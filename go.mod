@@ -1,4 +1,4 @@
-module github.com/google/github_actions_on_gcp
+module github.com/abcxyz/github-action-dispatcher
 
 go 1.24
 

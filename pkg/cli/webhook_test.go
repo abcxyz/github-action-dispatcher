@@ -21,13 +21,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abcxyz/pkg/cli"
-	"github.com/abcxyz/pkg/logging"
-	"github.com/abcxyz/pkg/testutil"
 	"github.com/sethvargo/go-envconfig"
 	"github.com/sethvargo/go-gcpkms/pkg/gcpkms"
 
-	"github.com/google/github_actions_on_gcp/pkg/webhook"
+	"github.com/abcxyz/github-action-dispatcher/pkg/webhook"
+	"github.com/abcxyz/pkg/cli"
+	"github.com/abcxyz/pkg/logging"
+	"github.com/abcxyz/pkg/testutil"
 )
 
 func TestWebhookServerCommand(t *testing.T) {

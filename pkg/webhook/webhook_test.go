@@ -29,9 +29,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abcxyz/pkg/githubauth"
-
 	"github.com/google/go-github/v69/github"
+
+	"github.com/abcxyz/pkg/githubauth"
 )
 
 const (

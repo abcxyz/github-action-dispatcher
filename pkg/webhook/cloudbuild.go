@@ -20,9 +20,8 @@ import (
 
 	cloudbuild "cloud.google.com/go/cloudbuild/apiv1/v2"
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
-	"google.golang.org/api/option"
-
 	"github.com/googleapis/gax-go/v2"
+	"google.golang.org/api/option"
 )
 
 // CloudBuild provides a client and dataset identifiers.

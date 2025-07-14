@@ -40,7 +40,7 @@ jobs:
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Checkout'
-        uses: 'actions/checkout@v4'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
 
       - name: 'Setup Go'
         uses: 'actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a' # ratchet:actions/setup-go@v5
@@ -74,8 +74,9 @@ jobs:
           git tag -f "$(date "+%Y%m%d%H%M%S")"
 
       - name: 'Set Docker Tag for PR'
-        if: 'github.event_name == "pull_request"'
-        run: 'echo "DOCKER_TAG=webhook-pr-${{ github.event.number }}-${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV'
+        if: |
+          github.event_name == 'pull_request'
+        run: 'echo "DOCKER_TAG=webhook-pr-${{ github.event.number }}-${{ github.event.pull_request.head.sha }}" >> "$GITHUB_ENV"'
 
       - name: 'Build the server container and push to the registry with goreleaser'
         uses: 'goreleaser/goreleaser-action@9ed2f89a662bf1735a48bc8557fd212fa902bebf' # ratchet:goreleaser/goreleaser-action@v6
@@ -84,7 +85,8 @@ jobs:
           args: 'release -f .goreleaser.docker.yml --rm-dist --skip-validate'
 
       - name: 'Deploy to Cloud Run'
-        if: 'github.event_name != "pull_request"'
+        if: |
+          github.event_name != 'pull_request'
         run: |-
           gcloud run services update ${{ env.INTEGRATION_SERVICE_NAME }} \
             --project="${{ env.INTEGRATION_PROJECT_ID }}" \

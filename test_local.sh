@@ -11,12 +11,15 @@ echo "Generating JIT Config. If no more output, something failed. Try running \
 command without storing to variable to see output."
 
 # Generate JIT Config
-JIT_CONFIG="$(go run ./cmd/generate-jit \
--app-id #YOUR_APP_ID_GOES_HERE \
--private-key #PATH_TO_PEM_FILE \
--org #YOUR_ORG_NAME_GOES_HERE \
--runner-name "${RUNNER_NAME}" \
--runner-group-id 1 \
+JIT_CONFIG="$(
+    go run ./cmd/generate-jit \
+        -app-id \
+        -private-key \
+        -org \
+        -runner-name "${RUNNER_NAME}" \
+        -runner-group-id 1 #YOUR_APP_ID_GOES_HERE \
+    #PATH_TO_PEM_FILE \
+    #YOUR_ORG_NAME_GOES_HERE \
 )"
 
 echo "${JIT_CONFIG}"

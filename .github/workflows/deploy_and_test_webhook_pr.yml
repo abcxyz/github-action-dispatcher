@@ -20,14 +20,15 @@ permissions:
 
 jobs:
   deploy:
-    if: 'github.event.workflow_run.event == "pull_request" && github.event.workflow_run.conclusion == "success"'
+    if: |
+      github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
     runs-on: 'ubuntu-latest'
     outputs:
       service_name: '${{ steps.deploy.outputs.service_name }}'
       service_url: '${{ steps.deploy.outputs.service_url }}'
     steps:
       - name: 'Checkout'
-        uses: 'actions/checkout@v4'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
         with:
           ref: '${{ github.event.workflow_run.head_sha }}'
 
@@ -60,15 +61,15 @@ jobs:
             --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=webhook-pr-test-secret:latest" \
             --update-env-vars="WEBHOOK_KEY_MOUNT_PATH=${WEBHOOK_SECRET_MOUNT_PATH},WEBHOOK_KEY_NAME=${WEBHOOK_SECRET_NAME}" \
             --format='value(status.url)')
-          echo "service_url=${SERVICE_URL}" >> $GITHUB_OUTPUT
-          echo "service_name=${SERVICE_NAME}" >> $GITHUB_OUTPUT
+          echo "service_url=${SERVICE_URL}" >> "$GITHUB_OUTPUT"
+          echo "service_name=${SERVICE_NAME}" >> "$GITHUB_OUTPUT"
 
   test:
     needs: 'deploy'
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Checkout'
-        uses: 'actions/checkout@v4'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
         with:
           ref: '${{ github.event.workflow_run.head_sha }}'
 
@@ -86,7 +87,7 @@ jobs:
           version: '529.0.0'
 
       - name: 'Setup Go'
-        uses: 'actions/setup-go@v5'
+        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
         with:
           go-version: '1.22'
 
