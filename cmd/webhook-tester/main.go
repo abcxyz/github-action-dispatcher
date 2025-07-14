@@ -126,8 +126,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		ctx := context.Background()
-		req, err := http.NewRequestWithContext(ctx, "POST", *targetURL, bytes.NewReader([]byte(tc.payload)))
+		req, err := http.NewRequestWithContext(context.Background(), "POST", *targetURL, bytes.NewBufferString(tc.payload))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating request for test case %q: %v\n", tc.name, err)
 			os.Exit(1)
@@ -180,8 +179,7 @@ func verifyBuildTriggered(targetURL, payload, secret string) error {
 		return fmt.Errorf("failed to generate signature for e2e test: %w", err)
 	}
 
-	ctx := context.Background()
-	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader([]byte(payload)))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", targetURL, bytes.NewBufferString(payload))
 	if err != nil {
 		return fmt.Errorf("failed to create request for e2e test: %w", err)
 	}

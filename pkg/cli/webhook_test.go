@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/sethvargo/go-envconfig"
-	"github.com/sethvargo/go-gcpkms/pkg/gcpkms"
 
 	"github.com/abcxyz/github-action-dispatcher/pkg/webhook"
 	"github.com/abcxyz/pkg/cli"
@@ -166,9 +165,7 @@ func TestWebhookServerCommand(t *testing.T) {
 			// Provide mock implementation of dependencies
 			cmd.testOSFileReaderOverride = tc.fileMock
 			cmd.testCloudBuildClientOverride = &webhook.CloudBuild{}
-			cmd.testKMSClientOverride = &webhook.MockKMSClient{
-				CreateSignerMock: &webhook.CreateSignerRes{Res: &gcpkms.Signer{}},
-			}
+			cmd.testKMSClientOverride = &webhook.MockKMSClient{}
 
 			_, _, _ = cmd.Pipe()
 
