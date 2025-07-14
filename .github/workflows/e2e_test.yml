@@ -164,6 +164,7 @@ jobs:
           version: '529.0.0'
 
       - name: 'Delete Cloud Run Service'
+        if: "needs.deploy.outputs.service_name != ''"
         run: |-
           SERVICE_NAME='${{ needs.deploy.outputs.service_name }}'
           gcloud run services delete ${SERVICE_NAME} \
