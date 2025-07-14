@@ -78,7 +78,7 @@ jobs:
         uses: 'goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552' # ratchet:goreleaser/goreleaser-action@v6
         with:
           version: 'v1.12.3'
-          args: 'release -f .goreleaser.docker.yml --rm-dist --skip-validate'
+          args: 'build -f .goreleaser.docker.yml --rm-dist'
         env:
           DOCKER_TAG: '${{ steps.tag.outputs.image_tag }}'
 
