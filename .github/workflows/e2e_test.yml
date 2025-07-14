@@ -18,7 +18,15 @@ jobs:
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Checkout'
-        uses: 'actions/checkout@v4'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - name: 'Setup Go'
+        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: 'Build webhook server'
+        run: 'go build -o webhook ./cmd/github-actions-on-gcp'
 
       - name: 'Build Docker image'
         run: 'docker build -t gha-webhook:latest .'
@@ -28,10 +36,10 @@ jobs:
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Checkout'
-        uses: 'actions/checkout@v4'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
 
       - name: 'Setup Go'
-        uses: 'actions/setup-go@v5'
+        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
 
@@ -39,7 +47,7 @@ jobs:
         run: 'go build -o webhook ./cmd/github-actions-on-gcp'
 
       - name: 'Start webhook server'
-        run: './webhook server & echo "SERVER_PID=$!" >> $GITHUB_ENV'
+        run: './webhook webhook server & echo "SERVER_PID=$!" >> $GITHUB_ENV'
 
       - name: 'Wait for server to be ready'
         run: |
