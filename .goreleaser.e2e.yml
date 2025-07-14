@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+release:
+  disable: true
+
 env:
   # Global env vars for Go build.
   - 'CGO_ENABLED=0'
