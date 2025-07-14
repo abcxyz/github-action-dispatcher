@@ -47,6 +47,15 @@ jobs:
         run: 'go build -o webhook ./cmd/github-actions-on-gcp'
 
       - name: 'Start webhook server'
+        env:
+          GITHUB_APP_ID: '12345'
+          KMS_APP_PRIVATE_KEY_ID: 'dummy'
+          RUNNER_LOCATION: 'us-central1'
+          RUNNER_PROJECT_ID: 'test-project'
+          RUNNER_REPOSITORY_ID: 'test-repo'
+          RUNNER_SERVICE_ACCOUNT: 'test-sa'
+          WEBHOOK_KEY_MOUNT_PATH: '/tmp'
+          WEBHOOK_KEY_NAME: 'webhook-key'
         run: './webhook webhook server & echo "SERVER_PID=$!" >> $GITHUB_ENV'
 
       - name: 'Wait for server to be ready'
@@ -65,15 +74,6 @@ jobs:
           echo "Server is up!"
 
       - name: 'Run webhook tester'
-        env:
-          GITHUB_APP_ID: '12345'
-          KMS_APP_PRIVATE_KEY_ID: 'dummy'
-          RUNNER_LOCATION: 'us-central1'
-          RUNNER_PROJECT_ID: 'test-project'
-          RUNNER_REPOSITORY_ID: 'test-repo'
-          RUNNER_SERVICE_ACCOUNT: 'test-sa'
-          WEBHOOK_KEY_MOUNT_PATH: '/tmp'
-          WEBHOOK_KEY_NAME: 'webhook-key'
         run: 'go run ./cmd/webhook-tester --url="http://localhost:8080" --secret="test-github-webhook-secret"'
 
       - name: 'Stop webhook server'
