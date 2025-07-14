@@ -108,6 +108,7 @@ jobs:
             --region="${{ env.AUTOPUSH_REGION }}" \
             --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-amd64" \
             --no-allow-unauthenticated \
+            --ingress=internal \
             --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=webhook-pr-test-secret:latest" \
             --update-env-vars="WEBHOOK_KEY_MOUNT_PATH=${WEBHOOK_SECRET_MOUNT_PATH},WEBHOOK_KEY_NAME=${WEBHOOK_SECRET_NAME}" \
             --format='value(status.url)')
