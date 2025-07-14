@@ -8,7 +8,7 @@ set -e
 if docker info > /dev/null 2>&1; then
     echo "SUCCESS: Docker daemon is responsive to the 'root' user."
 else
-    echo "ERROR: 'docker info' as 'root' user (UID $(id -u)) failed."
+    echo "ERROR: 'docker info' as 'runner' user (UID $(id -u || true)) failed."
     exit 1
 fi
 
@@ -26,5 +26,5 @@ echo "Default DOCKER_CONFIG for this runner session set to: ${DOCKER_CONFIG}"
 ENCODED_JIT_CONFIG="$(echo "${ENCODED_JIT_CONFIG}" | base64 -d | gunzip)"
 
 # Finally register a github runner using the jit config env variable.
-/actions-runner/run.sh --jitconfig $ENCODED_JIT_CONFIG &
+/actions-runner/run.sh --jitconfig "${ENCODED_JIT_CONFIG:?}" &
 wait $!

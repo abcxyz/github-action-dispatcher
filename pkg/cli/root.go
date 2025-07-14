@@ -18,9 +18,8 @@ package cli
 import (
 	"context"
 
+	"github.com/abcxyz/github-action-dispatcher/pkg/version"
 	"github.com/abcxyz/pkg/cli"
-
-	"github.com/google/github_actions_on_gcp/pkg/version"
 )
 
 var rootCmd = func() cli.Command {

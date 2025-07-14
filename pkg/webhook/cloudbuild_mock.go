@@ -18,7 +18,6 @@ import (
 	"context"
 
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
-
 	"github.com/googleapis/gax-go/v2"
 )
 

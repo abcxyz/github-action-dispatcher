@@ -21,9 +21,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/abcxyz/github-action-dispatcher/pkg/cli"
 	"github.com/abcxyz/pkg/logging"
-
-	"github.com/google/github_actions_on_gcp/pkg/cli"
 )
 
 func main() {
