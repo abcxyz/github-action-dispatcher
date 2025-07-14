@@ -24,9 +24,9 @@ import (
 	"time"
 
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
-	"github.com/abcxyz/pkg/logging"
-
 	"github.com/google/go-github/v69/github"
+
+	"github.com/abcxyz/pkg/logging"
 )
 
 var (

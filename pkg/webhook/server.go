@@ -21,15 +21,15 @@ import (
 	"net/http"
 
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
+	"github.com/googleapis/gax-go/v2"
+	"github.com/sethvargo/go-gcpkms/pkg/gcpkms"
+	"google.golang.org/api/option"
+
+	"github.com/abcxyz/github-action-dispatcher/pkg/version"
 	"github.com/abcxyz/pkg/githubauth"
 	"github.com/abcxyz/pkg/healthcheck"
 	"github.com/abcxyz/pkg/logging"
 	"github.com/abcxyz/pkg/renderer"
-	"github.com/sethvargo/go-gcpkms/pkg/gcpkms"
-	"google.golang.org/api/option"
-
-	"github.com/google/github_actions_on_gcp/pkg/version"
-	"github.com/googleapis/gax-go/v2"
 )
 
 // Server provides the server implementation.

@@ -19,14 +19,14 @@ import (
 	"fmt"
 	"net/http"
 
+	"google.golang.org/api/option"
+
+	"github.com/abcxyz/github-action-dispatcher/pkg/version"
+	"github.com/abcxyz/github-action-dispatcher/pkg/webhook"
 	"github.com/abcxyz/pkg/cli"
 	"github.com/abcxyz/pkg/logging"
 	"github.com/abcxyz/pkg/renderer"
 	"github.com/abcxyz/pkg/serving"
-	"google.golang.org/api/option"
-
-	"github.com/google/github_actions_on_gcp/pkg/version"
-	"github.com/google/github_actions_on_gcp/pkg/webhook"
 )
 
 var _ cli.Command = (*WebhookServerCommand)(nil)

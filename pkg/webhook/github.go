@@ -21,9 +21,8 @@ import (
 	"net/url"
 	"strconv"
 
-	"golang.org/x/oauth2"
-
 	"github.com/google/go-github/v69/github"
+	"golang.org/x/oauth2"
 )
 
 func (s *Server) GenerateRepoJITConfig(ctx context.Context, installationID int64, org, repo, runnerName string) (*github.JITRunnerConfig, *apiResponse) {
