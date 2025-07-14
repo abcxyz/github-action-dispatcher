@@ -66,7 +66,7 @@ jobs:
 
       - id: 'tag'
         name: 'Set Docker Tag for PR'
-        run: 'echo "image_tag=webhook-pr-${{ github.event.number }}-${{ github.sha }}" >> $GITHUB_OUTPUT'
+        run: 'echo "image_tag=webhook-pr-${{ github.event.number }}-${{ github.sha }}" >> "$GITHUB_OUTPUT"'
 
       - name: 'Build the server container and push to the registry with goreleaser'
         uses: 'goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552' # ratchet:goreleaser/goreleaser-action@v6
@@ -107,7 +107,7 @@ jobs:
           WEBHOOK_SECRET_MOUNT_PATH="/etc/secrets/webhook-pr-test-key"
           WEBHOOK_SECRET_NAME="latest"
 
-          SERVICE_URL=$(gcloud run deploy ${SERVICE_NAME} \
+          SERVICE_URL=$(gcloud run deploy "${SERVICE_NAME}" \
             --project="${{ env.AUTOPUSH_PROJECT_ID }}" \
             --region="${{ env.AUTOPUSH_REGION }}" \
             --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-amd64" \
@@ -116,8 +116,8 @@ jobs:
             --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=webhook-pr-test-secret:latest" \
             --update-env-vars="WEBHOOK_KEY_MOUNT_PATH=${WEBHOOK_SECRET_MOUNT_PATH},WEBHOOK_KEY_NAME=${WEBHOOK_SECRET_NAME}" \
             --format='value(status.url)')
-          echo "service_url=${SERVICE_URL}" >> $GITHUB_OUTPUT
-          echo "service_name=${SERVICE_NAME}" >> $GITHUB_OUTPUT
+          echo "service_url=${SERVICE_URL}" >> "$GITHUB_OUTPUT"
+          echo "service_name=${SERVICE_NAME}" >> "$GITHUB_OUTPUT"
 
   test:
     needs: 'deploy'
@@ -171,7 +171,7 @@ jobs:
       - name: 'Delete Cloud Run Service'
         run: |-
           SERVICE_NAME='${{ needs.deploy.outputs.service_name }}'
-          gcloud run services delete ${SERVICE_NAME} \
+          gcloud run services delete "${SERVICE_NAME}" \
             --project='${{ env.AUTOPUSH_PROJECT_ID }}' \
             --region='${{ env.AUTOPUSH_REGION }}' \
             --quiet

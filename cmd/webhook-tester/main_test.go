@@ -28,7 +28,7 @@ import (
 	"github.com/abcxyz/pkg/githubauth"
 	"github.com/abcxyz/pkg/renderer"
 
-	"github.com/google/github_actions_on_gcp/pkg/webhook"
+	"github.com/abcxyz/github-action-dispatcher/pkg/webhook"
 )
 
 type mockFileReader struct {
