@@ -69,13 +69,21 @@ jobs:
         name: 'Set Docker Tag for PR'
         run: 'echo "image_tag=webhook-pr-${{ github.event.number }}-${{ github.sha }}" >> "$GITHUB_OUTPUT"'
 
+      - name: 'Create PR-specific goreleaser config'
+        run: |
+          # The .goreleaser.docker.yml disables the release, which also disables
+          # the docker push. For PRs, we want to push the image, so we create a
+          # temporary goreleaser config with the release block removed.
+          sed '/^release:/,/disable: true/d' .goreleaser.docker.yml > .goreleaser.pr.yml
+
       - name: 'Build the server container and push to the registry with goreleaser'
         uses: 'goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552' # ratchet:goreleaser/goreleaser-action@v6
         with:
           version: 'v1.12.3'
-          args: 'release -f .goreleaser.docker.yml --rm-dist --snapshot'
+          args: 'release -f .goreleaser.pr.yml --rm-dist --snapshot'
         env:
           DOCKER_TAG: '${{ steps.tag.outputs.image_tag }}'
+          GITHUB_TOKEN: ''
 
   deploy:
     needs: 'build'
