@@ -65,3 +65,6 @@ dockers:
 docker_manifests:
   - image_templates:
       - '{{ .Env.DOCKER_REPO }}/gha-webhook:{{ .Env.DOCKER_TAG }}-amd64'
+
+changelog:
+  skip: true
