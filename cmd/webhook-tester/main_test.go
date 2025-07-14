@@ -25,10 +25,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/abcxyz/pkg/renderer"
-	"github.com/google/github_actions_on_gcp/pkg/webhook"
-
 	"github.com/abcxyz/pkg/githubauth"
+	"github.com/abcxyz/pkg/renderer"
+
+	"github.com/google/github_actions_on_gcp/pkg/webhook"
 )
 
 type mockFileReader struct {
