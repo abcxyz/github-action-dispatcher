@@ -15,6 +15,9 @@
 package webhook
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/base64"
 	"fmt"
 	"html"
 	"log/slog"
@@ -60,6 +63,23 @@ func (s *Server) handleWebhook() http.Handler {
 		w.WriteHeader(resp.Code)
 		fmt.Fprint(w, html.EscapeString(resp.Message))
 	})
+}
+
+func compressAndBase64EncodeString(input string) (string, error) {
+	var compressedJIT bytes.Buffer
+	gzipWriter, err := gzip.NewWriterLevel(&compressedJIT, gzip.BestCompression)
+	if err != nil {
+		return "", fmt.Errorf("failed to cerate gzip writer: %w", err)
+	}
+	_, err = gzipWriter.Write([]byte(input))
+	if err != nil {
+		return "", fmt.Errorf("failed to write to gzip writer: %w", err)
+	}
+	err = gzipWriter.Close()
+	if err != nil {
+		return "", fmt.Errorf("failed to close gzip writer: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(compressedJIT.Bytes()), nil
 }
 
 func (s *Server) processRequest(r *http.Request) *apiResponse {
@@ -144,18 +164,23 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 				return errResponse
 			}
 
+			// Sometimes JITConfig has exceeded the 4,000-character limit for
+			// substitutions. It has nested base64 encoded data, so it is very
+			// compressible.
+			compressedJIT, err := compressAndBase64EncodeString(*jitConfig.EncodedJITConfig)
+			if err != nil {
+				return &apiResponse{http.StatusInternalServerError, "failed to compress JIT config", err}
+			}
+
 			build := &cloudbuildpb.Build{
 				ServiceAccount: s.runnerServiceAccount,
 				Steps: []*cloudbuildpb.BuildStep{
 					{
 						Id:         "run",
-						Name:       "gcr.io/cloud-builders/docker",
+						Name:       "$_REPOSITORY_ID/$_IMAGE_NAME:$_IMAGE_TAG",
 						Entrypoint: "bash",
-						Args: []string{
-							"-c",
-							// privileged and security-opts are needed to run Docker-in-Docker
-							// https://rootlesscontaine.rs/getting-started/common/apparmor/
-							"docker run --privileged --security-opt seccomp=unconfined --security-opt apparmor=unconfined -e ENCODED_JIT_CONFIG=$_ENCODED_JIT_CONFIG $_REPOSITORY_ID/$_IMAGE_NAME:$_IMAGE_TAG",
+						Env: []string{
+							"ENCODED_JIT_CONFIG=${_ENCODED_JIT_CONFIG}",
 						},
 					},
 				},
@@ -163,7 +188,7 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 					Logging: cloudbuildpb.BuildOptions_CLOUD_LOGGING_ONLY,
 				},
 				Substitutions: map[string]string{
-					"_ENCODED_JIT_CONFIG": *jitConfig.EncodedJITConfig,
+					"_ENCODED_JIT_CONFIG": compressedJIT,
 					"_REPOSITORY_ID":      s.runnerRepositoryID,
 					"_IMAGE_NAME":         s.runnerImageName,
 					"_IMAGE_TAG":          imageTag,
