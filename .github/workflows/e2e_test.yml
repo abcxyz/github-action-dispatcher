@@ -1,0 +1,75 @@
+name: 'Integration Test Webhook PR'
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/github-actions-on-gcp/**'
+      - 'cmd/webhook-tester/**'
+      - 'pkg/**'
+      - '.github/workflows/e2e_test.yml'
+
+permissions:
+  contents: 'read'
+  id-token: 'write'
+
+jobs:
+  build-docker:
+    name: 'Build Docker image'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - name: 'Setup Go'
+        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: 'Build webhook server'
+        run: 'go build -o webhook ./cmd/github-actions-on-gcp'
+
+      - name: 'Build Docker image'
+        run: 'docker build -t gha-webhook:latest .'
+
+  test:
+    name: 'Test webhook server'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - name: 'Setup Go'
+        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: 'Build webhook server'
+        run: 'go build -o webhook ./cmd/github-actions-on-gcp'
+
+      - name: 'Create dummy webhook secret'
+        run: 'mkdir -p /tmp && echo -n "test-github-webhook-secret" > /tmp/webhook-key'
+
+      - name: 'Start webhook server'
+        run: 'go run ./cmd/integration-test-server & echo "SERVER_PID=$!" >> $GITHUB_ENV'
+
+      - name: 'Wait for server to be ready'
+        run: |
+          timeout=30
+          interval=1
+          elapsed=0
+          while ! nc -z localhost 8080; do
+            if [ $elapsed -ge $timeout ]; then
+              echo "Timeout: Server did not start within ${timeout}s"
+              exit 1
+            fi
+            sleep $interval
+            elapsed=$((elapsed + interval))
+          done
+          echo "Server is up!"
+
+      - name: 'Run webhook tester'
+        run: 'go run ./cmd/webhook-tester --url="http://localhost:8080" --secret="test-github-webhook-secret"'
+
+      - name: 'Stop webhook server'
+        if: 'always()'
+        run: 'kill ${{ env.SERVER_PID }}'

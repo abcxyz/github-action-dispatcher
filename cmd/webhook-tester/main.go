@@ -125,7 +125,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		req, err := http.NewRequest("POST", *targetURL, bytes.NewBuffer([]byte(tc.payload)))
+		req, err := http.NewRequest("POST", *targetURL+"/webhook", bytes.NewBuffer([]byte(tc.payload)))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating request for test case %q: %v\n", tc.name, err)
 			os.Exit(1)
