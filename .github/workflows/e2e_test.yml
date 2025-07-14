@@ -1,6 +1,14 @@
 name: 'E2E Test Webhook PR'
 
 on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'cmd/github-actions-on-gcp/**'
+      - 'cmd/webhook-tester/**'
+      - 'pkg/**'
+      - '.github/workflows/e2e_test.yml'
   pull_request:
     paths:
       - 'cmd/github-actions-on-gcp/**'
