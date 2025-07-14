@@ -72,7 +72,7 @@ func realMain(ctx context.Context) error {
 		},
 		CloudBuildClientOverride: &webhook.MockCloudBuildClient{},
 		KeyManagementClientOverride: &webhook.MockKMSClient{
-			CreateSignerMock: &webhook.CreateSignerRes{Res: &gcpkms.Signer{}},
+			CreateSignerMock: &webhook.CreateSignerRes{Res: new(gcpkms.Signer)},
 		},
 	}
 
