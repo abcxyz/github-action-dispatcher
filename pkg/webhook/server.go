@@ -79,7 +79,7 @@ type WebhookClientOptions struct {
 
 // NewServer creates a new HTTP server implementation that will handle
 // receiving webhook payloads.
-func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *WebhookClientOptions) (*Server, error) {
+func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, appClient *githubauth.App, wco *WebhookClientOptions) (*Server, error) {
 	fr := wco.OSFileReaderOverride
 	if fr == nil {
 		fr = NewOSFileReader()
@@ -97,20 +97,6 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 			return nil, fmt.Errorf("failed to create kms client: %w", err)
 		}
 		kmc = km
-	}
-
-	signer, err := kmc.CreateSigner(ctx, cfg.KMSAppPrivateKeyID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create app signer: %w", err)
-	}
-
-	options := []githubauth.Option{
-		githubauth.WithBaseURL(cfg.GitHubAPIBaseURL),
-	}
-
-	appClient, err := githubauth.NewApp(cfg.GitHubAppID, signer, options...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to setup app client: %w", err)
 	}
 
 	cbc := wco.CloudBuildClientOverride

@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	"github.com/abcxyz/pkg/cli"
+	"github.com/abcxyz/pkg/githubauth"
 	"github.com/abcxyz/pkg/logging"
 	"github.com/abcxyz/pkg/renderer"
 	"github.com/abcxyz/pkg/serving"
@@ -125,7 +126,30 @@ func (c *WebhookServerCommand) RunUnstarted(ctx context.Context, args []string) 
 		webhookClientOptions.OSFileReaderOverride = c.testOSFileReaderOverride
 	}
 
-	webhookServer, err := webhook.NewServer(ctx, h, c.cfg, webhookClientOptions)
+	kmc := webhookClientOptions.KeyManagementClientOverride
+	if kmc == nil {
+		km, err := webhook.NewKeyManagement(ctx, webhookClientOptions.KeyManagementClientOpts...)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create kms client: %w", err)
+		}
+		kmc = km
+	}
+
+	signer, err := kmc.CreateSigner(ctx, c.cfg.KMSAppPrivateKeyID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create app signer: %w", err)
+	}
+
+	options := []githubauth.Option{
+		githubauth.WithBaseURL(c.cfg.GitHubAPIBaseURL),
+	}
+
+	appClient, err := githubauth.NewApp(c.cfg.GitHubAppID, signer, options...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to setup app client: %w", err)
+	}
+
+	webhookServer, err := webhook.NewServer(ctx, h, c.cfg, appClient, webhookClientOptions)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create server: %w", err)
 	}

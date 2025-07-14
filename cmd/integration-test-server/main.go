@@ -16,15 +16,17 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/abcxyz/pkg/githubauth"
 	"github.com/abcxyz/pkg/logging"
 	"github.com/abcxyz/pkg/renderer"
 	"github.com/abcxyz/pkg/serving"
-	"github.com/sethvargo/go-gcpkms/pkg/gcpkms"
 
 	"github.com/google/github_actions_on_gcp/pkg/webhook"
 )
@@ -64,6 +66,16 @@ func realMain(ctx context.Context) error {
 		return fmt.Errorf("failed to create renderer: %w", err)
 	}
 
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return fmt.Errorf("failed to generate rsa key: %w", err)
+	}
+
+	app, err := githubauth.NewApp(cfg.GitHubAppID, rsaKey)
+	if err != nil {
+		return fmt.Errorf("failed to create github app client: %w", err)
+	}
+
 	opts := &webhook.WebhookClientOptions{
 		OSFileReaderOverride: &webhook.MockFileReader{
 			ReadFileMock: &webhook.ReadFileResErr{
@@ -71,12 +83,9 @@ func realMain(ctx context.Context) error {
 			},
 		},
 		CloudBuildClientOverride: &webhook.MockCloudBuildClient{},
-		KeyManagementClientOverride: &webhook.MockKMSClient{
-			CreateSignerMock: &webhook.CreateSignerRes{Res: new(gcpkms.Signer)},
-		},
 	}
 
-	webhookServer, err := webhook.NewServer(ctx, h, cfg, opts)
+	webhookServer, err := webhook.NewServer(ctx, h, cfg, app, opts)
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
