@@ -67,7 +67,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends wget tar ca-certificates && \
     wget -q https://github.com/cli/cli/releases/download/v${GH_VERSION}/${GH_PACKAGE} -O /tmp/${GH_PACKAGE} && \
     tar -xzf /tmp/${GH_PACKAGE} -C /opt && \
-mkdir "dirname" \
+    mv /opt/gh_${GH_VERSION}_linux_amd64/bin/gh /usr/local/bin/gh && \
     chmod +x /usr/local/bin/gh && \
     gh --version && \
     rm -rf /tmp/${GH_PACKAGE} /opt/gh_${GH_VERSION}_linux_amd64 && \
