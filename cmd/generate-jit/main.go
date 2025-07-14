@@ -26,9 +26,10 @@ import (
 
 	"github.com/abcxyz/pkg/githubauth"
 	"github.com/abcxyz/pkg/logging"
-	"github.com/google/go-github/v69/github"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"golang.org/x/oauth2"
+
+	"github.com/google/go-github/v69/github"
 )
 
 var (

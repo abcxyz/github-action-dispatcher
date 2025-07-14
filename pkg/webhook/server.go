@@ -155,6 +155,11 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 	return root
 }
 
+// SetAppClient sets the app client for the server.
+func (s *Server) SetAppClient(app *githubauth.App) {
+	s.appClient = app
+}
+
 // handleVersion is a simple http.HandlerFunc that responds with version
 // information for the server.
 func (s *Server) handleVersion() http.Handler {
