@@ -81,8 +81,6 @@ COPY setup_docker.sh /usr/local/bin/setup_docker.sh
 RUN chmod +x /usr/local/bin/setup_docker.sh
 
 WORKDIR /home/runner
-USER runner
-
 
 # Docker socket is mounted at runtime, must fix permissions then.
 ENTRYPOINT ["/usr/local/bin/setup_docker.sh"]
