@@ -49,6 +49,9 @@ jobs:
         with:
           version: '529.0.0'
 
+      - name: 'Debug'
+        run: echo "${{ steps.auth.outputs.access_token }}" | cut -d '.' -f 2 | base64 -d
+
       - uses: 'docker/login-action@v3'
         with:
           username: 'oauth2accesstoken'
