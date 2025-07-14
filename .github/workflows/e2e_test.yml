@@ -1,4 +1,4 @@
-name: 'E2E Test Webhook PR'
+name: 'Integration Test Webhook PR'
 
 on:
   pull_request:
@@ -8,167 +8,57 @@ on:
       - 'pkg/**'
       - '.github/workflows/e2e_test.yml'
 
-env:
-  WIF_PROVIDER: 'projects/727875687543/locations/global/workloadIdentityPools/github-actions-on-gcp-p-a63b4c/providers/github-actions-on-gcp-p-a63b4c'
-  WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-on-gcp-p-a63b4c.iam.gserviceaccount.com'
-  DOCKER_REGISTRY: 'us-docker.pkg.dev'
-  DOCKER_REPO: 'us-docker.pkg.dev/ghss-artifacts-p-25/docker-images'
-  IMAGE_NAME: 'gha-webhook'
-  AUTOPUSH_PROJECT_ID: 'action-dispatcher-webhook-a-18'
-  AUTOPUSH_REGION: 'us-central1'
-
 permissions:
   contents: 'read'
   id-token: 'write'
 
 jobs:
-  build:
-    name: 'Build and publish Docker image'
+  build-docker:
+    name: 'Build Docker image'
     runs-on: 'ubuntu-latest'
-    outputs:
-      image_tag: '${{ steps.tag.outputs.image_tag }}'
     steps:
       - name: 'Checkout'
-        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+        uses: 'actions/checkout@v4'
+
+      - name: 'Build Docker image'
+        run: 'docker build -t gha-webhook:latest .'
+
+  test:
+    name: 'Test webhook server'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@v4'
 
       - name: 'Setup Go'
-        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
+        uses: 'actions/setup-go@v5'
         with:
           go-version-file: 'go.mod'
 
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@6fc4af4b145ae7821d527454aa9bd537d1f2dc5f' # ratchet:google-github-actions/auth@v2
-        with:
-          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
-          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
-          token_format: 'access_token'
+      - name: 'Build webhook server'
+        run: 'go build -o webhook ./cmd/github-actions-on-gcp'
 
-      - name: 'Setup gcloud'
-        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
-        with:
-          version: '529.0.0'
+      - name: 'Start webhook server'
+        run: './webhook server & echo "SERVER_PID=$!" >> $GITHUB_ENV'
 
-      - uses: 'docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772' # ratchet:docker/login-action@v3
-        with:
-          username: 'oauth2accesstoken'
-          password: '${{ steps.auth.outputs.access_token }}'
-          registry: '${{ env.DOCKER_REGISTRY }}'
+      - name: 'Wait for server to be ready'
+        run: |
+          timeout=30
+          interval=1
+          elapsed=0
+          while ! nc -z localhost 8080; do
+            if [ $elapsed -ge $timeout ]; then
+              echo "Timeout: Server did not start within ${timeout}s"
+              exit 1
+            fi
+            sleep $interval
+            elapsed=$((elapsed + interval))
+          done
+          echo "Server is up!"
 
-      - run: |-
-          git config user.name "${{ github.actor }}"
-          git config user.email "${{ github.actor }}@users.noreply.github.com"
-          git tag -f "$(date "+%Y%m%d%H%M%S")"
+      - name: 'Run webhook tester'
+        run: 'go run ./cmd/webhook-tester --url="http://localhost:8080" --secret="test-github-webhook-secret"'
 
-      - id: 'tag'
-        name: 'Set Docker Tag for PR'
-        run: 'echo "image_tag=webhook-pr-${{ github.event.number }}-${{ github.sha }}" >> $GITHUB_OUTPUT'
-
-      - name: 'Build the server container and push to the registry with goreleaser'
-        uses: 'goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552' # ratchet:goreleaser/goreleaser-action@v6
-        with:
-          version: 'v1.12.3'
-          args: 'release -f .goreleaser.docker.yml --rm-dist --skip-validate'
-        env:
-          DOCKER_TAG: '${{ steps.tag.outputs.image_tag }}'
-
-  deploy:
-    needs: 'build'
-    runs-on: 'ubuntu-latest'
-    outputs:
-      service_name: '${{ steps.deploy.outputs.service_name }}'
-      service_url: '${{ steps.deploy.outputs.service_url }}'
-    steps:
-      - name: 'Checkout'
-        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
-
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@6fc4af4b145ae7821d527454aa9bd537d1f2dc5f' # ratchet:google-github-actions/auth@v2
-        with:
-          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
-          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
-          token_format: 'access_token'
-
-      - name: 'Setup gcloud'
-        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
-        with:
-          version: '529.0.0'
-
-      - name: 'Deploy to Cloud Run'
-        id: 'deploy'
-        run: |-
-          SERVICE_NAME="webhook-pr-${{ github.event.number }}"
-          IMAGE_TAG="${{ needs.build.outputs.image_tag }}"
-          WEBHOOK_SECRET_MOUNT_PATH="/etc/secrets/webhook-pr-test-key"
-          WEBHOOK_SECRET_NAME="latest"
-
-          SERVICE_URL=$(gcloud run deploy ${SERVICE_NAME} \
-            --project="${{ env.AUTOPUSH_PROJECT_ID }}" \
-            --region="${{ env.AUTOPUSH_REGION }}" \
-            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-amd64" \
-            --no-allow-unauthenticated \
-            --ingress=internal \
-            --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=webhook-pr-test-secret:latest" \
-            --update-env-vars="WEBHOOK_KEY_MOUNT_PATH=${WEBHOOK_SECRET_MOUNT_PATH},WEBHOOK_KEY_NAME=${WEBHOOK_SECRET_NAME}" \
-            --format='value(status.url)')
-          echo "service_url=${SERVICE_URL}" >> $GITHUB_OUTPUT
-          echo "service_name=${SERVICE_NAME}" >> $GITHUB_OUTPUT
-
-  test:
-    needs: 'deploy'
-    runs-on: 'ubuntu-latest'
-    steps:
-      - name: 'Checkout'
-        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
-
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@6fc4af4b145ae7821d527454aa9bd537d1f2dc5f' # ratchet:google-github-actions/auth@v2
-        with:
-          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
-          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
-          token_format: 'access_token'
-
-      - name: 'Setup gcloud'
-        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
-        with:
-          version: '529.0.0'
-
-      - name: 'Setup Go'
-        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      - name: 'Run Webhook Tester'
-        run: |-
-          set -euo pipefail
-          SECRET=$(gcloud secrets versions access latest --secret="webhook-pr-test-secret" --project="${{ env.AUTOPUSH_PROJECT_ID }}")
-          go run ./cmd/webhook-tester --url="${{ needs.deploy.outputs.service_url }}" --secret="${SECRET}"
-
-  cleanup:
-    needs: ['deploy', 'test']
-    if: 'always()'
-    runs-on: 'ubuntu-latest'
-    steps:
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@6fc4af4b145ae7821d527454aa9bd537d1f2dc5f' # ratchet:google-github-actions/auth@v2
-        with:
-          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
-          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
-          token_format: 'access_token'
-
-      - name: 'Setup gcloud'
-        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
-        with:
-          version: '529.0.0'
-
-      - name: 'Delete Cloud Run Service'
-        if: "needs.deploy.outputs.service_name != ''"
-        run: |-
-          SERVICE_NAME='${{ needs.deploy.outputs.service_name }}'
-          gcloud run services delete ${SERVICE_NAME} \
-            --project='${{ env.AUTOPUSH_PROJECT_ID }}' \
-            --region='${{ env.AUTOPUSH_REGION }}' \
-            --quiet
+      - name: 'Stop webhook server'
+        if: 'always()'
+        run: 'kill ${{ env.SERVER_PID }}'
