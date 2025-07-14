@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # Get the Group ID (GID) of the mounted docker socket
 DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)
@@ -16,9 +16,7 @@ if [[ "${DOCKER_SOCKET_GID}" -eq 0 ]]; then
 fi
 
 # Create a group with the socket's GID if it doesn't already exist.
-if ! getent group "${DOCKER_SOCKET_GID}" >/dev/null 2>&1; then
-  groupadd --gid "${DOCKER_SOCKET_GID}" docker_socket
-fi
+getent group "${DOCKER_SOCKET_GID}" || groupadd --gid "${DOCKER_SOCKET_GID}" docker_socket
 
 # Add the 'runner' user to the docker socket's group.
 usermod -aG "${DOCKER_SOCKET_GID}" runner

@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # Use this to find the current hash of cached images.
 # docker image ls --digests
