@@ -115,6 +115,7 @@ jobs:
           SERVICE_URL=$(gcloud run deploy "${SERVICE_NAME}" \
             --project="${{ env.AUTOPUSH_PROJECT_ID }}" \
             --region="${{ env.AUTOPUSH_REGION }}" \
+            --service-account="${{ env.RUNTIME_SERVICE_ACCOUNT }}" \
             --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-amd64" \
             --ingress=internal-and-cloud-load-balancing \
             --no-allow-unauthenticated \
