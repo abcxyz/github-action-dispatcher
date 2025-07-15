@@ -88,7 +88,7 @@ jobs:
       service_name: '${{ steps.deploy.outputs.service_name }}'
       service_url: '${{ steps.deploy.outputs.service_url }}'
     env:
-      RUNTIME_SERVICE_ACCOUNT: 'gha-webhook-webhook-sa@action-dispatcher-webhook-a-18.iam.gserviceaccount.com'
+      RUNTIME_SERVICE_ACCOUNT: 'action-dispatcher-webhook-sa@action-dispatcher-webhook-a-18.iam.gserviceaccount.com'
     steps:
       - name: 'Checkout'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
