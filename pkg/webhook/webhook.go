@@ -69,7 +69,7 @@ func compressAndBase64EncodeString(input string) (string, error) {
 	var compressedJIT bytes.Buffer
 	gzipWriter, err := gzip.NewWriterLevel(&compressedJIT, gzip.BestCompression)
 	if err != nil {
-		return "", fmt.Errorf("failed to cerate gzip writer: %w", err)
+		return "", fmt.Errorf("failed to create gzip writer: %w", err)
 	}
 	_, err = gzipWriter.Write([]byte(input))
 	if err != nil {
