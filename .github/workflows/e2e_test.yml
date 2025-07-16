@@ -91,9 +91,9 @@ jobs:
       GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
       KMS_APP_PRIVATE_KEY_ID: 'dummy'
       RUNNER_LOCATION: 'us-central1'
-      RUNNER_PROJECT_ID: ${{ env.AUTOPUSH_PROJECT_ID }}
+      RUNNER_PROJECT_ID: 'action-dispatcher-webhook-a-18'
       RUNNER_REPOSITORY_ID: 'docker-images'
-      RUNNER_SERVICE_ACCOUNT: ${{ env.RUNTIME_SERVICE_ACCOUNT }}
+      RUNNER_SERVICE_ACCOUNT: 'action-dispatcher-webhook-sa@action-dispatcher-webhook-a-18.iam.gserviceaccount.com'
       RUNTIME_SERVICE_ACCOUNT: 'action-dispatcher-webhook-sa@action-dispatcher-webhook-a-18.iam.gserviceaccount.com'
     steps:
       - name: 'Checkout'
