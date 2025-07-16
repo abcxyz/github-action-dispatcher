@@ -70,7 +70,7 @@ jobs:
         run: 'echo "image_tag=webhook-pr-${{ github.event.number }}-${{ github.sha }}" >> "$GITHUB_OUTPUT"'
 
       - name: 'Create dummy tag for goreleaser'
-        run: git tag v0.0.0-pr-${{ github.event.number }}
+        run: 'git tag v0.0.0-pr-${{ github.event.number }}'
 
       - name: 'Build the server container and push to the registry with goreleaser'
         uses: 'goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552' # ratchet:goreleaser/goreleaser-action@v6
