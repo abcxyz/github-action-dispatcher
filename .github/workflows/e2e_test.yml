@@ -88,6 +88,12 @@ jobs:
       service_name: '${{ steps.deploy.outputs.service_name }}'
       service_url: '${{ steps.deploy.outputs.service_url }}'
     env:
+      GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
+      KMS_APP_PRIVATE_KEY_ID: 'dummy'
+      RUNNER_LOCATION: 'us-central1'
+      RUNNER_PROJECT_ID: ${{ env.AUTOPUSH_PROJECT_ID }}
+      RUNNER_REPOSITORY_ID: 'docker-images'
+      RUNNER_SERVICE_ACCOUNT: ${{ env.RUNTIME_SERVICE_ACCOUNT }}
       RUNTIME_SERVICE_ACCOUNT: 'action-dispatcher-webhook-sa@action-dispatcher-webhook-a-18.iam.gserviceaccount.com'
     steps:
       - name: 'Checkout'
@@ -122,7 +128,7 @@ jobs:
             --ingress=internal-and-cloud-load-balancing \
             --no-allow-unauthenticated \
             --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=webhook-pr-test-secret:latest" \
-            --update-env-vars="WEBHOOK_KEY_MOUNT_PATH=${WEBHOOK_SECRET_MOUNT_PATH},WEBHOOK_KEY_NAME=${WEBHOOK_SECRET_NAME}" \
+            --update-env-vars="GITHUB_APP_ID=${{ env.GITHUB_APP_ID }},KMS_APP_PRIVATE_KEY_ID=${{ env.KMS_APP_PRIVATE_KEY_ID }},RUNNER_LOCATION=${{ env.RUNNER_LOCATION }},RUNNER_PROJECT_ID=${{ env.RUNNER_PROJECT_ID }},RUNNER_REPOSITORY_ID=${{ env.RUNNER_REPOSITORY_ID }},RUNNER_SERVICE_ACCOUNT=${{ env.RUNNER_SERVICE_ACCOUNT }},WEBHOOK_KEY_MOUNT_PATH=${WEBHOOK_SECRET_MOUNT_PATH},WEBHOOK_KEY_NAME=${WEBHOOK_SECRET_NAME}" \
             --format='value(status.url)')
           echo "service_url=${SERVICE_URL}" >> "$GITHUB_OUTPUT"
           echo "service_name=${SERVICE_NAME}" >> "$GITHUB_OUTPUT"
