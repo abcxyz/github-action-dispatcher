@@ -88,7 +88,7 @@ jobs:
       service_name: '${{ steps.deploy.outputs.service_name }}'
       service_url: '${{ steps.deploy.outputs.service_url }}'
     env:
-      GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
+      GITHUB_APP_ID: '12345'
       KMS_APP_PRIVATE_KEY_ID: 'dummy'
       RUNNER_LOCATION: 'us-central1'
       RUNNER_PROJECT_ID: 'action-dispatcher-webhook-a-18'
