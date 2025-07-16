@@ -1,6 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 
+# Docker-in-Docker Path Translation Workaround:
+# The Cloud Build environment provides a shared `/workspace` directory that is visible
+# to both this runner container and the host's Docker daemon.
+# By moving the entire actions-runner directory into `/workspace`, we ensure that
+# the runner's $GITHUB_WORKSPACE variable will always resolve to a path under `/workspace`.
+# This allows docker volume mounts (-v $GITHUB_WORKSPACE:...) to work correctly,
+# as the source path is visible to the Docker daemon.
+mv /actions-runner /workspace/
+
+RUNNER_PATH="/workspace/actions-runner"
+
+# Give the runner ownership of its new directory.
+chown -R runner:runner "${RUNNER_PATH}"
+
 # Get the Group ID (GID) of the mounted docker socket
 DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)
 
@@ -21,5 +35,5 @@ getent group "${DOCKER_SOCKET_GID}" || groupadd --gid "${DOCKER_SOCKET_GID}" doc
 # Add the 'runner' user to the docker socket's group.
 usermod -aG "${DOCKER_SOCKET_GID}" runner
 
-# Switch to the 'runner' user and execute the startup script.
-exec gosu runner /actions-runner/start_runner.sh "$@"
+#    Then, drop privileges and execute the startup script.
+exec gosu runner "${RUNNER_PATH}/start_runner.sh" "$@"
