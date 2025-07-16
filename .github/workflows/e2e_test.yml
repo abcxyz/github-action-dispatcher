@@ -109,7 +109,7 @@ jobs:
       - name: 'Deploy to Cloud Run'
         id: 'deploy'
         run: |-
-          SERVICE_NAME="webhook-pr-${{ github.event.number }}"
+          SERVICE_NAME="webhook-pr-${{ github.event.number }}-${{ github.sha }}"
           IMAGE_TAG="${{ needs.build.outputs.image_tag }}"
           WEBHOOK_SECRET_MOUNT_PATH="/etc/secrets/webhook-pr-test-key"
           WEBHOOK_SECRET_NAME="latest"
