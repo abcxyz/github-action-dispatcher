@@ -127,7 +127,6 @@ jobs:
             --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-amd64" \
             --ingress=internal-and-cloud-load-balancing \
             --no-allow-unauthenticated \
-            --no-traffic \
             --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=webhook-pr-test-secret:latest" \
             --update-env-vars="GITHUB_APP_ID=${{ env.GITHUB_APP_ID }},KMS_APP_PRIVATE_KEY_ID=${{ env.KMS_APP_PRIVATE_KEY_ID }},RUNNER_LOCATION=${{ env.RUNNER_LOCATION }},RUNNER_PROJECT_ID=${{ env.RUNNER_PROJECT_ID }},RUNNER_REPOSITORY_ID=${{ env.RUNNER_REPOSITORY_ID }},RUNNER_SERVICE_ACCOUNT=${{ env.RUNNER_SERVICE_ACCOUNT }},WEBHOOK_KEY_MOUNT_PATH=${WEBHOOK_SECRET_MOUNT_PATH},WEBHOOK_KEY_NAME=${WEBHOOK_SECRET_NAME}" \
             --format='value(status.url)')
