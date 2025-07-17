@@ -113,6 +113,12 @@ jobs:
             "${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-amd64")
           echo "container_id=${CONTAINER_ID}" >> "$GITHUB_OUTPUT"
 
+      - name: 'Wait for service to be healthy'
+        run: |-
+          echo "Waiting for container to be healthy..."
+          timeout 30s bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://localhost:8080/healthz)" != "200" ]]; do echo -n "."; sleep 1; done'
+          echo "Container is healthy!"
+
       - name: 'Run Webhook Tester'
         run: |-
           set -euo pipefail
