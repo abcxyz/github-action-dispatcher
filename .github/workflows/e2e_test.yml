@@ -110,7 +110,7 @@ jobs:
             -e "RUNNER_SERVICE_ACCOUNT=${{ env.RUNNER_SERVICE_ACCOUNT }}" \
             -e "WEBHOOK_KEY_MOUNT_PATH=${WEBHOOK_SECRET_MOUNT_PATH}" \
             -e "WEBHOOK_KEY_NAME=${WEBHOOK_SECRET_NAME}" \
-            "${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-amd64")
+            "${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-amd64" webhook server)
           echo "container_id=${CONTAINER_ID}" >> "$GITHUB_OUTPUT"
 
       - name: 'Wait for service to be healthy'
