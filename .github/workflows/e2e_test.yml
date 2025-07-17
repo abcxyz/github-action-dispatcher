@@ -81,12 +81,11 @@ jobs:
           DOCKER_TAG: '${{ steps.tag.outputs.image_tag }}'
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
 
-  deploy:
+  test-container:
     needs: 'build'
     runs-on: 'ubuntu-latest'
     outputs:
-      service_name: '${{ steps.deploy.outputs.service_name }}'
-      service_url: '${{ steps.deploy.outputs.service_url }}'
+      container_id: '${{ steps.docker_run.outputs.container_id }}'
     env:
       GITHUB_APP_ID: '1617912'
       KMS_APP_PRIVATE_KEY_ID: 'projects/action-dispatcher-webhook-a-18/locations/global/keyRings/webhook-pr-test-keyring/cryptoKeys/webhook-pr-test-app-key/cryptoKeyVersions/4'
@@ -112,32 +111,34 @@ jobs:
         with:
           version: '529.0.0'
 
-      - name: 'Deploy to Cloud Run'
-        id: 'deploy'
+      - name: 'Fetch Webhook Secret'
+        id: 'fetch-secret'
         run: |-
-          SERVICE_NAME="webhook-pr-${{ github.event.number }}-${{ github.sha }}"
+          gcloud secrets versions access latest --secret="webhook-pr-test-secret" --project="${{ env.AUTOPUSH_PROJECT_ID }}" > /tmp/secret.txt
+
+      - name: 'Run Docker Container'
+        id: 'docker_run'
+        run: |-
           IMAGE_TAG="${{ needs.build.outputs.image_tag }}"
           WEBHOOK_SECRET_MOUNT_PATH="/etc/secrets/webhook-pr-test-key"
           WEBHOOK_SECRET_NAME="latest"
-
-          SERVICE_URL=$(gcloud run deploy "${SERVICE_NAME}" \
-            --project="${{ env.AUTOPUSH_PROJECT_ID }}" \
-            --region="${{ env.AUTOPUSH_REGION }}" \
-            --service-account="${{ env.RUNTIME_SERVICE_ACCOUNT }}" \
-            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-amd64" \
-            --ingress=internal-and-cloud-load-balancing \
-            --no-allow-unauthenticated \
-            --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=webhook-pr-test-secret:latest" \
-            --update-env-vars="GITHUB_APP_ID=${{ env.GITHUB_APP_ID }},KMS_APP_PRIVATE_KEY_ID=${{ env.KMS_APP_PRIVATE_KEY_ID }},RUNNER_LOCATION=${{ env.RUNNER_LOCATION }},RUNNER_PROJECT_ID=${{ env.RUNNER_PROJECT_ID }},RUNNER_REPOSITORY_ID=${{ env.RUNNER_REPOSITORY_ID }},RUNNER_SERVICE_ACCOUNT=${{ env.RUNNER_SERVICE_ACCOUNT }},WEBHOOK_KEY_MOUNT_PATH=${WEBHOOK_SECRET_MOUNT_PATH},WEBHOOK_KEY_NAME=${WEBHOOK_SECRET_NAME}" \
-            --format='value(status.url)')
-          echo "service_url=${SERVICE_URL}" >> "$GITHUB_OUTPUT"
-          echo "service_name=${SERVICE_NAME}" >> "$GITHUB_OUTPUT"
-
-          echo "Waiting for 30 seconds for the service to be ready..."
-          sleep 30
+          CONTAINER_ID=$(docker run -d -p 8080:8080 \
+            -v "/tmp/secret.txt:${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}" \
+            -v "${{ steps.auth.outputs.credentials_file_path }}:/tmp/creds.json" \
+            -e "GOOGLE_APPLICATION_CREDENTIALS=/tmp/creds.json" \
+            -e "GITHUB_APP_ID=${{ env.GITHUB_APP_ID }}" \
+            -e "KMS_APP_PRIVATE_KEY_ID=${{ env.KMS_APP_PRIVATE_KEY_ID }}" \
+            -e "RUNNER_LOCATION=${{ env.RUNNER_LOCATION }}" \
+            -e "RUNNER_PROJECT_ID=${{ env.RUNNER_PROJECT_ID }}" \
+            -e "RUNNER_REPOSITORY_ID=${{ env.RUNNER_REPOSITORY_ID }}" \
+            -e "RUNNER_SERVICE_ACCOUNT=${{ env.RUNNER_SERVICE_ACCOUNT }}" \
+            -e "WEBHOOK_KEY_MOUNT_PATH=${WEBHOOK_SECRET_MOUNT_PATH}" \
+            -e "WEBHOOK_KEY_NAME=${WEBHOOK_SECRET_NAME}" \
+            "${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-amd64")
+          echo "container_id=${CONTAINER_ID}" >> "$GITHUB_OUTPUT"
 
   test:
-    needs: 'deploy'
+    needs: 'test-container'
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Checkout'
@@ -165,30 +166,15 @@ jobs:
         run: |-
           set -euo pipefail
           SECRET=$(gcloud secrets versions access latest --secret="webhook-pr-test-secret" --project="${{ env.AUTOPUSH_PROJECT_ID }}")
-          go run ./cmd/webhook-tester --url="${{ needs.deploy.outputs.service_url }}/webhook" --secret="${SECRET}"
+          go run ./cmd/webhook-tester --url="http://localhost:8080/webhook" --secret="${SECRET}"
 
   cleanup:
-    needs: ['deploy', 'test']
+    needs: ['test-container', 'test']
     if: 'always()'
     runs-on: 'ubuntu-latest'
     steps:
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
-        with:
-          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
-          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
-          token_format: 'access_token'
-
-      - name: 'Setup gcloud'
-        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
-        with:
-          version: '529.0.0'
-
-      - name: 'Delete Cloud Run Service'
+      - name: 'Stop and Remove Docker Container'
         run: |-
-          SERVICE_NAME='${{ needs.deploy.outputs.service_name }}'
-          gcloud run services delete "${SERVICE_NAME}" \
-            --project='${{ env.AUTOPUSH_PROJECT_ID }}' \
-            --region='${{ env.AUTOPUSH_REGION }}' \
-            --quiet
+          CONTAINER_ID='${{ needs.test-container.outputs.container_id }}'
+          docker stop "${CONTAINER_ID}"
+          docker rm "${CONTAINER_ID}"
