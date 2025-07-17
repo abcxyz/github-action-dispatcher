@@ -133,6 +133,9 @@ jobs:
           echo "service_url=${SERVICE_URL}" >> "$GITHUB_OUTPUT"
           echo "service_name=${SERVICE_NAME}" >> "$GITHUB_OUTPUT"
 
+          echo "Waiting for 30 seconds for the service to be ready..."
+          sleep 30
+
   test:
     needs: 'deploy'
     runs-on: 'ubuntu-latest'
