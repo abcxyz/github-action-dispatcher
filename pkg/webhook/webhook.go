@@ -176,9 +176,8 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 				ServiceAccount: s.runnerServiceAccount,
 				Steps: []*cloudbuildpb.BuildStep{
 					{
-						Id:         "run",
-						Name:       "$_REPOSITORY_ID/$_IMAGE_NAME:$_IMAGE_TAG",
-						Entrypoint: "bash",
+						Id:   "run",
+						Name: "$_REPOSITORY_ID/$_IMAGE_NAME:$_IMAGE_TAG",
 						Env: []string{
 							"ENCODED_JIT_CONFIG=${_ENCODED_JIT_CONFIG}",
 						},

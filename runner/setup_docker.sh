@@ -1,25 +1,26 @@
 #!/bin/bash
 set -euo pipefail
 
-# Get the Group ID (GID) of the mounted docker socket
-DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)
-
-# 🛡️ SECURITY CHECK: Refuse to proceed if the socket's group is root (GID 0).
-# Since the runner does have full sudo permissions, this won't stop a malicious
-# actor.
-if [[ "${DOCKER_SOCKET_GID}" -eq 0 ]]; then
-  echo "!! DANGER !!" >&2
-  echo "Docker socket is owned by the 'root' group (GID 0)." >&2
-  echo "Adding a user to the root group is a major security risk." >&2
-  echo "Aborting." >&2
-  exit 1
+# --- Privilege Check ---
+echo "--- Checking for privileged access... ---"
+if ! ls /dev | grep -q -E 'sda|vda|xvda'; then
+    echo "ERROR: Container is not running in privileged mode." >&2
+    echo "This Docker-in-Docker setup requires the --privileged flag to function." >&2
+    exit 1
 fi
+echo "SUCCESS: Privileged access confirmed."
 
-# Create a group with the socket's GID if it doesn't already exist.
-getent group "${DOCKER_SOCKET_GID}" || groupadd --gid "${DOCKER_SOCKET_GID}" docker_socket
+# --- Opportunistic DinD Start ---
+# Define a non-conflicting path for the DinD socket to avoid collision with the host's mount
+INTERNAL_DOCKER_SOCKET="unix:///var/run/docker-internal.sock"
 
-# Add the 'runner' user to the docker socket's group.
-usermod -aG "${DOCKER_SOCKET_GID}" runner
+# Set the DOCKER_HOST variable so all docker commands talk to our new DinD daemon
+export DOCKER_HOST="${INTERNAL_DOCKER_SOCKET}"
 
-# Switch to the 'runner' user and execute the startup script.
+# Start the daemon in the background on the new socket
+# Forcing --storage-driver=vfs is crucial for reliability in Cloud Build
+dockerd-entrypoint.sh dockerd --host="${INTERNAL_DOCKER_SOCKET}" --storage-driver=vfs &
+
+# Drop privileges and execute the runner startup script
+# The DOCKER_HOST variable will be passed to the runner's environment
 exec gosu runner /actions-runner/start_runner.sh "$@"

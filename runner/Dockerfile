@@ -1,4 +1,6 @@
 FROM gcr.io/cloud-builders/docker@sha256:057d91e53efd3e025350d09ecf0fea30ec261bdc5ef5e052d1351c6c6d9dfe21
+# Use this to find the current hash of cached images.
+# docker image ls --digests
 ENV DEBIAN_FRONTEND=noninteractive
 
 ARG ACTION_RUNNER_VERSION=2.326.0
@@ -31,6 +33,9 @@ RUN apt-get update \
     && apt-get clean \
     && rm -r /var/lib/apt/lists/*
 
+# Add the official Docker-in-Docker entrypoint script for a reliable DinD setup
+COPY --from=docker:dind /usr/local/bin/dockerd-entrypoint.sh /usr/local/bin/
+
 RUN curl -f -L -o runner.tar.gz https://github.com/actions/runner/releases/download/v${ACTION_RUNNER_VERSION}/actions-runner-linux-x64-${ACTION_RUNNER_VERSION}.tar.gz \
     && tar xzf ./runner.tar.gz \
     && rm runner.tar.gz \
@@ -39,6 +44,9 @@ RUN curl -f -L -o runner.tar.gz https://github.com/actions/runner/releases/downl
 RUN /actions-runner/bin/installdependencies.sh \
     && adduser --disabled-password --gecos "" --uid 1001 runner \
     && usermod -aG sudo runner \
+    # The 'docker-ce' package in the base image creates the 'docker' group automatically.
+    # We just need to add our 'runner' user to it.
+    && usermod -aG docker runner \
     # Configure sudoers securely \
     && mkdir -p /etc/sudoers.d/ \
     && echo "%sudo ALL=(ALL:ALL) NOPASSWD:ALL" > /etc/sudoers.d/runner_sudo_access \
@@ -73,6 +81,12 @@ RUN apt-get update && \
     rm -rf /tmp/${GH_PACKAGE} /opt/gh_${GH_VERSION}_linux_amd64 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Rename the real docker binary
+RUN mv /usr/bin/docker /usr/bin/docker.real
+# Add the wrapper script that will replace it
+COPY docker_proxy.sh /usr/bin/docker
+RUN chmod +x /usr/bin/docker
 
 COPY start_runner.sh /actions-runner/start_runner.sh
 RUN chmod +x /actions-runner/start_runner.sh
