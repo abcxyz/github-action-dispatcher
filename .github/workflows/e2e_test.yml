@@ -89,7 +89,7 @@ jobs:
       service_url: '${{ steps.deploy.outputs.service_url }}'
     env:
       GITHUB_APP_ID: '1617912'
-      KMS_APP_PRIVATE_KEY_ID: 'projects/action-dispatcher-webhook-a-18/locations/global/keyRings/webhook-pr-test-keyring/cryptoKeys/webhook-pr-test-app-key/cryptoKeyVersions/1'
+      KMS_APP_PRIVATE_KEY_ID: 'projects/action-dispatcher-webhook-a-18/locations/global/keyRings/webhook-pr-test-keyring/cryptoKeys/webhook-pr-test-app-key/cryptoKeyVersions/4'
       RUNNER_LOCATION: 'us-central1'
       RUNNER_PROJECT_ID: 'action-dispatcher-webhook-a-18'
       RUNNER_REPOSITORY_ID: 'docker-images'
