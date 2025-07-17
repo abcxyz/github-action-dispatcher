@@ -128,7 +128,8 @@ jobs:
       - name: 'Stop and Remove Docker Container'
         if: 'always()'
         run: |-
-          CONTAINER_ID='${{ steps.docker_run.outputs.container_id }}'
+          CONTAINER_ID='${{ needs.build-and-test.outputs.container_id }}'
+          docker logs "${CONTAINER_ID}"
           docker stop "${CONTAINER_ID}"
           docker rm "${CONTAINER_ID}"
 
