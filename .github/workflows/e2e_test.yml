@@ -162,7 +162,7 @@ jobs:
         run: |-
           set -euo pipefail
           SECRET=$(gcloud secrets versions access latest --secret="webhook-pr-test-secret" --project="${{ env.AUTOPUSH_PROJECT_ID }}")
-          go run ./cmd/webhook-tester --url="${{ needs.deploy.outputs.service_url }}" --secret="${SECRET}"
+          go run ./cmd/webhook-tester --url="${{ needs.deploy.outputs.service_url }}/webhook" --secret="${SECRET}"
 
   cleanup:
     needs: ['deploy', 'test']
