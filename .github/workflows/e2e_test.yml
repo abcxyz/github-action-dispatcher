@@ -33,6 +33,8 @@ jobs:
   build-and-test:
     name: 'Build, publish, and test Docker image'
     runs-on: 'ubuntu-latest'
+    outputs:
+      container_id: '${{ steps.docker_run.outputs.container_id }}'
     env:
       GITHUB_APP_ID: '1617912'
       KMS_APP_PRIVATE_KEY_ID: 'projects/action-dispatcher-webhook-a-18/locations/global/keyRings/webhook-pr-test-keyring/cryptoKeys/webhook-pr-test-app-key/cryptoKeyVersions/4'
@@ -126,11 +128,14 @@ jobs:
           SECRET=$(gcloud secrets versions access latest --secret="webhook-pr-test-secret" --project="${{ env.AUTOPUSH_PROJECT_ID }}")
           go run ./cmd/webhook-tester --url="http://localhost:8080/webhook" --secret="${SECRET}"
 
+  cleanup:
+    needs: ['build-and-test']
+    if: 'always()'
+    runs-on: 'ubuntu-latest'
+    steps:
       - name: 'Stop and Remove Docker Container'
-        if: 'always()'
         run: |-
           CONTAINER_ID='${{ needs.build-and-test.outputs.container_id }}'
           docker logs "${CONTAINER_ID}"
           docker stop "${CONTAINER_ID}"
           docker rm "${CONTAINER_ID}"
-
