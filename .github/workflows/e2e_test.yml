@@ -114,6 +114,12 @@ jobs:
             -e "WEBHOOK_KEY_NAME=${WEBHOOK_SECRET_NAME}" \
             "${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-amd64")
           echo "container_id=${CONTAINER_ID}" >> "$GITHUB_OUTPUT"
+
+      - name: 'Get Docker Container Logs'
+        if: 'always()'
+        run: |
+          CONTAINER_ID='${{ steps.docker_run.outputs.container_id }}'
+          sleep 5 # Give the container a moment to start and produce logs
           docker logs "${CONTAINER_ID}"
 
       - name: 'Wait for service to be healthy'
