@@ -30,11 +30,17 @@ permissions:
   id-token: 'write'
 
 jobs:
-  build:
-    name: 'Build and publish Docker image'
+  build-and-test:
+    name: 'Build, publish, and test Docker image'
     runs-on: 'ubuntu-latest'
-    outputs:
-      image_tag: '${{ steps.tag.outputs.image_tag }}'
+    env:
+      GITHUB_APP_ID: '1617912'
+      KMS_APP_PRIVATE_KEY_ID: 'projects/action-dispatcher-webhook-a-18/locations/global/keyRings/webhook-pr-test-keyring/cryptoKeys/webhook-pr-test-app-key/cryptoKeyVersions/4'
+      RUNNER_LOCATION: 'us-central1'
+      RUNNER_PROJECT_ID: 'action-dispatcher-webhook-a-18'
+      RUNNER_REPOSITORY_ID: 'docker-images'
+      RUNNER_SERVICE_ACCOUNT: 'action-dispatcher-webhook-sa@action-dispatcher-webhook-a-18.iam.gserviceaccount.com'
+      RUNTIME_SERVICE_ACCOUNT: 'action-dispatcher-webhook-sa@action-dispatcher-webhook-a-18.iam.gserviceaccount.com'
     steps:
       - name: 'Checkout'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
@@ -72,44 +78,14 @@ jobs:
       - name: 'Create dummy tag for goreleaser'
         run: 'git tag v0.0.0-pr-${{ github.event.number }}'
 
-      - name: 'Build the server container and push to the registry with goreleaser'
+      - name: 'Build the server container with goreleaser'
         uses: 'goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552' # ratchet:goreleaser/goreleaser-action@v6
         with:
           version: 'v1.12.3'
-          args: 'release -f .goreleaser.e2e.yml --rm-dist --skip-validate'
+          args: 'release -f .goreleaser.e2e.yml --rm-dist --skip-validate --skip-publish'
         env:
           DOCKER_TAG: '${{ steps.tag.outputs.image_tag }}'
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-
-  test-container:
-    needs: 'build'
-    runs-on: 'ubuntu-latest'
-    outputs:
-      container_id: '${{ steps.docker_run.outputs.container_id }}'
-    env:
-      GITHUB_APP_ID: '1617912'
-      KMS_APP_PRIVATE_KEY_ID: 'projects/action-dispatcher-webhook-a-18/locations/global/keyRings/webhook-pr-test-keyring/cryptoKeys/webhook-pr-test-app-key/cryptoKeyVersions/4'
-      RUNNER_LOCATION: 'us-central1'
-      RUNNER_PROJECT_ID: 'action-dispatcher-webhook-a-18'
-      RUNNER_REPOSITORY_ID: 'docker-images'
-      RUNNER_SERVICE_ACCOUNT: 'action-dispatcher-webhook-sa@action-dispatcher-webhook-a-18.iam.gserviceaccount.com'
-      RUNTIME_SERVICE_ACCOUNT: 'action-dispatcher-webhook-sa@action-dispatcher-webhook-a-18.iam.gserviceaccount.com'
-    steps:
-      - name: 'Checkout'
-        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
-
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
-        with:
-          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
-          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
-          token_format: 'access_token'
-
-      - name: 'Setup gcloud'
-        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
-        with:
-          version: '529.0.0'
 
       - name: 'Fetch Webhook Secret'
         id: 'fetch-secret'
@@ -119,7 +95,7 @@ jobs:
       - name: 'Run Docker Container'
         id: 'docker_run'
         run: |-
-          IMAGE_TAG="${{ needs.build.outputs.image_tag }}"
+          IMAGE_TAG="${{ steps.tag.outputs.image_tag }}"
           WEBHOOK_SECRET_MOUNT_PATH="/etc/secrets/webhook-pr-test-key"
           WEBHOOK_SECRET_NAME="latest"
           CONTAINER_ID=$(docker run -d -p 8080:8080 \
@@ -137,44 +113,16 @@ jobs:
             "${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-amd64")
           echo "container_id=${CONTAINER_ID}" >> "$GITHUB_OUTPUT"
 
-  test:
-    needs: 'test-container'
-    runs-on: 'ubuntu-latest'
-    steps:
-      - name: 'Checkout'
-        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
-
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
-        with:
-          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
-          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
-          token_format: 'access_token'
-
-      - name: 'Setup gcloud'
-        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
-        with:
-          version: '529.0.0'
-
-      - name: 'Setup Go'
-        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
       - name: 'Run Webhook Tester'
         run: |-
           set -euo pipefail
           SECRET=$(gcloud secrets versions access latest --secret="webhook-pr-test-secret" --project="${{ env.AUTOPUSH_PROJECT_ID }}")
           go run ./cmd/webhook-tester --url="http://localhost:8080/webhook" --secret="${SECRET}"
 
-  cleanup:
-    needs: ['test-container', 'test']
-    if: 'always()'
-    runs-on: 'ubuntu-latest'
-    steps:
       - name: 'Stop and Remove Docker Container'
+        if: 'always()'
         run: |-
-          CONTAINER_ID='${{ needs.test-container.outputs.container_id }}'
+          CONTAINER_ID='${{ steps.docker_run.outputs.container_id }}'
           docker stop "${CONTAINER_ID}"
           docker rm "${CONTAINER_ID}"
+
