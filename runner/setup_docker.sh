@@ -4,7 +4,7 @@ set -euo pipefail
 # --- Privilege Check ---
 echo "--- Checking for privileged access... ---"
 # Check if any of the common host block devices exist.
-if [ -e "/dev/sda" ] || [ -e "/dev/vda" ] || [ -e "/dev/xvda" ]; then
+if [[ -e "/dev/sda" ]] || [[ -e "/dev/vda" ]] || [[ -e "/dev/xvda" ]]; then
     echo "SUCCESS: Privileged access confirmed."
 else
     echo "ERROR: Container is not running in privileged mode." >&2
