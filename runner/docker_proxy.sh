@@ -12,7 +12,7 @@ if ! /usr/bin/docker.real info > /dev/null 2>&1; then
   timeout=60
   while ! /usr/bin/docker.real info > /dev/null 2>&1; do
     ((timeout--))
-    if [ $timeout -eq 0 ]; then
+    if [[ "${timeout}" -eq 0 ]]; then
       echo "Timed out waiting for Docker daemon to start." >&2
       exit 1
     fi

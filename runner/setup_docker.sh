@@ -3,12 +3,14 @@ set -euo pipefail
 
 # --- Privilege Check ---
 echo "--- Checking for privileged access... ---"
-if ! ls /dev | grep -q -E 'sda|vda|xvda'; then
+# Check if any of the common host block devices exist.
+if [ -e "/dev/sda" ] || [ -e "/dev/vda" ] || [ -e "/dev/xvda" ]; then
+    echo "SUCCESS: Privileged access confirmed."
+else
     echo "ERROR: Container is not running in privileged mode." >&2
     echo "This Docker-in-Docker setup requires the --privileged flag to function." >&2
     exit 1
 fi
-echo "SUCCESS: Privileged access confirmed."
 
 # --- Opportunistic DinD Start ---
 # Define a non-conflicting path for the DinD socket to avoid collision with the host's mount
