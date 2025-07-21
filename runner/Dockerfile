@@ -1,9 +1,10 @@
-FROM ubuntu@sha256:dc17125eaac86538c57da886e494a34489122fb6a3ebb6411153d742594c2ddc
-
+FROM gcr.io/cloud-builders/docker@sha256:057d91e53efd3e025350d09ecf0fea30ec261bdc5ef5e052d1351c6c6d9dfe21
+# Use this to find the current hash of cached images.
+# docker image ls --digests
 ENV DEBIAN_FRONTEND=noninteractive
 
-ARG ACTION_RUNNER_VERSION=2.323.0
-ARG GH_VERSION=2.70.0
+ARG ACTION_RUNNER_VERSION=2.326.0
+ARG GH_VERSION=2.75.1
 ARG GH_PACKAGE=gh_${GH_VERSION}_linux_amd64.tar.gz
 ARG GH_INSTALL_DIR=/opt/gh-cli-${GH_VERSION}
 
@@ -18,6 +19,7 @@ RUN apt-get update \
       curl \
       git \
       git-lfs \
+      gosu \
       gzip \
       jq \
       lsb-release \
@@ -31,6 +33,9 @@ RUN apt-get update \
     && apt-get clean \
     && rm -r /var/lib/apt/lists/*
 
+# Add the official Docker-in-Docker entrypoint script for a reliable DinD setup
+COPY --from=docker:dind /usr/local/bin/dockerd-entrypoint.sh /usr/local/bin/
+
 RUN curl -f -L -o runner.tar.gz https://github.com/actions/runner/releases/download/v${ACTION_RUNNER_VERSION}/actions-runner-linux-x64-${ACTION_RUNNER_VERSION}.tar.gz \
     && tar xzf ./runner.tar.gz \
     && rm runner.tar.gz \
@@ -38,10 +43,12 @@ RUN curl -f -L -o runner.tar.gz https://github.com/actions/runner/releases/downl
 
 RUN /actions-runner/bin/installdependencies.sh \
     && adduser --disabled-password --gecos "" --uid 1001 runner \
-    && groupadd docker --gid 997 \
     && usermod -aG sudo runner \
+    # The 'docker-ce' package in the base image creates the 'docker' group automatically.
+    # We just need to add our 'runner' user to it.
     && usermod -aG docker runner \
-    # Configure sudoers securely
+    # Configure sudoers securely \
+    && mkdir -p /etc/sudoers.d/ \
     && echo "%sudo ALL=(ALL:ALL) NOPASSWD:ALL" > /etc/sudoers.d/runner_sudo_access \
     && echo "Defaults env_keep += \"DEBIAN_FRONTEND\"" >> /etc/sudoers.d/runner_sudo_access \
     # Define secure_path for sudo
@@ -62,21 +69,6 @@ RUN apt-get update -y && \
   && python3 -m pipx ensurepath \
   && python3 --version
 
-# Install docker.
-WORKDIR /install/docker/
-RUN apt-get -y update \
-    && install -m 0755 -d /etc/apt/keyrings \
-    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
-    && chmod a+r /etc/apt/keyrings/docker.asc \
-    && echo \
-        "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-        $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-        tee /etc/apt/sources.list.d/docker.list > /dev/null \
-    && apt-get update -y \
-    && apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
-    && rm -rf /var/lib/apt/lists/* \
-    && docker --version
-
 # Install gh CLI.
 WORKDIR /install/github-cli/
 RUN apt-get update && \
@@ -90,10 +82,19 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# Rename the real docker binary
+RUN mv /usr/bin/docker /usr/bin/docker.real
+# Add the wrapper script that will replace it
+COPY docker_proxy.sh /usr/bin/docker
+RUN chmod +x /usr/bin/docker
+
 COPY start_runner.sh /actions-runner/start_runner.sh
 RUN chmod +x /actions-runner/start_runner.sh
 
-WORKDIR /home/runner
-USER runner
+COPY setup_docker.sh /usr/local/bin/setup_docker.sh
+RUN chmod +x /usr/local/bin/setup_docker.sh
 
-ENTRYPOINT ["/actions-runner/start_runner.sh"]
+WORKDIR /home/runner
+
+# Docker socket is mounted at runtime, must fix permissions then.
+ENTRYPOINT ["/usr/local/bin/setup_docker.sh"]
