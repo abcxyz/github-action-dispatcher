@@ -219,7 +219,7 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 			logFields := append([]any{}, baseLogFields...) // Create a mutable copy
 
 			if event.WorkflowJob.CreatedAt != nil && event.WorkflowJob.StartedAt != nil {
-				queuedDuration := event.WorkflowJob.StartedAt.Time.Sub(event.WorkflowJob.CreatedAt.Time)
+				queuedDuration := event.WorkflowJob.StartedAt.Sub(event.WorkflowJob.CreatedAt.Time)
 
 				logFields = append(logFields, "duration_queued_seconds", queuedDuration.Seconds())
 			}
@@ -236,13 +236,13 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 			}
 
 			if event.WorkflowJob.StartedAt != nil && event.WorkflowJob.CompletedAt != nil {
-				inProgressDuration := event.WorkflowJob.CompletedAt.Time.Sub(event.WorkflowJob.StartedAt.Time)
+				inProgressDuration := event.WorkflowJob.CompletedAt.Sub(event.WorkflowJob.StartedAt.Time)
 				logFields = append(logFields, "duration_in_progress_seconds", inProgressDuration.Seconds())
 			}
 
 			// Optional: Also log total duration from creation to completion here
 			if event.WorkflowJob.CreatedAt != nil && event.WorkflowJob.CompletedAt != nil {
-				totalDuration := event.WorkflowJob.CompletedAt.Time.Sub(event.WorkflowJob.CreatedAt.Time)
+				totalDuration := event.WorkflowJob.CompletedAt.Sub(event.WorkflowJob.CreatedAt.Time)
 				logFields = append(logFields, "duration_total_seconds", totalDuration.Seconds())
 			}
 
@@ -271,6 +271,5 @@ func getTimeString(ghTime *github.Timestamp) string {
 	if ghTime == nil { // ONLY check if the *pointer* itself is nil
 		return "N/A"
 	}
-	// ghTime.Time is a time.Time struct, which is never nil.
-	return ghTime.Time.Format(time.RFC3339Nano)
+	return ghTime.Format(time.RFC3339Nano)
 }
