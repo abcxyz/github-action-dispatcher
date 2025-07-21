@@ -11,7 +11,7 @@ require (
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/sethvargo/go-envconfig v1.1.1
 	github.com/sethvargo/go-gcpkms v0.3.0
-	golang.org/x/oauth2 v0.26.0
+	golang.org/x/oauth2 v0.27.0
 	google.golang.org/api v0.222.0
 )
 
