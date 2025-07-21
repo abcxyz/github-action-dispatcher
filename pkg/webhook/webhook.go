@@ -158,7 +158,7 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 				return &apiResponse{http.StatusBadRequest, "unexpected event payload struture", err}
 			}
 
-			jitConfig, errResponse := s.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID)
+			jitConfig, errResponse := s.GenerateOrgJITConfig(ctx, *event.Installation.ID, *event.Org.Login, runnerID)
 			if errResponse != nil {
 				logger.ErrorContext(ctx, "failed to generate JIT config", append(baseLogFields, "error", errResponse.Error, "response_message", errResponse.Message)...)
 				return errResponse
