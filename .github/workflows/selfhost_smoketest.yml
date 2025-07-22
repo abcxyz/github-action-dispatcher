@@ -78,9 +78,8 @@ jobs:
       directory: 'pkg/'
 
   run-lint-tests:
-    name: 'Run Lint Suite on abcxyz-pkg'
-    # This calls the workflow file you just created in your repo
+    name: 'Run Lint Suite on abcxyz/pkg'
     uses: ./.github/workflows/reusable-lint-logic.yml
     with:
-      repo-to-lint: 'abcxyz/abcxyz-pkg'
+      repo-to-lint: 'abcxyz/pkg'
       ref: 'main'
