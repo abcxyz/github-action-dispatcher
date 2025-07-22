@@ -83,3 +83,4 @@ jobs:
     with:
       repo-to-lint: 'abcxyz/pkg'
       ref: 'main'
+      runs-on: 'self-hosted'
