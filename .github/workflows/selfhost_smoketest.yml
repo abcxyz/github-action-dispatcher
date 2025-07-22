@@ -72,6 +72,7 @@ jobs:
             exit 1 # Fail the step if the mount is empty
           fi
 
+ # TODO: runs-on
   check-go-test-self:
     uses: 'abcxyz/actions/.github/workflows/go-test.yml@main' # ratchet:exclude
     with:
