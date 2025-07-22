@@ -20,22 +20,15 @@ import (
 	"github.com/sethvargo/go-gcpkms/pkg/gcpkms"
 )
 
-type CreateSignerRes struct {
-	Res *gcpkms.Signer
-	Err error
-}
+// MockKMSClient is a mock for the KeyManagementClient interface.
+type MockKMSClient struct{}
 
-type MockKMSClient struct {
-	CreateSignerMock *CreateSignerRes
-}
-
-func (m *MockKMSClient) CreateSigner(ctx context.Context, kmsAppPrivateKeyID string) (*gcpkms.Signer, error) {
-	if m.CreateSignerMock != nil {
-		return nil, m.CreateSignerMock.Err
-	}
-	return m.CreateSignerMock.Res, nil
-}
-
+// Close implements the KeyManagementClient interface.
 func (m *MockKMSClient) Close() error {
 	return nil
+}
+
+// CreateSigner implements the KeyManagementClient interface.
+func (m *MockKMSClient) CreateSigner(ctx context.Context, kmsAppPrivateKeyID string) (*gcpkms.Signer, error) {
+	return nil, nil
 }
