@@ -79,7 +79,7 @@ jobs:
 
   run-lint-tests:
     name: 'Run Lint Suite on abcxyz/pkg'
-    uses: '.github/workflows/reusable-lint-logic.yml'
+    uses: './.github/workflows/reusable-lint-logic.yml'
     with:
       repo-to-lint: 'abcxyz/pkg'
       ref: 'main'
