@@ -317,27 +317,26 @@ jobs:
           directory: '${{ matrix.gomod-dir }}'
           golangci_lint_version: '${{ env.GO_LINT_GOLANGCI_LINT_VERSION }}'
 
-    lint-js-ts:
-      runs-on: '${{ inputs.runs-on }}'
-      needs:
+  lint-js-ts:
+    runs-on: '${{ inputs.runs-on }}'
+    needs:
       - 'init'
-      if: |
-        needs.init.outputs.packagejson-dirs != '' && needs.init.outputs.packagejson-dirs != '[]' && github.repository != 'abcxyz/actions'
-      permissions:
-        contents: 'read'
-      strategy:
-        fail-fast: false
-        max-parallel: 100
-        matrix:
-          packagejson-dir: '${{ fromJSON(needs.init.outputs.packagejson-dirs) }}'
-      steps:
+    if: |
+      needs.init.outputs.packagejson-dirs != '' && needs.init.outputs.packagejson-dirs != '[]' && github.repository != 'abcxyz/actions'
+    permissions:
+      contents: 'read'
+    strategy:
+      fail-fast: false
+      max-parallel: 100
+      matrix:
+        packagejson-dir: '${{ fromJSON(needs.init.outputs.packagejson-dirs) }}'
+    steps:
       - name: 'Checkout'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
         with:
           repository: '${{ inputs.repo-to-lint }}'
           ref: '${{ inputs.ref }}'
           fetch-depth: 1 # shallow clone
-
       - name: '[JAVASCRIPT] Lint Javascript and Typescript'
         uses: 'abcxyz/actions/.github/actions/lint-javascript@main' # ratchet:exclude
         with:
