@@ -100,10 +100,10 @@ WORKDIR /home/runner
 USER runner
 
 # We may want to change to install globally, I think that is being done here
-# by settin the PIPX_BIN_DIR to something in the path.
+# by setting the PIPX_BIN_DIR to something in the path.
 # https://github.com/actions/runner-images/blob/8701ae48e2da7e0b758c8e5982185514b915f52b/images/ubuntu/scripts/build/install-pipx-packages.sh#L4
-RUN pipx install yamllint && \
-    pipx ensurepath
+RUN pipx ensurepath && \
+    pipx install yamllint
 
 
 USER root
