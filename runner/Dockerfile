@@ -27,7 +27,6 @@ RUN apt-get update \
       sudo \
       tar \
       unzip \
-      yamllint \
       zip \
       zstd \
     && apt-get clean \
@@ -69,11 +68,12 @@ RUN apt-get update -y && \
   && python3 -m pipx ensurepath \
   && python3 --version
 
+
 # Install gh CLI.
 WORKDIR /install/github-cli/
 RUN apt-get update && \
     apt-get install -y --no-install-recommends wget tar ca-certificates && \
-    wget -q https://github.com/cli/cli/releases/download/v${GH_VERSION}/${GH_PACKAGE} -O /tmp/${GH_PACKAGE} && \
+    curl -f -L -o /tmp/${GH_PACKAGE} https://github.com/cli/cli/releases/download/v${GH_VERSION}/${GH_PACKAGE} -O  && \
     tar -xzf /tmp/${GH_PACKAGE} -C /opt && \
     mv /opt/gh_${GH_VERSION}_linux_amd64/bin/gh /usr/local/bin/gh && \
     chmod +x /usr/local/bin/gh && \
@@ -95,6 +95,15 @@ COPY setup_docker.sh /usr/local/bin/setup_docker.sh
 RUN chmod +x /usr/local/bin/setup_docker.sh
 
 WORKDIR /home/runner
+
+# We need to do some setup as the runner
+USER runner
+
+RUN pipx yamllint && \
+    pipx ensurepath
+
+
+USER root
 
 # Docker socket is mounted at runtime, must fix permissions then.
 ENTRYPOINT ["/usr/local/bin/setup_docker.sh"]
