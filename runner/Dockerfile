@@ -94,6 +94,13 @@ RUN chmod +x /actions-runner/start_runner.sh
 COPY setup_docker.sh /usr/local/bin/setup_docker.sh
 RUN chmod +x /usr/local/bin/setup_docker.sh
 
+# Mirror permissions from GitHub hosted runner. Note that in experimentation
+# it appears that facl has been set, but I don't see that being done in this
+# repo.
+# https://github.com/actions/runner-images/blob/1ed26a6d42b1c856759a31823c9d99b9775cb5fa/images/ubuntu/scripts/build/configure-system.sh#L15
+RUN chmod -R 777 /opt && \
+    chmod -R 777 /usr/share
+
 WORKDIR /home/runner
 
 # We need to do some setup as the runner
