@@ -27,7 +27,6 @@ RUN apt-get update \
       sudo \
       tar \
       unzip \
-      yamllint \
       zip \
       zstd \
     && apt-get clean \
@@ -69,11 +68,12 @@ RUN apt-get update -y && \
   && python3 -m pipx ensurepath \
   && python3 --version
 
+
 # Install gh CLI.
 WORKDIR /install/github-cli/
 RUN apt-get update && \
     apt-get install -y --no-install-recommends wget tar ca-certificates && \
-    wget -q https://github.com/cli/cli/releases/download/v${GH_VERSION}/${GH_PACKAGE} -O /tmp/${GH_PACKAGE} && \
+    curl -f -L -o /tmp/${GH_PACKAGE} https://github.com/cli/cli/releases/download/v${GH_VERSION}/${GH_PACKAGE} -O  && \
     tar -xzf /tmp/${GH_PACKAGE} -C /opt && \
     mv /opt/gh_${GH_VERSION}_linux_amd64/bin/gh /usr/local/bin/gh && \
     chmod +x /usr/local/bin/gh && \
@@ -94,7 +94,30 @@ RUN chmod +x /actions-runner/start_runner.sh
 COPY setup_docker.sh /usr/local/bin/setup_docker.sh
 RUN chmod +x /usr/local/bin/setup_docker.sh
 
+# Mirror permissions from GitHub hosted runner. Note that in experimentation
+# it appears that facl has been set, but I don't see that being done in this
+# repo.
+# https://github.com/actions/runner-images/blob/1ed26a6d42b1c856759a31823c9d99b9775cb5fa/images/ubuntu/scripts/build/configure-system.sh#L15
+RUN chmod -R 777 /opt && \
+    chmod -R 777 /usr/share
+
 WORKDIR /home/runner
+
+# We need to do some setup as the runner
+USER runner
+ENV HOME="/home/runner"
+# .profile doesn't get sourced, so we need to add these manually
+# This is a bit hacky as root user will also have /home/runner in its path.
+ENV PATH="$HOME/bin:$HOME/.local/bin:$PATH"
+
+# We may want to change to install globally, I think that is being done here
+# by setting the PIPX_BIN_DIR to something in the path.
+# https://github.com/actions/runner-images/blob/8701ae48e2da7e0b758c8e5982185514b915f52b/images/ubuntu/scripts/build/install-pipx-packages.sh#L4
+RUN pipx ensurepath && \
+    pipx install yamllint
+
+
+USER root
 
 # Docker socket is mounted at runtime, must fix permissions then.
 ENTRYPOINT ["/usr/local/bin/setup_docker.sh"]
