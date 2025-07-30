@@ -17,12 +17,13 @@ on:
       - '.github/workflows/e2e_test.yml'
 
 env:
-  WIF_PROVIDER: 'projects/727875687543/locations/global/workloadIdentityPools/github-actions-on-gcp-p-a63b4c/providers/github-actions-on-gcp-p-a63b4c'
-  WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-on-gcp-p-a63b4c.iam.gserviceaccount.com'
+  WIF_PROVIDER: 'projects/214307795652/locations/global/workloadIdentityPools/github-automation/providers/action-dispatcher-i'
+  WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-action-dispatcher-i-413ef7.iam.gserviceaccount.com'
   DOCKER_REGISTRY: 'us-docker.pkg.dev'
-  DOCKER_REPO: 'us-docker.pkg.dev/ghss-artifacts-p-25/docker-images'
+  # TODO: update with integration docker repo
+  DOCKER_REPO: 'us-docker.pkg.dev/gha-action-dispatcher-i-413ef7/ci-images'
   IMAGE_NAME: 'gha-webhook'
-  AUTOPUSH_PROJECT_ID: 'action-dispatcher-webhook-a-18'
+  AUTOPUSH_PROJECT_ID: 'gha-action-dispatcher-i-413ef7'
   AUTOPUSH_REGION: 'us-central1'
 
 permissions:
@@ -89,12 +90,15 @@ jobs:
       service_url: '${{ steps.deploy.outputs.service_url }}'
     env:
       GITHUB_APP_ID: '1617912'
-      KMS_APP_PRIVATE_KEY_ID: 'projects/action-dispatcher-webhook-a-18/locations/global/keyRings/webhook-pr-test-keyring/cryptoKeys/webhook-pr-test-app-key/cryptoKeyVersions/4'
+      # TODO: update with integration KMS key
+      KMS_APP_PRIVATE_KEY_ID: 'projects/gha-action-dispatcher-i-413ef7/locations/global/keyRings/webhook-pr-test-keyring/cryptoKeys/webhook-pr-test-app-key'
       RUNNER_LOCATION: 'us-central1'
-      RUNNER_PROJECT_ID: 'action-dispatcher-webhook-a-18'
+      RUNNER_PROJECT_ID: 'gha-action-dispatcher-i-413ef7'
       RUNNER_REPOSITORY_ID: 'docker-images'
-      RUNNER_SERVICE_ACCOUNT: 'action-dispatcher-webhook-sa@action-dispatcher-webhook-a-18.iam.gserviceaccount.com'
-      RUNTIME_SERVICE_ACCOUNT: 'action-dispatcher-webhook-sa@action-dispatcher-webhook-a-18.iam.gserviceaccount.com'
+      # TODO: update with integration service account
+      RUNNER_SERVICE_ACCOUNT: 'action-dispatcher-webhook-sa@gha-action-dispatcher-i-413ef7.iam.gserviceaccount.com'
+      # TODO: update with integration service account
+      RUNTIME_SERVICE_ACCOUNT: 'action-dispatcher-webhook-sa@gha-action-dispatcher-i-413ef7.iam.gserviceaccount.com'
     steps:
       - name: 'Checkout'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
