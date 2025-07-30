@@ -173,12 +173,12 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: 'verify-dotnet'
-        uses: 'actions/github-script@v7'
-        with:
-          script-language: 'csharp'
-          script: |
-            var version = Environment.Version;
-            if (version.Major != 8 || version.Minor != 0)
-            {
-              throw new Exception($"Want .NET 8.0.x, got {version}");
-            }
+        run: |
+          dotnet tool install --global dotnet-script --version 1.5.2
+          dotnet-script <<EOF
+          var version = Environment.Version;
+          if (version.Major != 8 || version.Minor != 0)
+          {
+            throw new Exception($"Want .NET 8.0.x, got {version}");
+          }
+          EOF
