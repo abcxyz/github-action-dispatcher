@@ -105,7 +105,6 @@ jobs:
 
   test-github-functionality:
     name: 'Test GitHub functionality'
-    runs-on: 'self-hosted'
     uses: './.github/workflows/integration-test-gh.yaml'
     with:
       runs-on: 'self-hosted'
