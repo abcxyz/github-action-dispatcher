@@ -109,6 +109,11 @@ ENV HOME="/home/runner"
 # .profile doesn't get sourced, so we need to add these manually
 # This is a bit hacky as root user will also have /home/runner in its path.
 ENV PATH="$HOME/bin:$HOME/.local/bin:$PATH"
+# This exists in the runner, added for compatibility as setup-dotnet is not
+# adding to path, breaking tools installed with `dotnet tool install`.
+# TODO: remove when https://github.com/actions/setup-dotnet/issues/653 is
+# resolved.
+ENV PATH="$HOME/.dotnet/tools:$PATH"
 
 # We may want to change to install globally, I think that is being done here
 # by setting the PIPX_BIN_DIR to something in the path.
