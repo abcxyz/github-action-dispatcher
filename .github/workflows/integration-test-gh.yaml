@@ -35,7 +35,7 @@ jobs:
     - name: 'Verify gh CLI is available'
       run: |
         gh --version
-        gh repo view
+        gh repo list
 
   test-github-env-and-output:
     name: 'Test GITHUB_OUTPUT and GITHUB_ENV'
