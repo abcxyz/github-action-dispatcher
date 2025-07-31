@@ -21,7 +21,7 @@ on:
         description: 'The runner environment to use for the jobs.'
         required: false
         type: 'string'
-        default: 'ubuntu-latest'
+        default: 'self-hosted'
 
 jobs:
   test-setup-python:

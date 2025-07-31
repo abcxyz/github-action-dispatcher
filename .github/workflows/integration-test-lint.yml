@@ -29,7 +29,7 @@ on:
         description: 'The runner environment to use for linting jobs.'
         required: false
         type: 'string'
-        default: 'ubuntu-latest'
+        default: 'self-hosted'
 
 concurrency:
   # New linter jobs with same inputs will cancel old versions.
