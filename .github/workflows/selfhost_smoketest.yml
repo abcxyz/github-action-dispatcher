@@ -174,12 +174,13 @@ jobs:
       - name: 'verify-dotnet'
         run: |
           dotnet tool install --global dotnet-script --version 1.6.0
-          dotnet-script <<'EOF'
+          cat <<'EOF' > test.csx
           var version = Environment.Version;
           if (version.Major != 8 || version.Minor != 0)
           {
             throw new Exception($"Want .NET 8.0.x, got {version}");
           }
+          dotnet-script test.csx
           EOF
 
   setup-actions-ubuntu:
