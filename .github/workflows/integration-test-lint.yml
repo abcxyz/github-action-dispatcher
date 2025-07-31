@@ -32,7 +32,7 @@ on:
         default: 'ubuntu-latest'
 
 concurrency:
-  group: '${{ github.workflow }}-${{ inputs.ref }}'
+  group: '${{ github.workflow }}-${{inputs.repo-to-lint}}-${{ inputs.ref }}-${{inputs.runs-on}}'
   cancel-in-progress: true
 
 jobs:

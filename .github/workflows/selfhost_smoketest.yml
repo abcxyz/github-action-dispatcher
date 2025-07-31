@@ -103,6 +103,12 @@ jobs:
       ref: 'main'
       runs-on: 'self-hosted'
 
+  test-github-functionality:
+    name: 'Test GitHub functionality'
+    runs-on: 'self-hosted'
+    steps:
+
+
   setup-actions:
     runs-on: 'self-hosted'
     steps:
