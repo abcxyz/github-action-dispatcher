@@ -109,6 +109,14 @@ jobs:
     with:
       runs-on: 'self-hosted'
 
+  test-gcp-functionality:
+    name: 'Test GCP functionality'
+    uses: './.github/workflows/integration-test-gcp.yml'
+    permissions:
+      id-token: 'write'
+    with:
+      runs-on: 'self-hosted'
+
   setup-actions:
     name: 'Test setup actions'
     uses: './.github/workflows/integration-test-setup.yml'

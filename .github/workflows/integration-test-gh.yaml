@@ -18,10 +18,10 @@ on:
   workflow_call:
     inputs:
       runs-on:
-        description: 'The runner environment to use for linting jobs.'
+        description: 'The runner environment to use for jobs.'
         required: false
         type: 'string'
-        default: 'ubuntu-latest'
+        default: 'self-hosted'
 
 jobs:
   test-gh-cli:
