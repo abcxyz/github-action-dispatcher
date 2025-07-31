@@ -27,6 +27,8 @@ jobs:
   test-gh-cli:
     name: 'Test gh CLI'
     runs-on: '${{ inputs.runs-on }}'
+    permissions:
+      contents: 'read'
     steps:
     - name: 'Verify gh CLI is available'
       run: |
