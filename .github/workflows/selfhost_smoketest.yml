@@ -87,11 +87,19 @@ jobs:
       directory: 'pkg/'
       runs-on: 'self-hosted'
 
-  run-lint-tests:
+  run-lint-tests-pkg:
     name: 'Run Lint Suite on abcxyz/pkg'
     uses: './.github/workflows/integration-test-lint.yml'
     with:
       repo-to-lint: 'abcxyz/pkg'
+      ref: 'main'
+      runs-on: 'self-hosted'
+
+  run-lint-tests-java-repo:
+    name: 'Run Lint Suite on abcxyz/lumberjack to test a repo with java'
+    uses: './.github/workflows/integration-test-lint.yml'
+    with:
+      repo-to-lint: 'abcxyz/lumberjack'
       ref: 'main'
       runs-on: 'self-hosted'
 
