@@ -103,6 +103,12 @@ jobs:
       ref: 'main'
       runs-on: 'self-hosted'
 
+  test-github-functionality:
+    name: 'Test GitHub functionality'
+    uses: './.github/workflows/integration-test-gh.yaml'
+    with:
+      runs-on: 'self-hosted'
+
   setup-actions:
     runs-on: 'self-hosted'
     steps:

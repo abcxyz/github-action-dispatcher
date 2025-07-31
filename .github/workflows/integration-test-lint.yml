@@ -32,7 +32,8 @@ on:
         default: 'ubuntu-latest'
 
 concurrency:
-  group: '${{ github.workflow }}-${{ inputs.ref }}'
+  # New linter jobs with same inputs will cancel old versions.
+  group: '${{ github.workflow }}-${{inputs.repo-to-lint}}-${{ inputs.ref }}-${{inputs.runs-on}}'
   cancel-in-progress: true
 
 jobs:
