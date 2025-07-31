@@ -63,7 +63,7 @@ jobs:
     steps:
       - name: 'Test fromJSON'
         run: |
-          output=$(echo '${{ fromJSON('{"key": "value"}').key }}')
+          output='${{ fromJSON('{"key": "value"}').key }}'
           if [[ "${output}" != "value" ]]; then
             echo "::error::fromJSON function failed"
             exit 1
@@ -76,7 +76,7 @@ jobs:
       job1_output: '${{ steps.job1.outputs.test_output }}'
     steps:
       - id: 'job1'
-        run: 'echo "test_output=job1_data" >> $GITHUB_OUTPUT'
+        run: 'echo "test_output=job1_data" >> "${GITHUB_OUTPUT}"'
 
   complex-workflow-job-2:
     name: 'Complex Workflow - Job 2'
@@ -92,7 +92,7 @@ jobs:
             exit 1
           fi
       - id: 'job2'
-        run: 'echo "test_output=job2_data" >> $GITHUB_OUTPUT'
+        run: 'echo "test_output=job2_data" >> "${GITHUB_OUTPUT}"'
 
   complex-workflow-job-3:
     name: 'Complex Workflow - Job 3 (Multiple Dependencies)'
