@@ -182,8 +182,8 @@ jobs:
           {
             throw new Exception($"Want .NET 8.0.x, got {version}");
           }
-          dotnet-script test.csx
           EOF
+          dotnet-script test.csx
 
   setup-actions-ubuntu:
     runs-on: 'ubuntu-latest'
@@ -205,7 +205,7 @@ jobs:
           {
             throw new Exception($"Want .NET 8.0.x, got {version}");
           }
-          dotnet-script test.csx
           EOF
+          dotnet-script test.csx
       - name: 'print path'
         run: 'echo "${PATH}"'
