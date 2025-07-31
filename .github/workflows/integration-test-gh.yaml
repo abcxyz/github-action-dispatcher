@@ -30,44 +30,44 @@ jobs:
     permissions:
       contents: 'read'
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
     steps:
-    - name: 'Verify gh CLI is available'
-      run: |
-        gh --version
-        gh repo list
+      - name: 'Verify gh CLI is available'
+        run: |
+          gh --version
+          gh repo list
 
   test-github-env-and-output:
     name: 'Test GITHUB_OUTPUT and GITHUB_ENV'
     runs-on: '${{ inputs.runs-on }}'
     steps:
-    - name: 'Set environment variables'
-      id: 'setter'
-      run: |
-        echo "out1=hello" >> "${GITHUB_OUTPUT}"
-        echo "MY_ENV=test" >> "${GITHUB_ENV}"
-    - name: 'Verify environment variables'
-      run: |
-        if [[ "${{ steps.setter.outputs.out1 }}" != "hello" ]]; then
-          echo "::error::GITHUB_OUTPUT not set correctly"
-          exit 1
-        fi
-        if [[ "${MY_ENV}" != "test" ]]; then
-          echo "::error::GITHUB_ENV not set correctly"
-          exit 1
-        fi
+      - name: 'Set environment variables'
+        id: 'setter'
+        run: |
+          echo "out1=hello" >> "${GITHUB_OUTPUT}"
+          echo "MY_ENV=test" >> "${GITHUB_ENV}"
+      - name: 'Verify environment variables'
+        run: |
+          if [[ "${{ steps.setter.outputs.out1 }}" != "hello" ]]; then
+            echo "::error::GITHUB_OUTPUT not set correctly"
+            exit 1
+          fi
+          if [[ "${MY_ENV}" != "test" ]]; then
+            echo "::error::GITHUB_ENV not set correctly"
+            exit 1
+          fi
 
   test-github-functions:
     name: 'Test GitHub native functions'
     runs-on: '${{ inputs.runs-on }}'
     steps:
-    - name: 'Test fromJSON'
-      run: |
-        output=$(echo '${{ fromJSON('{"key": "value"}').key }}')
-        if [[ "${output}" != "value" ]]; then
-          echo "::error::fromJSON function failed"
-          exit 1
-        fi
+      - name: 'Test fromJSON'
+        run: |
+          output=$(echo '${{ fromJSON('{"key": "value"}').key }}')
+          if [[ "${output}" != "value" ]]; then
+            echo "::error::fromJSON function failed"
+            exit 1
+          fi
 
   complex-workflow-job-1:
     name: 'Complex Workflow - Job 1'
@@ -75,8 +75,8 @@ jobs:
     outputs:
       job1_output: '${{ steps.job1.outputs.test_output }}'
     steps:
-    - id: 'job1'
-      run: 'echo "test_output=job1_data" >> $GITHUB_OUTPUT'
+      - id: 'job1'
+        run: 'echo "test_output=job1_data" >> $GITHUB_OUTPUT'
 
   complex-workflow-job-2:
     name: 'Complex Workflow - Job 2'
@@ -85,28 +85,27 @@ jobs:
     outputs:
       job2_output: '${{ steps.job2.outputs.test_output }}'
     steps:
-    - name: 'Verify data from Job 1'
-      run: |
-        if [[ "${{ needs.complex-workflow-job-1.outputs.job1_output }}" != "job1_data" ]]; then
-          echo "::error::Did not receive correct output from Job 1"
-          exit 1
-        fi
-    - id: 'job2'
-      run: 'echo "test_output=job2_data" >> $GITHUB_OUTPUT'
+      - name: 'Verify data from Job 1'
+        run: |
+          if [[ "${{ needs.complex-workflow-job-1.outputs.job1_output }}" != "job1_data" ]]; then
+            echo "::error::Did not receive correct output from Job 1"
+            exit 1
+          fi
+      - id: 'job2'
+        run: 'echo "test_output=job2_data" >> $GITHUB_OUTPUT'
 
   complex-workflow-job-3:
     name: 'Complex Workflow - Job 3 (Multiple Dependencies)'
     runs-on: '${{ inputs.runs-on }}'
     needs: ['complex-workflow-job-1', 'complex-workflow-job-2']
     steps:
-    - name: 'Verify data from Job 1 and Job 2'
-      run: |
-        if [[ "${{ needs.complex-workflow-job-1.outputs.job1_output }}" != "job1_data" ]]; then
-          echo "::error::Did not receive correct output from Job 1"
-          exit 1
-        fi
-        if [[ "${{ needs.complex-workflow-job-2.outputs.job2_output }}" != "job2_data" ]]; then
-          echo "::error::Did not receive correct output from Job 2"
-          exit 1
-        fi
-
+      - name: 'Verify data from Job 1 and Job 2'
+        run: |
+          if [[ "${{ needs.complex-workflow-job-1.outputs.job1_output }}" != "job1_data" ]]; then
+            echo "::error::Did not receive correct output from Job 1"
+            exit 1
+          fi
+          if [[ "${{ needs.complex-workflow-job-2.outputs.job2_output }}" != "job2_data" ]]; then
+            echo "::error::Did not receive correct output from Job 2"
+            exit 1
+          fi
