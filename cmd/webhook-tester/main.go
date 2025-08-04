@@ -48,6 +48,7 @@ type testCase struct {
 func main() {
 	targetURL := flag.String("url", "", "The target URL for the webhook.")
 	secret := flag.String("secret", "", "The webhook secret.")
+	token := flag.String("token", "", "The OIDC token for authentication.")
 	flag.Parse()
 
 	if *targetURL == "" {
@@ -56,6 +57,10 @@ func main() {
 	}
 	if *secret == "" {
 		fmt.Fprintln(os.Stderr, "Error: --secret is required.")
+		os.Exit(1)
+	}
+	if *token == "" {
+		fmt.Fprintln(os.Stderr, "Error: --token is required.")
 		os.Exit(1)
 	}
 
@@ -134,6 +139,7 @@ func main() {
 
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-GitHub-Event", tc.eventHeader)
+		req.Header.Set("Authorization", "Bearer "+*token)
 		if signature != "" {
 			req.Header.Set("X-Hub-Signature-256", signature)
 		}
@@ -166,14 +172,14 @@ func main() {
 	fmt.Println("All test cases passed.")
 
 	fmt.Println("--- Running end-to-end test case: build verification ---")
-	if err := verifyBuildTriggered(*targetURL, validPayload, *secret); err != nil {
+	if err := verifyBuildTriggered(*targetURL, validPayload, *secret, *token); err != nil {
 		fmt.Fprintf(os.Stderr, "End-to-end test failed: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Println("End-to-end test case passed.")
 }
 
-func verifyBuildTriggered(targetURL, payload, secret string) error {
+func verifyBuildTriggered(targetURL, payload, secret, token string) error {
 	signature, err := generateSignature([]byte(payload), secret)
 	if err != nil {
 		return fmt.Errorf("failed to generate signature for e2e test: %w", err)
@@ -186,6 +192,7 @@ func verifyBuildTriggered(targetURL, payload, secret string) error {
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-GitHub-Event", "workflow_job")
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("X-Hub-Signature-256", signature)
 
 	client := &http.Client{Timeout: 15 * time.Second}
