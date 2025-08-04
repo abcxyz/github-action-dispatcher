@@ -91,7 +91,7 @@ jobs:
     env:
       GITHUB_APP_ID: '1617912'
       # TODO: update with integration KMS key
-      KMS_APP_PRIVATE_KEY_ID: 'projects/gha-action-dispatcher-i-413ef7/locations/global/keyRings/webhook-pr-test-keyring/cryptoKeys/webhook-pr-test-app-key'
+      KMS_APP_PRIVATE_KEY_ID: 'projects/gha-action-dispatcher-i-413ef7/locations/global/keyRings/webhook-pr-test-keyring/cryptoKeys/webhook-pr-test-app-key/cryptoKeyVersions/1'
       RUNNER_LOCATION: 'us-central1'
       RUNNER_PROJECT_ID: 'gha-action-dispatcher-i-413ef7'
       RUNNER_REPOSITORY_ID: 'docker-images'
