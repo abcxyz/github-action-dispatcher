@@ -174,11 +174,12 @@ jobs:
           id_token_audience: '${{ needs.deploy.outputs.service_url }}'
 
       - name: 'Run Webhook Tester'
+        env:
+          ID_TOKEN: '${{ steps.oidc_auth.outputs.id_token }}'
         run: |-
           set -euo pipefail
           SECRET=$(gcloud secrets versions access latest --secret="webhook-pr-test-secret" --project="${{ env.AUTOPUSH_PROJECT_ID }}")
-          TOKEN=${{ steps.oidc_auth.outputs.id_token }}
-          go run ./cmd/webhook-tester --url="${{ needs.deploy.outputs.service_url }}/webhook" --secret="${SECRET}" --token="${TOKEN}"
+          go run ./cmd/webhook-tester --url="${{ needs.deploy.outputs.service_url }}/webhook" --secret="${SECRET}" --token="${ID_TOKEN}"
 
   cleanup:
     needs: ['deploy', 'test']
