@@ -147,12 +147,13 @@ jobs:
       - name: 'Checkout'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
 
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
+      - id: 'gcloud_auth'
+        name: 'Authenticate to Google Cloud for gcloud CLI'
         uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
         with:
           workload_identity_provider: '${{ env.WIF_PROVIDER }}'
           service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'access_token'
 
       - name: 'Setup gcloud'
         uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
@@ -164,11 +165,19 @@ jobs:
         with:
           go-version: '1.22'
 
+      - id: 'oidc_auth'
+        name: 'Generate OIDC token for webhook'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          id_token_audience: '${{ needs.deploy.outputs.service_url }}'
+
       - name: 'Run Webhook Tester'
         run: |-
           set -euo pipefail
           SECRET=$(gcloud secrets versions access latest --secret="webhook-pr-test-secret" --project="${{ env.AUTOPUSH_PROJECT_ID }}")
-          TOKEN=$(gcloud auth print-identity-token --audiences="${{ needs.deploy.outputs.service_url }}" --impersonate-service-account="${{ env.WIF_SERVICE_ACCOUNT }}")
+          TOKEN='${{ steps.oidc_auth.outputs.id_token }}'
           go run ./cmd/webhook-tester --url="${{ needs.deploy.outputs.service_url }}/webhook" --secret="${SECRET}" --token="${TOKEN}"
 
   cleanup:
