@@ -165,8 +165,10 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: 'Debug: Check gcloud auth'
-        run: 'gcloud auth list'
+      - name: 'Debug: Attempt to generate ID token with gcloud'
+        id: 'debug_token'
+        run: 'gcloud auth print-identity-token --audiences="${{ needs.deploy.outputs.service_url }}"'
+        continue-on-error: true
 
       - name: 'Run Webhook Tester'
         run: |-
