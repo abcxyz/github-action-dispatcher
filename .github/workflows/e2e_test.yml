@@ -168,7 +168,7 @@ jobs:
         run: |-
           set -euo pipefail
           SECRET=$(gcloud secrets versions access latest --secret="webhook-pr-test-secret" --project="${{ env.AUTOPUSH_PROJECT_ID }}")
-          TOKEN=$(gcloud auth print-identity-token --audiences="${{ needs.deploy.outputs.service_url }}")
+          TOKEN=$(gcloud auth print-identity-token --audiences="${{ needs.deploy.outputs.service_url }}" --impersonate-service-account="${{ env.WIF_SERVICE_ACCOUNT }}")
           go run ./cmd/webhook-tester --url="${{ needs.deploy.outputs.service_url }}/webhook" --secret="${SECRET}" --token="${TOKEN}"
 
   cleanup:
