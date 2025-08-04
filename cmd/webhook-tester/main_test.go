@@ -57,22 +57,23 @@ func TestWebhookHarness(t *testing.T) {
 	var fakeGitHub *httptest.Server
 	fakeGitHub = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("fakeGitHub received request: %s %s", r.Method, r.URL.Path)
-		if r.URL.Path == "/app/installations/54321" {
+		switch r.URL.Path {
+		case "/app/installations/54321":
 			w.WriteHeader(http.StatusOK)
 			if _, err := w.Write([]byte(`{"access_tokens_url": "` + fakeGitHub.URL + `/app/installations/54321/access_tokens"}`)); err != nil {
 				t.Errorf("failed to write response: %v", err)
 			}
-		} else if r.URL.Path == "/app/installations/54321/access_tokens" {
+		case "/app/installations/54321/access_tokens":
 			w.WriteHeader(http.StatusCreated)
 			if _, err := w.Write([]byte(`{"token": "test-token"}`)); err != nil {
 				t.Errorf("failed to write response: %v", err)
 			}
-		} else if r.URL.Path == "/repos/test-org/test-repo/actions/runners/generate-jitconfig" {
+		case "/repos/test-org/test-repo/actions/runners/generate-jitconfig":
 			w.WriteHeader(http.StatusCreated)
 			if _, err := w.Write([]byte(`{"encoded_jit_config": "test-jit-config"}`)); err != nil {
 				t.Errorf("failed to write response: %v", err)
 			}
-		} else {
+		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
