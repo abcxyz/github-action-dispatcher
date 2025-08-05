@@ -293,15 +293,15 @@ func TestHandleWebhook(t *testing.T) {
 			}
 
 			if tc.expectBuild {
-				if mockCloudBuildClient.createBuildReq == nil {
+				if mockCloudBuildClient.CreateBuildReq == nil {
 					t.Fatalf("expected a build to be created, but it was not")
 				}
-				if got, want := mockCloudBuildClient.createBuildReq.GetBuild().GetSubstitutions()["_IMAGE_TAG"], tc.expectedImageTag; got != want {
+				if got, want := mockCloudBuildClient.CreateBuildReq.GetBuild().GetSubstitutions()["_IMAGE_TAG"], tc.expectedImageTag; got != want {
 					t.Errorf("expected image tag %q to be %q", got, want)
 				}
 			} else {
-				if mockCloudBuildClient.createBuildReq != nil {
-					t.Errorf("expected no build to be created, but a build was created with request: %v", mockCloudBuildClient.createBuildReq)
+				if mockCloudBuildClient.CreateBuildReq != nil {
+					t.Errorf("expected no build to be created, but a build was created with request: %v", mockCloudBuildClient.CreateBuildReq)
 				}
 			}
 		})
