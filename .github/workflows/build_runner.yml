@@ -7,12 +7,25 @@ on:
     paths:
       - 'runner/**'
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: 'The runner environment to use for the jobs.'
+        required: false
+        type: 'string'
+        default: 'self-hosted'
+      image-tag:
+        description: 'The image tag to use'
+        required: false
+        type: 'string'
+        default: 'self-hosted-latest'
 
 env:
   WIF_PROVIDER: 'projects/727875687543/locations/global/workloadIdentityPools/github-actions-on-gcp-p-a63b4c/providers/github-actions-on-gcp-p-a63b4c'
   WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-on-gcp-p-a63b4c.iam.gserviceaccount.com'
   GAR_LOCATION: 'us'
   GAR_IMAGE_NAME: 'ghss-artifacts-p-25/docker-images/gha-runner'
+  GAR_IMAGE_TAG: "${{ inputs.image-tag || 'latest' }}"
 
 permissions:
   contents: 'read'
@@ -32,7 +45,7 @@ jobs:
 
   build_and_publish:
     name: 'Build and publish Docker image'
-    runs-on: 'ubuntu-latest'
+    runs-on: "${{ inputs.runs-on || 'ubuntu-latest'}}"
     steps:
       - name: 'Checkout'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
@@ -62,5 +75,5 @@ jobs:
         with:
           context: './runner'
           file: './runner/Dockerfile'
-          tags: '${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.GAR_IMAGE_NAME }}:latest'
+          tags: '${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.GAR_IMAGE_NAME }}:${{ env.GAR_IMAGE_TAG }}'
           push: true

@@ -138,3 +138,11 @@ jobs:
       - name: 'Use abc'
         run: 'abc templates describe github.com/abcxyz/abc/t/rest_server@v0.10.0'
 
+  build-and-push-runner:
+    name: 'Build and Push Runner'
+    uses: './.github/workflows/build_runner.yml'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    with:
+      runs-on: 'self-hosted'
