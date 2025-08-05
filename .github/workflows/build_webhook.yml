@@ -26,8 +26,8 @@ env:
   DOCKER_REPO: 'us-docker.pkg.dev/ghss-artifacts-p-25/docker-images'
   IMAGE_NAME: 'gha-webhook'
   TAG_ID: 'ci-${{ github.run_id }}-${{ github.run_number }}'
-  INTEGRATION_SERVICE_NAME: 'github-actions-on-gcp-36e3'
-  INTEGRATION_PROJECT_ID: 'gha-on-gcp-webhook-p-10'
+  INTEGRATION_SERVICE_NAME: 'action-dispatcher-fed9'
+  INTEGRATION_PROJECT_ID: 'action-dispatcher-webhook-p-18'
   INTEGRATION_REGION: 'us-central1'
 
 permissions:
