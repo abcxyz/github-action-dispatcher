@@ -122,3 +122,19 @@ jobs:
     uses: './.github/workflows/integration-test-setup.yml'
     with:
       runs-on: 'self-hosted'
+
+  setup-binary:
+    name: 'Test setup-binary action'
+    runs-on: 'self-hosted'
+    steps:
+      - name: 'Setup abc'
+        uses: 'abcxyz/actions/.github/actions/setup-binary@f26869a425d0b0217b9c8ad7e3f6ab70547272c9' # ratchet:main
+        with:
+          download_url: 'https://github.com/abcxyz/abc/releases/download/v0.10.1/abc_0.10.1_linux_amd64.tar.gz'
+          install_path: '${{ runner.temp }}/.guardian'
+          binary_subpath: 'guardian'
+          cache_key: '${{ runner.os }}_${{ runner.arch }}_abc_0.10.1'
+          add_to_path: true
+      - name: 'Use abc'
+        run: 'abc templates describe github.com/abcxyz/abc/t/rest_server@v0.10.0'
+
