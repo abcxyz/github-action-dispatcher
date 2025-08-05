@@ -103,6 +103,12 @@ jobs:
       ref: 'main'
       runs-on: 'self-hosted'
 
+  test-buildx-buildkit-functionality:
+    name: 'Test buildx Buildkit functionality'
+    uses: './.github/workflows/integration-test-buildx-buildkit.yml'
+    with:
+      runs-on: 'self-hosted'
+
   test-github-functionality:
     name: 'Test GitHub functionality'
     uses: './.github/workflows/integration-test-gh.yaml'
