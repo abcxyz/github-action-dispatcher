@@ -1,0 +1,66 @@
+# Copyright 2025 The Authors (see AUTHORS file)
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: 'Docker buildx + BuildKit Integration Tests'
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: 'The runner environment to use for the jobs.'
+        required: false
+        type: 'string'
+        default: 'self-hosted'
+
+jobs:
+  buildkit-buidx:
+    name: 'buildx + BuildKit'
+    runs-on: '${{ inputs.runs-on }}'
+    steps:
+      - name: 'Build Container'
+        run: |
+          DOCKER_BUILDKIT=1 docker buildx build \
+            --progress=auto \
+            --load \
+            -t buildx-bk-test:local \
+            -f- . <<EOF
+          # syntax=docker/dockerfile:1.4
+
+          # Use automatic platform ARGs provided by Buildx
+          ARG TARGETOS
+          ARG TARGETARCH
+
+          # Stage 1: Independent work
+          FROM alpine:3.19 AS stage1
+          # Sleep helps visualize parallelism in the BuildKit output
+          RUN echo "Stage 1 running..." && sleep 1
+          # Use the ARG to prove it was passed correctly by Buildx
+          RUN echo "Platform Arch: ${TARGETARCH}" > /arch.txt
+
+          # Stage 2: Independent work (BuildKit will run this concurrently with Stage 1)
+          FROM alpine:3.19 AS stage2
+          RUN echo "Stage 2 running..." && sleep 1
+          # Use the ARG to prove it was passed correctly by Buildx
+          RUN echo "Platform OS: ${TARGETOS}" > /os.txt
+
+          # Final stage: Combine results
+          FROM alpine:3.19 AS final
+          # Use a BuildKit specific optimization (COPY --link)
+          COPY --link --from=stage1 /arch.txt /
+          COPY --link --from=stage2 /os.txt /
+          # Output the results when the container runs
+          CMD echo "--- BuildKit/Buildx Success ---" && cat /arch.txt && cat /os.txt
+          EOF
+      - name: 'Run Container'
+        run: 'docker run --rm buildx-bk-test:local'
