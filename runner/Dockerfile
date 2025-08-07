@@ -55,6 +55,7 @@ RUN apt-get -y install \
 
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV IDLE_TIMEOUT_SECONDS=300
 
 ARG ACTION_RUNNER_VERSION=2.326.0
 ARG GH_VERSION=2.75.1
@@ -94,6 +95,11 @@ RUN curl -f -L -o runner.tar.gz https://github.com/actions/runner/releases/downl
     && tar xzf ./runner.tar.gz \
     && rm runner.tar.gz \
     && rm -rf /var/lib/apt/lists/*
+
+# Copy pre-run script and add it to actions runner config file
+COPY pre-run.sh /actions-runner/pre-run.sh
+RUN chmod +x /actions-runner/pre-run.sh \
+    && echo "ACTIONS_RUNNER_HOOK_JOB_STARTED=/actions-runner/pre-run.sh" >> /actions-runner/.env
 
 RUN /actions-runner/bin/installdependencies.sh \
     && adduser --disabled-password --gecos "" --uid 1001 runner \
@@ -152,7 +158,8 @@ RUN chmod +x /actions-runner/start_runner.sh
 COPY setup_docker.sh /usr/local/bin/setup_docker.sh
 RUN chmod +x /usr/local/bin/setup_docker.sh
 
-# Mirror permissions from GitHub hosted runner. Note that in experimentation
+# Mirror permissions from GitHub hosted runner.
+# Note that in experimentation
 # it appears that facl has been set, but I don't see that being done in this
 # repo.
 # https://github.com/actions/runner-images/blob/1ed26a6d42b1c856759a31823c9d99b9775cb5fa/images/ubuntu/scripts/build/configure-system.sh#L15
