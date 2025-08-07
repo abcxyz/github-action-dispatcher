@@ -5,14 +5,15 @@ rule:
     assertion.iss == issuers.github &&
     assertion.repository_owner_id == '93787867' &&
     assertion.repository_id == '882980224' &&
-    assertion.ref == 'refs/heads/main' &&
-    assertion.workflow_ref == assertion.job_workflow_ref
+    assertion.ref == 'refs/heads/main'
 
 scope:
   make-pr:
     rule:
       if: |-
-        assertion.workflow_ref.startsWith("abcxyz/github-action-dispatcher/.github/workflows/integration-test-minty.yml") &&
+        (assertion.workflow_ref.startsWith("abcxyz/github-actions-dispatcher/.github/workflows/integration-test.yml") ||
+         assertion.workflow_ref.startsWith("abcxyz/github-actions-dispatcher/.github/workflows/integration-test-minty.yml")) &&
+        assertion.job_workflow_ref.startsWith("abcxyz/github-action-dispatcher/.github/workflows/integration-test-minty.yml") &&
         (assertion.event_name == 'workflow_dispatch' ||
          assertion.event_name == 'workflow_call')
     repositories:
