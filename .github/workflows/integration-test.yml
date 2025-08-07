@@ -109,6 +109,15 @@ jobs:
     with:
       runs-on: 'self-hosted'
 
+  test-create-pull-request-minty:
+    name: 'Test Create Pull Request flow with Minty'
+    uses: './.github/workflows/integration-test-minty.yml'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    with:
+      runs-on: 'self-hosted'
+
   test-github-functionality:
     name: 'Test GitHub functionality'
     uses: './.github/workflows/integration-test-gh.yaml'
