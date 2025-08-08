@@ -132,7 +132,15 @@ jobs:
     with:
       runs-on: 'self-hosted'
 
-  setup-actions:
+  test-maven-functionality:
+    name: 'Test Maven functionality'
+    uses: './.github/workflows/integration-test-mvn.yml'
+    permissions:
+      id-token: 'write'
+    with:
+      runs-on: 'self-hosted'
+
+  test-setup-actions:
     name: 'Test setup actions'
     uses: './.github/workflows/integration-test-setup.yml'
     with:
