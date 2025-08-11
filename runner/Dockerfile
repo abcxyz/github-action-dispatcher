@@ -27,6 +27,8 @@ RUN apt-get -y update && \
         signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] \
         https://download.docker.com/linux/ubuntu \
         $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list && \
+    # tini doesn't add a docker-init symlink, must do manually \
+    ln -s /usr/bin/tini /usr/local/bin/docker-init && \
     apt-get -y update && \
     apt-get -y dist-upgrade && \
     apt-get autoremove && \
