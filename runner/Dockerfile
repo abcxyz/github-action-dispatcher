@@ -29,7 +29,9 @@ RUN apt-get -y update && \
     apt-get autoremove && \
     apt-get clean
 
-ARG DOCKER_VERSION=5:24.0.9-1~ubuntu.20.04~focal
+# This is a newer version of docker than in the cloud-builder image, due to
+# that version not existing in apt repo for 24.04. This should be fine.
+ARG DOCKER_VERSION=5:28.3.3-1~ubuntu.24.04~noble
 
 RUN apt-get -y install \
         docker-ce=${DOCKER_VERSION} \
