@@ -77,6 +77,8 @@ jobs:
           changed_paths: '["ignore_me"]'
       - name: 'Check Pull Request Updated'
         shell: 'bash'
+        env:
+          GH_TOKEN: '${{ github.token }}'
         run: |-
           gh pr -R abcxyz/github-action-dispatcher list \
           --search "Minty Test Pull Request updated:>=$(date -u -Iseconds -d "1 minute ago")" \
