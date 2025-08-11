@@ -1,6 +1,52 @@
-FROM gcr.io/cloud-builders/docker@sha256:057d91e53efd3e025350d09ecf0fea30ec261bdc5ef5e052d1351c6c6d9dfe21
-# Use this to find the current hash of cached images.
-# docker image ls --digests
+# This cached image has an old version of Ubuntu which isn't compatible with
+# some moderdern software. At the expense of performance we will re-create it
+# with a more modern version of Ubuntu until it can be fixed.
+# FROM gcr.io/cloud-builders/docker@sha256:057d91e53efd3e025350d09ecf0fea30ec261bdc5ef5e052d1351c6c6d9dfe21
+# ========================================================== #
+# Cloud-builders image but with updated ubuntu version BEGIN #
+# ========================================================== #
+# This is current cached version, I would prefer to use
+# marketplace.gcr.io/google/ubuntu2404 but it doesn't appear to be in the cache.
+# I believe it tracks latest so we would need to update the hash ocassionally
+# if we wanted to use this long-term.
+FROM ubuntu@sha256:a08e551cb33850e4740772b38217fc1796a66da2506d312abe51acda354ff061
+
+RUN apt-get -y update && \
+    apt-get -y install \
+        apt-transport-https \
+        ca-certificates \
+        curl \
+        make \
+        software-properties-common && \
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+        gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) \
+        signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] \
+        https://download.docker.com/linux/ubuntu \
+        $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list && \
+    apt-get -y update && \
+    apt-get -y dist-upgrade && \
+    apt-get autoremove && \
+    apt-get clean
+
+ARG DOCKER_VERSION=5:24.0.9-1~ubuntu.20.04~focal
+
+RUN apt-get -y install \
+        docker-ce=${DOCKER_VERSION} \
+        docker-ce-cli=${DOCKER_VERSION} \
+        docker-compose docker-compose-plugin && \
+    apt-get clean
+
+# ======================================================== #
+# Cloud-builders image but with updated ubuntu version END #
+# ======================================================== #
+
+# Use this cloudbuild.yml to find the current hash of cached images:
+# steps:
+# - name: 'gcr.io/cloud-builders/docker'
+#   args: ['image', 'ls', '--digests']
+
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 ARG ACTION_RUNNER_VERSION=2.326.0
@@ -56,6 +102,10 @@ RUN /actions-runner/bin/installdependencies.sh \
     && chmod 0440 /etc/sudoers.d/secure_path_default \
     && rm -rf /var/lib/apt/lists/*
 
+# TODO: Install node separtely once image streaming is implemented.
+# See https://github.com/abcxyz/github-action-dispatcher/issues/71
+ENV PATH="/actions-runner/externals/node20/bin:$PATH"
+
 # Install Python.
 RUN apt-get update -y && \
   apt-get -y install --no-install-recommends \
@@ -67,7 +117,6 @@ RUN apt-get update -y && \
   && rm -rf /var/lib/apt/lists/* \
   && python3 -m pipx ensurepath \
   && python3 --version
-
 
 # Install gh CLI.
 WORKDIR /install/github-cli/
