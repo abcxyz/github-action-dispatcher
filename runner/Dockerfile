@@ -11,13 +11,16 @@
 # if we wanted to use this long-term.
 FROM ubuntu@sha256:a08e551cb33850e4740772b38217fc1796a66da2506d312abe51acda354ff061
 
+# I had to add tini because it is no longer included with docker-ce package
+# (was getting failures from dockerd-entrypoint due to missing docker-init).
 RUN apt-get -y update && \
     apt-get -y install \
         apt-transport-https \
         ca-certificates \
         curl \
         make \
-        software-properties-common && \
+        software-properties-common \
+        tini && \
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
         gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) \
