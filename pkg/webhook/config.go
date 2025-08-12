@@ -41,6 +41,7 @@ type Config struct {
 	RunnerRepositoryID        string `env:"RUNNER_REPOSITORY_ID,required"`
 	RunnerServiceAccount      string `env:"RUNNER_SERVICE_ACCOUNT,required"`
 	RunnerWorkerPoolID        string `env:"RUNNER_WORKER_POOL_ID"`
+	E2ETestRunID              string `env:"E2E_TEST_RUN_ID"`
 }
 
 // Validate validates the webhook config after load.
@@ -201,6 +202,13 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Target: &cfg.RunnerWorkerPoolID,
 		EnvVar: "RUNNER_WORKER_POOL_ID",
 		Usage:  `The private runner worker pool ID`,
+	})
+
+	f.StringVar(&cli.StringVar{
+		Name:   "e2e-test-run-id",
+		Target: &cfg.E2ETestRunID,
+		EnvVar: "E2E_TEST_RUN_ID",
+		Usage:  `The unique ID for an E2E test run, used for tagging builds.`,
 	})
 
 	return set

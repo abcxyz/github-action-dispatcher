@@ -9,12 +9,6 @@ on:
       - 'cmd/webhook-tester/**'
       - 'pkg/**'
       - '.github/workflows/deploy_and_test_webhook_pr.yml'
-  pull_request:
-    paths:
-      - 'cmd/github-actions-on-gcp/**'
-      - 'cmd/webhook-tester/**'
-      - 'pkg/**'
-      - '.github/workflows/deploy_and_test_webhook_pr.yml'
   workflow_dispatch:
 
 env:
@@ -73,22 +67,7 @@ jobs:
           git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
           git tag -f "$(date "+%Y%m%d%H%M%S")"
 
-      - name: 'Set Docker Tag for PR'
-        if: |
-          github.event_name == 'pull_request'
-        run: 'echo "DOCKER_TAG=webhook-pr-${{ github.event.number }}-${{ github.event.pull_request.head.sha }}" >> "$GITHUB_ENV"'
-
-      - name: 'Build the server container for PR'
-        if: |
-          github.event_name == 'pull_request'
-        uses: 'goreleaser/goreleaser-action@9ed2f89a662bf1735a48bc8557fd212fa902bebf' # ratchet:goreleaser/goreleaser-action@v6
-        with:
-          version: 'v1.12.3' # Manually pinned
-          args: 'release -f .goreleaser.docker.yml --rm-dist --skip-validate --skip-publish'
-
       - name: 'Build and push the server container to the registry'
-        if: |
-          github.event_name != 'pull_request'
         uses: 'goreleaser/goreleaser-action@9ed2f89a662bf1735a48bc8557fd212fa902bebf' # ratchet:goreleaser/goreleaser-action@v6
         with:
           version: 'v1.12.3' # Manually pinned

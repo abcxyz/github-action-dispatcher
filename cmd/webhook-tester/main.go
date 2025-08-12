@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// webhook-tester is a tool for testing the webhook locally.
 package main
 
 import (
@@ -20,193 +21,315 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
+
+	cloudbuild "cloud.google.com/go/cloudbuild/apiv1/v2"
+	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
+	secretmanager "cloud.google.com/go/secretmanager/apiv1"
+	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
+	"github.com/google/go-github/v69/github"
+	"golang.org/x/oauth2"
+	"google.golang.org/api/iterator"
+
+	"github.com/abcxyz/pkg/logging"
 )
 
-func generateSignature(payload []byte, secret string) (string, error) {
-	mac := hmac.New(sha256.New, []byte(secret))
-	if _, err := mac.Write(payload); err != nil {
-		return "", fmt.Errorf("failed to write payload to hmac: %w", err)
-	}
-	signature := hex.EncodeToString(mac.Sum(nil))
-	return "sha256=" + signature, nil
-}
-
-type testCase struct {
-	name               string
-	payload            string
-	eventHeader        string
-	expectedStatusCode int
-	signer             func(payload []byte, secret string) (string, error)
-}
+var (
+	webhookURL       = flag.String("webhook-url", "", "The URL of the webhook to test.")
+	secretName       = flag.String("secret-name", "", "The name of the secret in Secret Manager.")
+	installationID   = flag.Int64("installation-id", 0, "The ID of the GitHub App installation.")
+	projectID        = flag.String("project-id", "", "The GCP project ID for the integration environment.")
+	runID            = flag.String("run-id", "", "The unique GitHub Actions workflow run ID.")
+	idToken          = flag.String("id-token", "", "The ID token for authenticating to the webhook service.")
+	verifyRunner     = flag.Bool("verify-runner", false, "If true, verify the runner is online instead of the build.")
+	githubOwner      = flag.String("github-owner", "", "The GitHub owner (organization).")
+	githubRepo       = flag.String("github-repo", "", "The GitHub repository name.")
+	githubToken      = flag.String("github-token", "", "The GitHub token for authenticating to the API.")
+	signatureFlag    = flag.String("signature", "", "The signature to use for the webhook payload. If empty, it will be calculated.")
+	expectHTTPStatus = flag.Int("expect-http-status", http.StatusOK, "The expected HTTP status code.")
+	payload          = flag.String("payload", "", "The payload to send. If empty, a default valid payload is used.")
+	payloadFile      = flag.String("payload-file", "", "The path to a file containing the payload to send.")
+	expectNoBuild    = flag.Bool("expect-no-build", false, "If true, verify that no build was triggered.")
+)
 
 func main() {
-	targetURL := flag.String("url", "", "The target URL for the webhook.")
-	secret := flag.String("secret", "", "The webhook secret.")
-	flag.Parse()
+	ctx, done := signal.NotifyContext(context.Background(),
+		syscall.SIGINT, syscall.SIGTERM)
+	defer done()
 
-	if *targetURL == "" {
-		fmt.Fprintln(os.Stderr, "Error: --url is required.")
+	logger := logging.NewFromEnv("")
+	ctx = logging.WithLogger(ctx, logger)
+
+	if err := realMain(ctx); err != nil {
+		done()
+		logger.ErrorContext(ctx, "process exited with error", "error", err)
 		os.Exit(1)
 	}
-	if *secret == "" {
-		fmt.Fprintln(os.Stderr, "Error: --secret is required.")
-		os.Exit(1)
-	}
-
-	// A valid payload for a "queued" event.
-	validPayload := `{
-		"action": "queued",
-		"workflow_job": {
-			"id": 123456789,
-			"run_id": 987654321,
-			"name": "test-job",
-			"labels": ["self-hosted"],
-			"created_at": "2025-07-12T00:00:00Z",
-			"started_at": "2025-07-12T00:00:00Z"
-		},
-		"repository": { "name": "test-repo" },
-		"organization": { "login": "test-org" },
-		"installation": { "id": 54321 }
-	}`
-
-	testCases := []testCase{
-		{
-			name:               "valid payload",
-			payload:            validPayload,
-			eventHeader:        "workflow_job",
-			expectedStatusCode: http.StatusOK,
-			signer:             generateSignature,
-		},
-		{
-			name:               "invalid signature",
-			payload:            validPayload,
-			eventHeader:        "workflow_job",
-			expectedStatusCode: http.StatusInternalServerError,
-			signer: func(p []byte, s string) (string, error) {
-				return "sha256=invalid-signature", nil
-			},
-		},
-		{
-			name:               "missing signature",
-			payload:            validPayload,
-			eventHeader:        "workflow_job",
-			expectedStatusCode: http.StatusInternalServerError,
-			signer: func(p []byte, s string) (string, error) {
-				return "", nil
-			},
-		},
-		{
-			name:               "malformed payload",
-			payload:            `{"foo": "bar"`,
-			eventHeader:        "workflow_job",
-			expectedStatusCode: http.StatusInternalServerError,
-			signer:             generateSignature,
-		},
-		{
-			name:               "non-queued event",
-			payload:            `{"action": "completed"}`,
-			eventHeader:        "workflow_job",
-			expectedStatusCode: http.StatusOK,
-			signer:             generateSignature,
-		},
-	}
-
-	for _, tc := range testCases {
-		fmt.Printf("--- Running test case: %s ---\n", tc.name)
-
-		signature, err := tc.signer([]byte(tc.payload), *secret)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error generating signature for test case %q: %v\n", tc.name, err)
-			os.Exit(1)
-		}
-
-		ctx := context.Background()
-		req, err := http.NewRequestWithContext(ctx, "POST", *targetURL, bytes.NewReader([]byte(tc.payload)))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating request for test case %q: %v\n", tc.name, err)
-			os.Exit(1)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-GitHub-Event", tc.eventHeader)
-		if signature != "" {
-			req.Header.Set("X-Hub-Signature-256", signature)
-		}
-
-		client := &http.Client{Timeout: 15 * time.Second}
-		resp, err := client.Do(req)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error sending request for test case %q: %v\n", tc.name, err)
-			os.Exit(1)
-		}
-
-		body, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			fmt.Fprintf(os.Stderr, "Error reading response body for test case %q: %v\n", tc.name, readErr)
-			resp.Body.Close() // Close the body before exiting
-			os.Exit(1)
-		}
-		resp.Body.Close() // Ensure the body is closed after reading
-
-		fmt.Printf("Response Status: %s\n", resp.Status)
-		fmt.Printf("Response Body: %s\n", string(body))
-
-		if resp.StatusCode != tc.expectedStatusCode {
-			fmt.Fprintf(os.Stderr, "Test case %q failed: expected status code %d, got %d\n", tc.name, tc.expectedStatusCode, resp.StatusCode)
-			os.Exit(1)
-		}
-		fmt.Printf("Test case %q passed.\n\n", tc.name)
-	}
-
-	fmt.Println("All test cases passed.")
-
-	fmt.Println("--- Running end-to-end test case: build verification ---")
-	if err := verifyBuildTriggered(*targetURL, validPayload, *secret); err != nil {
-		fmt.Fprintf(os.Stderr, "End-to-end test failed: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Println("End-to-end test case passed.")
 }
 
-func verifyBuildTriggered(targetURL, payload, secret string) error {
-	signature, err := generateSignature([]byte(payload), secret)
-	if err != nil {
-		return fmt.Errorf("failed to generate signature for e2e test: %w", err)
+func realMain(ctx context.Context) error {
+	flag.Parse()
+
+	if *webhookURL == "" {
+		return fmt.Errorf("--webhook-url is required")
+	}
+	if *secretName == "" {
+		return fmt.Errorf("--secret-name is required")
+	}
+	if *installationID == 0 {
+		return fmt.Errorf("--installation-id is required")
+	}
+	if *projectID == "" {
+		return fmt.Errorf("--project-id is required")
+	}
+	if *runID == "" {
+		return fmt.Errorf("--run-id is required")
+	}
+	if *verifyRunner {
+		if *githubOwner == "" {
+			return fmt.Errorf("--github-owner is required with --verify-runner")
+		}
+		if *githubRepo == "" {
+			return fmt.Errorf("--github-repo is required with --verify-runner")
+		}
 	}
 
-	ctx := context.Background()
-	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader([]byte(payload)))
+	if *payload == "" && *payloadFile == "" {
+		return fmt.Errorf("either --payload or --payload-file is required")
+	}
+
+	secret, err := getSecret(ctx, *secretName)
 	if err != nil {
-		return fmt.Errorf("failed to create request for e2e test: %w", err)
+		return fmt.Errorf("failed to get secret: %w", err)
+	}
+
+	body := *payload
+	if *payloadFile != "" {
+		payloadBytes, err := os.ReadFile(*payloadFile)
+		if err != nil {
+			return fmt.Errorf("failed to read payload file: %w", err)
+		}
+		body = string(payloadBytes)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, *webhookURL, bytes.NewBufferString(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	sig := *signatureFlag
+	if sig == "" {
+		sig = signature([]byte(secret), []byte(body))
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-GitHub-Event", "workflow_job")
-	req.Header.Set("X-Hub-Signature-256", signature)
+	req.Header.Set("X-Hub-Signature-256", "sha256="+sig)
+	if *idToken != "" {
+		req.Header.Set("Authorization", "Bearer "+*idToken)
+	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send request for e2e test: %w", err)
+		return fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("e2e test request failed: expected status code %d, got %d", http.StatusOK, resp.StatusCode)
+	// Limit the response body to 4MB to prevent reading excessively large
+	// responses.
+	limitReader := &io.LimitedReader{R: resp.Body, N: 4_194_304}
+	respBody, err := io.ReadAll(limitReader)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	fmt.Println("Verifying that a Cloud Build job was triggered...")
-	// This part of the test still needs to be implemented by shelling out to gcloud.
-	// A pure Go solution would require adding the Cloud Build SDK as a dependency.
-	// For now, we will just print a success message.
-	// TODO: Implement polling for Cloud Build job.
-	fmt.Println("Build verification check (polling) is not yet implemented.")
+	log.Printf("Status: %s", resp.Status)
+	log.Printf("Body: %s", string(respBody))
+
+	if resp.StatusCode != *expectHTTPStatus {
+		return fmt.Errorf("expected status %d, but got %d", *expectHTTPStatus, resp.StatusCode)
+	}
+
+	log.Printf("Successfully received expected status code %d.", *expectHTTPStatus)
+
+	cloudBuildClient, err := cloudbuild.NewClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create cloudbuild client: %w", err)
+	}
+	defer cloudBuildClient.Close()
+
+	if *expectNoBuild {
+		if err := verifyNoBuildTriggered(ctx, cloudBuildClient, *projectID, *runID); err != nil {
+			return fmt.Errorf("failed to verify that no build was triggered: %w", err)
+		}
+		log.Printf("Successfully verified that no build was triggered.")
+		return nil
+	}
+
+	// Only run verification if the test was expected to succeed.
+	if *expectHTTPStatus == http.StatusOK {
+		log.Printf("Successfully sent webhook payload. Now verifying...")
+
+		if *verifyRunner {
+			if err := verifyRunnerOnline(ctx, *githubOwner, *githubRepo, *runID); err != nil {
+				return fmt.Errorf("failed to verify runner: %w", err)
+			}
+			log.Printf("Successfully verified runner is online.")
+		} else {
+			if err := verifyBuildTriggered(ctx, cloudBuildClient, *projectID, *runID); err != nil {
+				return fmt.Errorf("failed to verify build trigger: %w", err)
+			}
+			log.Printf("Successfully verified build trigger.")
+		}
+	}
+	return nil
+}
+
+// verifyBuildTriggered polls GCP to check if a build was triggered with the correct tag.
+func verifyBuildTriggered(ctx context.Context, client *cloudbuild.Client, projectID, runID string) error {
+	const (
+		maxRetries = 10
+		delay      = 30 * time.Second
+	)
+
+	filter := fmt.Sprintf(`tags="e2e-run-id-%s"`, runID)
+
+	for i := 0; i < maxRetries; i++ {
+		log.Printf("Polling for build (attempt %d/%d)...", i+1, maxRetries)
+
+		it := client.ListBuilds(ctx, &cloudbuildpb.ListBuildsRequest{
+			ProjectId: projectID,
+			Filter:    filter,
+		})
+		for {
+			build, err := it.Next()
+			if errors.Is(err, iterator.Done) {
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("failed to list builds: %w", err)
+			}
+
+			if build != nil {
+				log.Printf("Found build ID: %s", build.GetId())
+				return nil
+			}
+		}
+
+		time.Sleep(delay)
+	}
+
+	return fmt.Errorf("timed out waiting for build to be triggered")
+}
+
+// verifyNoBuildTriggered polls GCP to ensure that no build was triggered with the correct tag.
+func verifyNoBuildTriggered(ctx context.Context, client *cloudbuild.Client, projectID, runID string) error {
+	const (
+		retries = 3
+		delay   = 10 * time.Second
+	)
+
+	filter := fmt.Sprintf(`tags="e2e-run-id-%s"`, runID)
+
+	for i := 0; i < retries; i++ {
+		log.Printf("Polling to ensure no build was triggered (attempt %d/%d)...", i+1, retries)
+		it := client.ListBuilds(ctx, &cloudbuildpb.ListBuildsRequest{
+			ProjectId: projectID,
+			Filter:    filter,
+		})
+		for {
+			build, err := it.Next()
+			if errors.Is(err, iterator.Done) {
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("failed to list builds: %w", err)
+			}
+
+			if build != nil {
+				return fmt.Errorf("found build ID %s, but no build was expected", build.GetId())
+			}
+		}
+
+		time.Sleep(delay)
+	}
 
 	return nil
+}
+
+// verifyRunnerOnline polls the GitHub API to check if a runner with the correct name is online.
+func verifyRunnerOnline(ctx context.Context, owner, repo, runID string) error {
+	const (
+		maxRetries = 10
+		delay      = 30 * time.Second
+	)
+
+	runnerName := fmt.Sprintf("GCP-%s", runID)
+
+	var httpClient *http.Client
+	if *githubToken != "" {
+		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: *githubToken})
+		httpClient = oauth2.NewClient(ctx, ts)
+	}
+	client := github.NewClient(httpClient)
+
+	for i := 0; i < maxRetries; i++ {
+		log.Printf("Polling for runner (attempt %d/%d)...", i+1, maxRetries)
+
+		opts := &github.ListRunnersOptions{}
+		runners, _, err := client.Actions.ListRunners(ctx, owner, repo, opts)
+		if err != nil {
+			return fmt.Errorf("failed to list runners: %w", err)
+		}
+
+		for _, runner := range runners.Runners {
+			if runner.GetName() == runnerName && runner.GetStatus() == "online" {
+				log.Printf("Found runner %s with status %s", runner.GetName(), runner.GetStatus())
+				return nil
+			}
+		}
+
+		time.Sleep(delay)
+	}
+
+	return fmt.Errorf("timed out waiting for runner to be online")
+}
+
+// getSecret gets the secret from Secret Manager.
+func getSecret(ctx context.Context, name string) (string, error) {
+	client, err := secretmanager.NewClient(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to create secret manager client: %w", err)
+	}
+	defer client.Close()
+
+	req := &secretmanagerpb.AccessSecretVersionRequest{
+		Name: name,
+	}
+
+	result, err := client.AccessSecretVersion(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("failed to access secret version: %w", err)
+	}
+
+	return string(result.GetPayload().GetData()), nil
+}
+
+// signature calculates the signature for the given secret and body.
+func signature(secret, body []byte) string {
+	mac := hmac.New(sha256.New, secret)
+	mac.Write(body)
+	return hex.EncodeToString(mac.Sum(nil))
 }
