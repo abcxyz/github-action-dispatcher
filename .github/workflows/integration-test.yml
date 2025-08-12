@@ -34,6 +34,31 @@ on:
       - 'main'
 
 jobs:
+  test-foo:
+    strategy:
+      matrix:
+        runner: [ 'self-hosted', 'ubuntu-latest' ]
+    runs-on: "${{ matrix.runner }}"
+    steps:
+    - name: 'Checkout Target Repository'
+      uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+      with:
+        repository: 'abcxyz/lumberjack'
+        ref: 'main'
+        fetch-depth: 1 # shallow checkout
+    - name: 'step-by-step'
+      run: |
+        echo "==1=="
+        git ls-files
+        echo "==2=="
+        git ls-files | grep -E '^([^.]+|.*\.(sh|zsh|bash))$' 
+        echo "==3=="
+        git ls-files | grep -E '^([^.]+|.*\.(sh|zsh|bash))$' | xargs file --mime-type
+        echo "==4=="
+        git ls-files | grep -E '^([^.]+|.*\.(sh|zsh|bash))$' | xargs file --mime-type |  grep "text/x-shellscript"
+        echo "==5=="
+        git ls-files | grep -E '^([^.]+|.*\.(sh|zsh|bash))$' | xargs file --mime-type |  grep "text/x-shellscript" | awk '{ print substr($1, 1, length($1)-1) }'          
+
   test-github-script-action:
     runs-on: "${{ inputs.runs-on || 'self-hosted' }}"
     steps:
