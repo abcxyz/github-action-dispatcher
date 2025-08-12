@@ -70,6 +70,7 @@ RUN apt-get update \
       ca-certificates \
       coreutils \
       curl \
+      file \
       git \
       git-lfs \
       gosu \
