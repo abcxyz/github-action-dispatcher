@@ -20,23 +20,25 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/go-github/v69/github"
 	"golang.org/x/oauth2"
 )
 
-func (s *Server) GenerateRepoJITConfig(ctx context.Context, installationID int64, org, repo, runnerName string) (*github.JITRunnerConfig, *apiResponse) {
+func (s *Server) GenerateRepoJITConfig(ctx context.Context, installationID int64, org, repo, runnerName string) (*github.JITRunnerConfig, string, *apiResponse) {
 	return s.generateJITConfig(ctx, installationID, org, &repo, runnerName)
 }
 
-func (s *Server) GenerateOrgJITConfig(ctx context.Context, installationID int64, org, runnerName string) (*github.JITRunnerConfig, *apiResponse) {
+func (s *Server) GenerateOrgJITConfig(ctx context.Context, installationID int64, org, runnerName string) (*github.JITRunnerConfig, string, *apiResponse) {
 	return s.generateJITConfig(ctx, installationID, org, nil, runnerName)
 }
 
-func (s *Server) generateJITConfig(ctx context.Context, installationID int64, org string, repo *string, runnerName string) (*github.JITRunnerConfig, *apiResponse) {
+func (s *Server) generateJITConfig(ctx context.Context, installationID int64, org string, repo *string, runnerName string) (*github.JITRunnerConfig, string, *apiResponse) {
 	installation, err := s.appClient.InstallationForID(ctx, strconv.FormatInt(installationID, 10))
 	if err != nil {
-		return nil, &apiResponse{http.StatusInternalServerError, "failed to setup installation client", err}
+		return nil, "", &apiResponse{http.StatusInternalServerError, "failed to setup installation client", err}
 	}
 
 	httpClient := oauth2.NewClient(ctx, (*installation).AllReposOAuth2TokenSource(ctx, map[string]string{
@@ -46,7 +48,7 @@ func (s *Server) generateJITConfig(ctx context.Context, installationID int64, or
 	gh := github.NewClient(httpClient)
 	baseURL, err := url.Parse(fmt.Sprintf("%s/", s.ghAPIBaseURL))
 	if err != nil {
-		return nil, &apiResponse{http.StatusInternalServerError, "failed to set github base URL", err}
+		return nil, "", &apiResponse{http.StatusInternalServerError, "failed to set github base URL", err}
 	}
 	gh.BaseURL = baseURL
 	gh.UploadURL = baseURL
@@ -70,7 +72,25 @@ func (s *Server) generateJITConfig(ctx context.Context, installationID int64, or
 	}
 
 	if err != nil {
-		return nil, &apiResponse{http.StatusInternalServerError, "failed to generate jitconfig", err}
+		return nil, "", &apiResponse{http.StatusInternalServerError, "failed to generate jitconfig", err}
 	}
-	return jitConfig, nil
+
+	claims := jwt.MapClaims{
+		"runner_id": jitConfig.Runner.GetID(),
+		"org":       org,
+		"exp":       time.Now().Add(time.Hour * 24).Unix(),
+	}
+	if repo != nil {
+		claims["repo"] = *repo
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	// Sign and get the complete encoded token as a string using the secret
+	tokenString, err := token.SignedString([]byte(s.runnerJWTSecret))
+	if err != nil {
+		return nil, "", &apiResponse{http.StatusInternalServerError, "failed to sign runner token", err}
+	}
+
+	return jitConfig, tokenString, nil
 }

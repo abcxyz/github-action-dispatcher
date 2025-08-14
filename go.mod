@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/cloudbuild v1.22.0
 	cloud.google.com/go/kms v1.21.0
 	github.com/abcxyz/pkg v1.5.4
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/go-github/v69 v69.2.0
 	github.com/googleapis/gax-go/v2 v2.14.1
 	github.com/lestrrat-go/jwx/v2 v2.1.6

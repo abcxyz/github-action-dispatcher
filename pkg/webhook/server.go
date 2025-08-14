@@ -48,6 +48,7 @@ type Server struct {
 	runnerServiceAccount string
 	runnerWorkerPoolID   string
 	webhookSecret        []byte
+	runnerJWTSecret      string
 }
 
 // FileReader can read a file and return the content.
@@ -137,6 +138,7 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 		runnerServiceAccount: cfg.RunnerServiceAccount,
 		runnerWorkerPoolID:   cfg.RunnerWorkerPoolID,
 		webhookSecret:        webhookSecret,
+		runnerJWTSecret:      cfg.RunnerJWTSecret,
 	}, nil
 }
 
@@ -147,6 +149,7 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", healthcheck.HandleHTTPHealthCheck())
 	mux.Handle("/webhook", s.handleWebhook())
+	mux.Handle("/delete-runner", s.handleDeleteRunner())
 	mux.Handle("/version", s.handleVersion())
 
 	// Middleware

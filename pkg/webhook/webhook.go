@@ -27,9 +27,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
-	"github.com/google/go-github/v69/github"
-
 	"github.com/abcxyz/pkg/logging"
+	"github.com/google/go-github/v69/github"
 )
 
 var (
@@ -158,7 +157,7 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 				return &apiResponse{http.StatusBadRequest, "unexpected event payload struture", err}
 			}
 
-			jitConfig, errResponse := s.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID)
+			jitConfig, runnerToken, errResponse := s.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID)
 			if errResponse != nil {
 				logger.ErrorContext(ctx, "failed to generate JIT config", append(baseLogFields, "error", errResponse.Error, "response_message", errResponse.Message)...)
 				return errResponse
@@ -180,6 +179,8 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 						Name: "$_REPOSITORY_ID/$_IMAGE_NAME:$_IMAGE_TAG",
 						Env: []string{
 							"ENCODED_JIT_CONFIG=${_ENCODED_JIT_CONFIG}",
+							"RUNNER_TOKEN=${_RUNNER_TOKEN}",
+							"WEBHOOK_URL=${_WEBHOOK_URL}",
 						},
 					},
 				},
@@ -188,6 +189,8 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 				},
 				Substitutions: map[string]string{
 					"_ENCODED_JIT_CONFIG": compressedJIT,
+					"_RUNNER_TOKEN":       runnerToken,
+					"_WEBHOOK_URL":        "http://" + r.Host, // This might need to be more robust
 					"_REPOSITORY_ID":      s.runnerRepositoryID,
 					"_IMAGE_NAME":         s.runnerImageName,
 					"_IMAGE_TAG":          imageTag,

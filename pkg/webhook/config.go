@@ -41,6 +41,7 @@ type Config struct {
 	RunnerRepositoryID        string `env:"RUNNER_REPOSITORY_ID,required"`
 	RunnerServiceAccount      string `env:"RUNNER_SERVICE_ACCOUNT,required"`
 	RunnerWorkerPoolID        string `env:"RUNNER_WORKER_POOL_ID"`
+	RunnerJWTSecret           string `env:"RUNNER_JWT_SECRET,required"`
 }
 
 // Validate validates the webhook config after load.
@@ -79,6 +80,10 @@ func (cfg *Config) Validate() error {
 
 	if cfg.RunnerServiceAccount == "" {
 		return fmt.Errorf("RUNNER_SERVICE_ACCOUNT is required")
+	}
+
+	if cfg.RunnerJWTSecret == "" {
+		return fmt.Errorf("RUNNER_JWT_SECRET is required")
 	}
 
 	return nil
@@ -201,6 +206,13 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Target: &cfg.RunnerWorkerPoolID,
 		EnvVar: "RUNNER_WORKER_POOL_ID",
 		Usage:  `The private runner worker pool ID`,
+	})
+
+	f.StringVar(&cli.StringVar{
+		Name:   "runner-jwt-secret",
+		Target: &cfg.RunnerJWTSecret,
+		EnvVar: "RUNNER_JWT_SECRET",
+		Usage:  `The secret for signing and validating runner JWTs.`,
 	})
 
 	return set
