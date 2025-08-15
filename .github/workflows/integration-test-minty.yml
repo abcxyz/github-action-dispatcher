@@ -84,4 +84,4 @@ jobs:
           --search "Minty Test Pull Request updated:>=$(date -u -Iseconds -d "1 minute ago")" \
           --limit 1 \
           --json id \
-          | js ".[0].id" -e
+          | node ".[0].id" -e
