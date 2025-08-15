@@ -21,6 +21,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -235,7 +236,6 @@ func verifyRunnerOnline(ctx context.Context, owner, repo, runID string) error {
 
 	return fmt.Errorf("timed out waiting for runner to be online")
 }
-
 
 // getSecret gets the secret from Secret Manager.
 func getSecret(ctx context.Context, name string) (string, error) {
