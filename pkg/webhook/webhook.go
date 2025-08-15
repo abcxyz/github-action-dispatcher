@@ -61,7 +61,13 @@ func (s *Server) handleWebhook() http.Handler {
 		}
 
 		w.WriteHeader(resp.Code)
-		fmt.Fprint(w, html.EscapeString(resp.Message))
+		if resp.Error != nil {
+			// Also include the error in the response body for easier debugging in CI
+			fullMessage := fmt.Sprintf("%s: %v", resp.Message, resp.Error)
+			fmt.Fprint(w, html.EscapeString(fullMessage))
+		} else {
+			fmt.Fprint(w, html.EscapeString(resp.Message))
+		}
 	})
 }
 
@@ -88,7 +94,7 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 
 	payload, err := github.ValidatePayload(r, s.webhookSecret)
 	if err != nil {
-		return &apiResponse{http.StatusInternalServerError, "failed to validate payload", err}
+		return &apiResponse{http.StatusInternalServerError, fmt.Sprintf("failed to validate payload: %v", err), err}
 	}
 
 	event, err := github.ParseWebHook(github.WebHookType(r), payload)
@@ -192,6 +198,11 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 					"_IMAGE_NAME":         s.runnerImageName,
 					"_IMAGE_TAG":          imageTag,
 				},
+			}
+
+			// Check if this is an E2E test run and add appropriate tags.
+			if s.e2eTestRunID != "" {
+				build.Tags = []string{"e2e-test", fmt.Sprintf("e2e-run-id-%s", s.e2eTestRunID)}
 			}
 
 			if s.runnerWorkerPoolID != "" {
