@@ -24,10 +24,9 @@ on:
           - 'self-hosted'
           - 'ubuntu-latest'
   workflow_run:
-    # Run this workflow after either of the other build/deploys run.
+    # Run this workflow after runner image is pushed.
     workflows:
-      - 'build_runner.yml'
-      - 'build_webhook.yml'
+      - 'build_runner_container'
     types:
       - 'completed'
     branches:
@@ -118,6 +117,8 @@ jobs:
 
   test-create-pull-request-minty:
     name: 'Test Create Pull Request flow with Minty'
+    # WIF attribute means will only pass if running on main.
+    if: "${{ github.ref == 'refs/heads/main' }}"
     uses: './.github/workflows/integration-test-minty.yml'
     permissions:
       contents: 'read'
