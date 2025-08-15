@@ -43,6 +43,9 @@ var (
 	projectID      = flag.String("project-id", "", "The GCP project ID for the integration environment.")
 	runID          = flag.String("run-id", "", "The unique GitHub Actions workflow run ID.")
 	idToken        = flag.String("id-token", "", "The ID token for authenticating to the webhook service.")
+	verifyRunner   = flag.Bool("verify-runner", false, "If true, verify the runner is online instead of the build.")
+	githubOwner    = flag.String("github-owner", "", "The GitHub owner (organization).")
+	githubRepo     = flag.String("github-repo", "", "The GitHub repository name.")
 )
 
 const (
@@ -69,6 +72,11 @@ const (
 	}`
 )
 
+type runnerInfo struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
 func main() {
 	flag.Parse()
 
@@ -86,6 +94,14 @@ func main() {
 	}
 	if *runID == "" {
 		log.Fatal("--run-id is required.")
+	}
+	if *verifyRunner {
+		if *githubOwner == "" {
+			log.Fatal("--github-owner is required with --verify-runner.")
+		}
+		if *githubRepo == "" {
+			log.Fatal("--github-repo is required with --verify-runner.")
+		}
 	}
 
 	ctx := context.Background()
@@ -134,13 +150,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Printf("Successfully sent webhook payload. Now verifying build trigger...")
+	log.Printf("Successfully sent webhook payload. Now verifying...")
 
-	if err := verifyBuildTriggered(ctx, *projectID, *runID); err != nil {
-		log.Fatalf("Failed to verify build trigger: %v", err)
+	if *verifyRunner {
+		if err := verifyRunnerOnline(ctx, *githubOwner, *githubRepo, *runID); err != nil {
+			log.Fatalf("Failed to verify runner: %v", err)
+		}
+		log.Printf("Successfully verified runner is online.")
+	} else {
+		if err := verifyBuildTriggered(ctx, *projectID, *runID); err != nil {
+			log.Fatalf("Failed to verify build trigger: %v", err)
+		}
+		log.Printf("Successfully verified build trigger.")
 	}
-
-	log.Printf("Successfully verified build trigger.")
 }
 
 // verifyBuildTriggered polls gcloud to check if a build was triggered with the correct tag.
@@ -174,6 +196,44 @@ func verifyBuildTriggered(ctx context.Context, projectID, runID string) error {
 	}
 
 	return fmt.Errorf("timed out waiting for build to be triggered")
+}
+
+// verifyRunnerOnline polls the GitHub API to check if a runner with the correct name is online.
+func verifyRunnerOnline(ctx context.Context, owner, repo, runID string) error {
+	const (
+		maxRetries = 10
+		delay      = 30 * time.Second
+	)
+
+	runnerName := fmt.Sprintf("GCP-%s", runID)
+
+	for i := 0; i < maxRetries; i++ {
+		log.Printf("Polling for runner (attempt %d/%d)...", i+1, maxRetries)
+		cmd := exec.CommandContext(ctx, "gh", "runner", "list", "-R", fmt.Sprintf("%s/%s", owner, repo), "--json", "name,status")
+		output, err := cmd.Output()
+		if err != nil {
+			if ee, ok := err.(*exec.ExitError); ok {
+				return fmt.Errorf("gh command failed: %w, stderr: %s", err, string(ee.Stderr))
+			}
+			return fmt.Errorf("gh command failed: %w", err)
+		}
+
+		var runners []runnerInfo
+		if err := json.Unmarshal(output, &runners); err != nil {
+			return fmt.Errorf("failed to unmarshal runner list: %w", err)
+		}
+
+		for _, runner := range runners {
+			if runner.Name == runnerName && runner.Status == "online" {
+				log.Printf("Found runner %s with status %s", runner.Name, runner.Status)
+				return nil
+			}
+		}
+
+		time.Sleep(delay)
+	}
+
+	return fmt.Errorf("timed out waiting for runner to be online")
 }
 
 

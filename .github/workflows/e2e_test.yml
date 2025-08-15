@@ -28,6 +28,7 @@ env:
   INTEGRATION_REGION: 'us-central1'
 
 permissions:
+  actions: 'read'
   contents: 'read'
   id-token: 'write'
 
@@ -175,6 +176,7 @@ jobs:
     runs-on: 'ubuntu-latest'
     env:
       TEST_INSTALLATION_ID: 80783309
+      GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
     steps:
       - name: 'Checkout'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
@@ -207,7 +209,10 @@ jobs:
             --installation-id "${{ env.TEST_INSTALLATION_ID }}" \
             --project-id "${{ env.RUNNER_PROJECT_ID }}" \
             --run-id "${{ github.run_id }}" \
-            --id-token "${{ steps.auth.outputs.id_token }}"
+            --id-token "${{ steps.auth.outputs.id_token }}" \
+            --verify-runner="true" \
+            --github-owner "abcxyz" \
+            --github-repo "github-action-dispatcher-testing"
 
   cleanup:
     needs: ['deploy', 'test']
@@ -240,6 +245,6 @@ jobs:
         run: |-
           SERVICE_NAME='${{ needs.deploy.outputs.service_name }}'
           gcloud run services delete "${SERVICE_NAME}" \
-            --project='${{ env.RUNNER_PROJECT_ID }}' \
+            --project='${{ env.WEBHOOK_PROJECT_ID }}' \
             --region='${{ env.INTEGRATION_REGION }}' \
             --quiet
