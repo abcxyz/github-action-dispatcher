@@ -92,7 +92,7 @@ jobs:
     uses: 'abcxyz/actions/.github/workflows/go-test.yml@main' # ratchet:exclude
     with:
       directory: 'pkg/'
-      runs-on: "${{ inputs.runs-on || 'self-hosted' }}"
+      runs-on: "\"${{ inputs.runs-on || 'self-hosted' }}\""
 
   run-lint-tests-pkg:
     name: 'Run Lint Suite on abcxyz/pkg'
