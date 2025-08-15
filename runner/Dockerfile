@@ -67,6 +67,7 @@ WORKDIR /actions-runner
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
       adduser \
+      build-essential \
       ca-certificates \
       coreutils \
       curl \
