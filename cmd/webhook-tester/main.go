@@ -78,6 +78,10 @@ type runnerInfo struct {
 	Status string `json:"status"`
 }
 
+type runnersResponse struct {
+	Runners []runnerInfo `json:"runners"`
+}
+
 func main() {
 	flag.Parse()
 
@@ -210,7 +214,7 @@ func verifyRunnerOnline(ctx context.Context, owner, repo, runID string) error {
 
 	for i := 0; i < maxRetries; i++ {
 		log.Printf("Polling for runner (attempt %d/%d)...", i+1, maxRetries)
-		cmd := exec.CommandContext(ctx, "gh", "runner", "list", "-R", fmt.Sprintf("%s/%s", owner, repo), "--json", "name,status")
+		cmd := exec.CommandContext(ctx, "gh", "api", "--paginate", fmt.Sprintf("repos/%s/%s/actions/runners", owner, repo))
 		output, err := cmd.Output()
 		if err != nil {
 			if ee, ok := err.(*exec.ExitError); ok {
@@ -219,12 +223,12 @@ func verifyRunnerOnline(ctx context.Context, owner, repo, runID string) error {
 			return fmt.Errorf("gh command failed: %w", err)
 		}
 
-		var runners []runnerInfo
-		if err := json.Unmarshal(output, &runners); err != nil {
+		var response runnersResponse
+		if err := json.Unmarshal(output, &response); err != nil {
 			return fmt.Errorf("failed to unmarshal runner list: %w", err)
 		}
 
-		for _, runner := range runners {
+		for _, runner := range response.Runners {
 			if runner.Name == runnerName && runner.Status == "online" {
 				log.Printf("Found runner %s with status %s", runner.Name, runner.Status)
 				return nil
