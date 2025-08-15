@@ -78,18 +78,18 @@ jobs:
           github.event_name == 'pull_request'
         run: 'echo "DOCKER_TAG=webhook-pr-${{ github.event.number }}-${{ github.event.pull_request.head.sha }}" >> "$GITHUB_ENV"'
 
-      - name: 'Build the server container and push to the registry with goreleaser'
+      - name: 'Build the server container for PR'
+        if: |
+          github.event_name == 'pull_request'
+        uses: 'goreleaser/goreleaser-action@9ed2f89a662bf1735a48bc8557fd212fa902bebf' # ratchet:goreleaser/goreleaser-action@v6
+        with:
+          version: 'v1.12.3' # Manually pinned
+          args: 'release -f .goreleaser.docker.yml --rm-dist --skip-validate --skip-publish'
+
+      - name: 'Build and push the server container to the registry'
+        if: |
+          github.event_name != 'pull_request'
         uses: 'goreleaser/goreleaser-action@9ed2f89a662bf1735a48bc8557fd212fa902bebf' # ratchet:goreleaser/goreleaser-action@v6
         with:
           version: 'v1.12.3' # Manually pinned
           args: 'release -f .goreleaser.docker.yml --rm-dist --skip-validate'
-
-      - name: 'Deploy to Cloud Run'
-        if: |
-          github.event_name != 'pull_request'
-        run: |-
-          gcloud run services update ${{ env.INTEGRATION_SERVICE_NAME }} \
-            --project="${{ env.INTEGRATION_PROJECT_ID }}" \
-            --region="${{ env.INTEGRATION_REGION }}" \
-            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.DOCKER_TAG }}-amd64" \
-            --tag="${{ env.TAG_ID }}"
