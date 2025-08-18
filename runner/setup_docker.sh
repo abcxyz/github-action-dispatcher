@@ -1,14 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 
-# --- Privilege Check ---
 echo "--- Checking for privileged access... ---"
-# Check if any of the common host block devices exist.
-if [[ -e "/dev/sda" ]] || [[ -e "/dev/vda" ]] || [[ -e "/dev/xvda" ]]; then
-    echo "SUCCESS: Privileged access confirmed."
+# Create a temporary directory to use as a safe mountpoint for our test.
+MOUNT_TEST_DIR="$(mktemp -d)"
+
+# Create an isolated mount namespace (-m)
+# and then attempt the 'mount' operation. This will only succeed if the
+# container has the required capabilities (like CAP_SYS_ADMIN) AND is not
+# blocked by a host security policy (like AppArmor/SELinux).
+if unshare -m -- mount -t tmpfs tmpfs "${MOUNT_TEST_DIR}" &>/dev/null; then
+    echo "SUCCESS: Container has sufficient privileges to run Docker-in-Docker."
+    rm -rf -- "${MOUNT_TEST_DIR}"
 else
-    echo "ERROR: Container is not running in privileged mode." >&2
-    echo "This Docker-in-Docker setup requires the --privileged flag to function." >&2
+    echo "ERROR: Container lacks the necessary mount permissions for DinD." >&2
+    echo "Ensure the container is started with the --privileged flag." >&2
     exit 1
 fi
 
