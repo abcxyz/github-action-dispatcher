@@ -317,7 +317,7 @@ jobs:
             --id-token "${{ steps.auth.outputs.id_token }}" \
             --payload-file "valid_payload.json" \
             --signature "bad-signature" \
-            --expect-http-status 500 \
+            --expect-http-status 400 \
             --expect-no-build
 
       - name: 'Run Webhook Tester (Malformed JSON)'
@@ -334,7 +334,7 @@ jobs:
             --run-id "${{ github.run_id }}" \
             --id-token "${{ steps.auth.outputs.id_token }}" \
             --payload-file "payload.json" \
-            --expect-http-status 200 \
+            --expect-http-status 400 \
             --expect-no-build
 
       - name: 'Run Webhook Tester (Missing Required Field)'
