@@ -46,6 +46,7 @@ type Server struct {
 	runnerImageTag       string
 	runnerRepositoryID   string
 	runnerServiceAccount string
+	extraRunnerCount     int
 	runnerWorkerPoolID   string
 	webhookSecret        []byte
 	e2eTestRunID         string
@@ -123,6 +124,15 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 		cbc = cb
 	}
 
+	var extraRunnerCount int
+	// This should be validated at config level already.
+
+	num, err := validateExtraRunnerCount(cfg.ExtraRunnerCount)
+	if err != nil {
+		return nil, err
+	}
+	extraRunnerCount = num
+
 	return &Server{
 		appClient:            appClient,
 		cbc:                  cbc,
@@ -136,13 +146,14 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 		runnerProjectID:      cfg.RunnerProjectID,
 		runnerRepositoryID:   cfg.RunnerRepositoryID,
 		runnerServiceAccount: cfg.RunnerServiceAccount,
+		extraRunnerCount:     extraRunnerCount,
 		runnerWorkerPoolID:   cfg.RunnerWorkerPoolID,
 		webhookSecret:        webhookSecret,
 		e2eTestRunID:         cfg.E2ETestRunID,
 	}, nil
 }
 
-// Routes creates a ServeMux of all of the routes that
+// Routes creates a ServeMux for all the routes that
 // this Router supports.
 func (s *Server) Routes(ctx context.Context) http.Handler {
 	logger := logging.FromContext(ctx)

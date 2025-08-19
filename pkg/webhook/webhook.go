@@ -163,16 +163,21 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		return &apiResponse{http.StatusBadRequest, "unexpected event payload struture", err}
 	}
 
-	runnerID := fmt.Sprintf("GCP-%s", jobID)
-	logger = logger.With("runner_id", runnerID)
-	ctx = logging.WithLogger(ctx, logger)
+	for i := 1; i <= 1+s.extraRunnerCount; i++ {
+		runnerID := fmt.Sprintf("GCP-%s-%d", jobID, i)
+		logger := logger.With("runner_id", runnerID) // Shadow logger per runner.
+		if i > 1 {
+			logger.InfoContext(ctx, "Spawning extra runner")
+		}
+		ctx = logging.WithLogger(ctx, logger)
 
-	responseText, err := s.startGitHubRunner(ctx, event, runnerID, logger, imageTag)
-	if err != nil {
-		return &apiResponse{http.StatusInternalServerError, responseText, err}
+		responseText, err := s.startGitHubRunner(ctx, event, runnerID, logger, imageTag)
+		if err != nil {
+			return &apiResponse{http.StatusInternalServerError, responseText, err}
+		}
+
+		logger.InfoContext(ctx, runnerStartedMsg, slog.Any(githubWebhookEventKey, event))
 	}
-
-	logger.InfoContext(ctx, runnerStartedMsg, slog.Any(githubWebhookEventKey, event))
 
 	return &apiResponse{http.StatusOK, runnerStartedMsg, nil}
 }

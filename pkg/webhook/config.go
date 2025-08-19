@@ -17,6 +17,7 @@ package webhook
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/sethvargo/go-envconfig"
 
@@ -40,6 +41,7 @@ type Config struct {
 	RunnerProjectID           string `env:"RUNNER_PROJECT_ID,required"`
 	RunnerRepositoryID        string `env:"RUNNER_REPOSITORY_ID,required"`
 	RunnerServiceAccount      string `env:"RUNNER_SERVICE_ACCOUNT,required"`
+	ExtraRunnerCount          string `env:"EXTRA_RUNNER_COUNT,default=0"`
 	RunnerWorkerPoolID        string `env:"RUNNER_WORKER_POOL_ID"`
 	E2ETestRunID              string `env:"E2E_TEST_RUN_ID"`
 }
@@ -82,12 +84,26 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("RUNNER_SERVICE_ACCOUNT is required")
 	}
 
+	if _, err := validateExtraRunnerCount(cfg.ExtraRunnerCount); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // NewConfig creates a new Config from environment variables.
 func NewConfig(ctx context.Context) (*Config, error) {
 	return newConfig(ctx, envconfig.OsLookuper())
+}
+
+func validateExtraRunnerCount(value string) (int, error) {
+	if num, err := strconv.Atoi(value); err != nil {
+		return 0, fmt.Errorf("EXTRA_RUNNER_COUNT must be an integer: %w", err)
+	} else if num < 0 || num >= 10 {
+		return 0, fmt.Errorf("EXTRA_RUNNER_COUNT must be in a range of [0,10)")
+	} else {
+		return num, nil
+	}
 }
 
 func newConfig(ctx context.Context, lu envconfig.Lookuper) (*Config, error) {
@@ -103,11 +119,26 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 	f := set.NewSection("COMMON SERVER OPTIONS")
 
 	f.StringVar(&cli.StringVar{
+		Name:   "e2e-test-run-id",
+		Target: &cfg.E2ETestRunID,
+		EnvVar: "E2E_TEST_RUN_ID",
+		Usage:  `The unique ID for an E2E test run, used for tagging builds.`,
+	})
+
+	f.StringVar(&cli.StringVar{
 		Name:    "environment",
 		Target:  &cfg.Environment,
 		EnvVar:  "ENVIRONMENT",
 		Default: "production",
 		Usage:   `The execution environment (e.g., "autopush", "production"). Controls environment-specific features.`,
+	})
+
+	f.StringVar(&cli.StringVar{
+		Name:    "extra-runner-count",
+		Target:  &cfg.ExtraRunnerCount,
+		EnvVar:  "EXTRA_RUNNER_COUNT",
+		Default: "0",
+		Usage:   `How many extra runners to spawn per webhook. Used to create excess runners to avoid runner deficit. Must be in range [0,10).`,
 	})
 
 	f.StringVar(&cli.StringVar{
@@ -202,13 +233,6 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Target: &cfg.RunnerWorkerPoolID,
 		EnvVar: "RUNNER_WORKER_POOL_ID",
 		Usage:  `The private runner worker pool ID`,
-	})
-
-	f.StringVar(&cli.StringVar{
-		Name:   "e2e-test-run-id",
-		Target: &cfg.E2ETestRunID,
-		EnvVar: "E2E_TEST_RUN_ID",
-		Usage:  `The unique ID for an E2E test run, used for tagging builds.`,
 	})
 
 	return set
