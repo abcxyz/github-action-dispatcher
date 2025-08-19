@@ -56,4 +56,5 @@ jobs:
           gcloud run services update ${{ env.AUTOPUSH_SERVICE_NAME }} \
             --project="${{ env.AUTOPUSH_PROJECT_ID }}" \
             --region="${{ env.AUTOPUSH_REGION }}" \
-            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.DOCKER_TAG }}-amd64"
+            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.DOCKER_TAG }}-amd64" \
+            --ingress="internal-and-cloud-load-balancing"
