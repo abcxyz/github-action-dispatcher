@@ -20,7 +20,7 @@ env:
   DOCKER_REPO: 'us-docker.pkg.dev/ghss-artifacts-p-25/docker-images'
   IMAGE_NAME: 'gha-webhook'
 
-  AUTOPUSH_SERVICE_NAME: 'action-dispatcher'
+  AUTOPUSH_SERVICE_NAME: 'action-dispatcher-1863'
   AUTOPUSH_PROJECT_ID: 'action-dispatcher-webhook-a-18'
   AUTOPUSH_REGION: 'us-central1'
 
