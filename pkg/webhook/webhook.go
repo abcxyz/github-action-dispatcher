@@ -104,10 +104,23 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 			return &apiResponse{http.StatusOK, "no action taken for nil action type", nil}
 		}
 
+		// A workflow job is required for all actions.
+		if event.WorkflowJob == nil {
+			err := fmt.Errorf("event is missing required field: workflow_job")
+			logger.ErrorContext(ctx, "cannot process event due to missing workflow_job", "error", err)
+			return &apiResponse{http.StatusBadRequest, "unexpected event payload structure", err}
+		}
+
 		// Common attributes to always include for WorkflowJobEvent
-		var jobID string
-		if event.WorkflowJob != nil && event.WorkflowJob.ID != nil {
+		var jobID, runID, jobName string
+		if event.WorkflowJob.ID != nil {
 			jobID = fmt.Sprintf("%d", *event.WorkflowJob.ID)
+		}
+		if event.WorkflowJob.RunID != nil {
+			runID = fmt.Sprintf("%d", *event.WorkflowJob.RunID)
+		}
+		if event.WorkflowJob.Name != nil {
+			jobName = *event.WorkflowJob.Name
 		}
 
 		runnerID := fmt.Sprintf("GCP-%s", jobID)
@@ -115,9 +128,9 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 		// Base log fields that will be common to most WorkflowJob logs
 		baseLogFields := []any{
 			"action_event_name", *event.Action,
-			"gh_run_id", *event.WorkflowJob.RunID,
-			"gh_job_id", *event.WorkflowJob.ID,
-			"gh_job_name", event.WorkflowJob.Name,
+			"gh_run_id", runID,
+			"gh_job_id", jobID,
+			"gh_job_name", jobName,
 			"job_id", jobID,
 			"runner_id", runnerID,
 		}
@@ -192,6 +205,11 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 					"_IMAGE_NAME":         s.runnerImageName,
 					"_IMAGE_TAG":          imageTag,
 				},
+			}
+
+			// Check if this is an E2E test run and add appropriate tags.
+			if s.e2eTestRunID != "" {
+				build.Tags = []string{"e2e-test", fmt.Sprintf("e2e-run-id-%s", s.e2eTestRunID)}
 			}
 
 			if s.runnerWorkerPoolID != "" {

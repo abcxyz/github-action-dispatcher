@@ -1,0 +1,463 @@
+name: 'E2E Test Webhook PR'
+
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'cmd/github-actions-on-gcp/**'
+      - 'cmd/webhook-tester/**'
+      - 'pkg/**'
+      - '.github/workflows/e2e_test.yml'
+  pull_request:
+    paths:
+      - 'cmd/github-actions-on-gcp/**'
+      - 'cmd/webhook-tester/**'
+      - 'pkg/**'
+      - '.github/workflows/e2e_test.yml'
+
+env:
+  WIF_PROVIDER: 'projects/214307795652/locations/global/workloadIdentityPools/github-automation/providers/action-dispatcher-i'
+  WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-action-dispatcher-i-413ef7.iam.gserviceaccount.com'
+  DOCKER_REGISTRY: 'us-docker.pkg.dev'
+  DOCKER_REPO: 'us-docker.pkg.dev/webhook-i-34/ci-images'
+  IMAGE_NAME: 'gha-webhook'
+  RUNNER_IMAGE_NAME: 'gha-runner'
+  WEBHOOK_PROJECT_ID: 'webhook-i-34'
+  RUNNER_PROJECT_ID: 'runner-i-34'
+  INTEGRATION_REGION: 'us-central1'
+
+permissions:
+  actions: 'read'
+  contents: 'read'
+  id-token: 'write'
+  issues: 'write'
+
+jobs:
+  check_pat:
+    name: 'Check PAT Expiration'
+    runs-on: 'ubuntu-latest'
+    outputs:
+      days_remaining: '${{ steps.check_pat.outputs.days_remaining }}'
+    steps:
+      - name: 'Check PAT Expiration'
+        id: 'check_pat'
+        env:
+          GH_TOKEN: '${{ secrets.E2E_TEST_REPO_TOKEN }}'
+        run: |
+          set -euo pipefail
+
+          # The -i flag includes headers in the output. The meta endpoint is lightweight.
+          # Use tr -d '\r' to handle potential carriage return issues from different shells.
+          EXPIRATION_HEADER=$(gh api meta -i | tr -d '\r' | grep -i "github-authentication-token-expiration:")
+
+          if [ -z "$EXPIRATION_HEADER" ]; then
+            echo "::error::Could not determine token expiration. The 'github-authentication-token-expiration' header was not found."
+            echo "Please ensure E2E_TEST_REPO_TOKEN is a fine-grained PAT."
+            exit 1
+          fi
+
+          # Extract the date string (e.g., "2025-11-10 12:00:00 UTC")
+          EXPIRATION_DATE_STR=$(echo "$EXPIRATION_HEADER" | cut -d':' -f2- | xargs)
+
+          # Convert dates to seconds since epoch for comparison
+          EXPIRATION_SECONDS=$(date -d "$EXPIRATION_DATE_STR" +%s)
+          CURRENT_SECONDS=$(date +%s)
+
+          # Calculate days remaining
+          DAYS_REMAINING=$(((EXPIRATION_SECONDS - CURRENT_SECONDS) / 86400))
+
+          echo "Token expires on: $EXPIRATION_DATE_STR ($DAYS_REMAINING days remaining)"
+          echo "days_remaining=${DAYS_REMAINING}" >> "$GITHUB_OUTPUT"
+
+      - name: 'Fail if Expired'
+        if: 'steps.check_pat.outputs.days_remaining < 1'
+        run: |
+          echo "::error::E2E_TEST_REPO_TOKEN has expired. Please rotate it."
+          exit 1
+
+      - name: 'Create Expiration Warning Issue'
+        if: 'steps.check_pat.outputs.days_remaining < 7'
+        env:
+          GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+        run: |
+          set -euo pipefail
+          ISSUE_TITLE="E2E Test PAT is expiring soon"
+
+          # Check if an issue with the same title already exists
+          EXISTING_ISSUE=$(gh issue list --label "technical-debt" --search "$ISSUE_TITLE in:title" --state open --json number)
+
+          if [ "$EXISTING_ISSUE" == "[]" ]; then
+            echo "Creating new issue for PAT expiration."
+            gh issue create \
+              --title "$ISSUE_TITLE" \
+              --body "The fine-grained PAT stored in the E2E_TEST_REPO_TOKEN secret is expiring in ${{ steps.check_pat.outputs.days_remaining }} days. Please rotate it to prevent E2E test failures." \
+              --label "technical-debt"
+          else
+            echo "An open issue for PAT expiration already exists."
+          fi
+
+  build-webhook:
+    name: 'Build and publish webhook Docker image'
+    needs: 'check_pat'
+    runs-on: 'ubuntu-latest'
+    outputs:
+      image_tag: '${{ steps.tag.outputs.image_tag }}'
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 'Setup Go'
+        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'access_token'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - uses: 'docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772' # ratchet:docker/login-action@v3
+        with:
+          username: 'oauth2accesstoken'
+          password: '${{ steps.auth.outputs.access_token }}'
+          registry: '${{ env.DOCKER_REGISTRY }}'
+
+      - id: 'tag'
+        name: 'Set Docker Tag for PR'
+        run: 'echo "image_tag=webhook-pr-${{ github.event.number }}${{ github.sha }}" >> "$GITHUB_OUTPUT"'
+
+      - name: 'Create dummy tag for goreleaser'
+        run: 'git tag v0.0.0-pr-${{ github.event.number }}'
+
+      - name: 'Build the server container and push to the registry with goreleaser'
+        uses: 'goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552' # ratchet:goreleaser/goreleaser-action@v6
+        with:
+          version: 'v1.12.3'
+          args: 'release -f .goreleaser.e2e.yml --rm-dist --skip-validate'
+        env:
+          DOCKER_TAG: '${{ steps.tag.outputs.image_tag }}'
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+
+  build-runner:
+    name: 'Build and publish runner Docker image'
+    needs: 'check_pat'
+    runs-on: 'ubuntu-latest'
+    outputs:
+      image_tag: '${{ steps.tag.outputs.image_tag }}'
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'access_token'
+
+      - uses: 'docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772' # ratchet:docker/login-action@v3
+        with:
+          username: 'oauth2accesstoken'
+          password: '${{ steps.auth.outputs.access_token }}'
+          registry: '${{ env.DOCKER_REGISTRY }}'
+
+      - id: 'tag'
+        name: 'Set Docker Tag for PR'
+        run: 'echo "image_tag=runner-pr-${{ github.event.number }}${{ github.sha }}" >> "$GITHUB_OUTPUT"'
+
+      - name: 'Build and push runner image'
+        uses: 'docker/build-push-action@5176d81f87c23d6fc96624dfdbcd9f3830bbe445' # ratchet:docker/build-push-action@v6.5.0
+        with:
+          context: './runner'
+          push: true
+          tags: '${{ env.DOCKER_REPO }}/${{ env.RUNNER_IMAGE_NAME }}:${{ steps.tag.outputs.image_tag }}'
+
+  deploy:
+    needs: ['build-webhook', 'build-runner']
+    runs-on: 'ubuntu-latest'
+    outputs:
+      service_name: '${{ steps.deploy.outputs.service_name }}'
+      service_url: '${{ steps.deploy.outputs.service_url }}'
+    env:
+      DOCKER_REGISTRY: 'us-docker.pkg.dev'
+      GITHUB_APP_ID: '1617912'
+      KMS_APP_PRIVATE_KEY_ID: 'projects/webhook-i-34/locations/global/keyRings/webhook-pr-test-keyring/cryptoKeys/webhook-pr-test-app-key/cryptoKeyVersions/2'
+      RUNNER_IMAGE_TAG: '${{ needs.build-runner.outputs.image_tag }}'
+      RUNNER_LOCATION: 'us-central1'
+      RUNNER_SERVICE_ACCOUNT: 'projects/runner-i-34/serviceAccounts/action-dispatcher-runner-sa@runner-i-34.iam.gserviceaccount.com'
+      RUNTIME_SERVICE_ACCOUNT: 'action-dispatcher-webhook-sa@webhook-i-34.iam.gserviceaccount.com'
+      E2E_TEST_RUN_ID: '${{ github.run_id }}'
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'access_token'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - name: 'Deploy to Cloud Run'
+        id: 'deploy'
+        run: |-
+          SERVICE_NAME="webhook-pr-${{ github.event.number }}${{ github.sha }}"
+          IMAGE_TAG="${{ needs.build-webhook.outputs.image_tag }}"
+          WEBHOOK_SECRET_MOUNT_PATH="/etc/secrets/webhook-pr-test-key"
+          WEBHOOK_SECRET_NAME="latest"
+
+          SERVICE_URL=$(gcloud run deploy "${SERVICE_NAME}" \
+            --project="${{ env.WEBHOOK_PROJECT_ID }}" \
+            --region="${{ env.INTEGRATION_REGION }}" \
+            --service-account="${{ env.RUNTIME_SERVICE_ACCOUNT }}" \
+            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-amd64" \
+            --ingress=all \
+            --no-allow-unauthenticated \
+            --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=webhook-pr-test-secret:latest" \
+            --update-env-vars="DOCKER_REGISTRY=${{ env.DOCKER_REGISTRY }},GITHUB_APP_ID=${{ env.GITHUB_APP_ID }},KMS_APP_PRIVATE_KEY_ID=${{ env.KMS_APP_PRIVATE_KEY_ID }},RUNNER_IMAGE_NAME=${{ env.RUNNER_IMAGE_NAME }},RUNNER_IMAGE_TAG=${{ env.RUNNER_IMAGE_TAG }},RUNNER_LOCATION=${{ env.RUNNER_LOCATION }},RUNNER_PROJECT_ID=${{ env.RUNNER_PROJECT_ID }},RUNNER_REPOSITORY_ID=${{ env.DOCKER_REPO }},RUNNER_SERVICE_ACCOUNT=${{ env.RUNNER_SERVICE_ACCOUNT }},WEBHOOK_KEY_MOUNT_PATH=${WEBHOOK_SECRET_MOUNT_PATH},WEBHOOK_KEY_NAME=${WEBHOOK_SECRET_NAME},E2E_TEST_RUN_ID=${{ env.E2E_TEST_RUN_ID }}" \
+            --format='value(status.url)')
+          echo "service_url=${SERVICE_URL}" >> "$GITHUB_OUTPUT"
+          echo "service_name=${SERVICE_NAME}" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: 'deploy'
+    runs-on: 'ubuntu-latest'
+    env:
+      TEST_INSTALLATION_ID: 80783309
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'id_token'
+          id_token_audience: '${{ needs.deploy.outputs.service_url }}'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - name: 'Setup Go'
+        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: 'Run Webhook Tester (Valid Signature)'
+        id: 'valid_signature'
+        run: |-
+          set -euo pipefail
+          cat <<EOF > valid_payload.json
+          {
+            "action": "queued",
+            "workflow_job": {
+              "id": ${{ github.run_id }},
+              "run_id": ${{ github.run_id }},
+              "name": "test-job",
+              "labels": ["self-hosted"],
+              "created_at": "2024-01-01T00:00:00Z"
+            },
+            "organization": {
+              "login": "abcxyz"
+            },
+            "repository": {
+              "name": "github-action-dispatcher-testing"
+            },
+            "installation": {
+              "id": ${{ env.TEST_INSTALLATION_ID }}
+            }
+          }
+          EOF
+          go run ./cmd/webhook-tester \
+            --webhook-url "${{ needs.deploy.outputs.service_url }}/webhook" \
+            --secret-name "projects/${{ env.WEBHOOK_PROJECT_ID }}/secrets/webhook-pr-test-secret/versions/latest" \
+            --installation-id "${{ env.TEST_INSTALLATION_ID }}" \
+            --project-id "${{ env.RUNNER_PROJECT_ID }}" \
+            --run-id "${{ github.run_id }}" \
+            --id-token "${{ steps.auth.outputs.id_token }}" \
+            --payload-file "valid_payload.json" \
+            --verify-runner \
+            --github-owner "abcxyz" \
+            --github-repo "github-action-dispatcher-testing" \
+            --github-token "${{ secrets.E2E_TEST_REPO_TOKEN }}"
+
+      - name: 'Run Webhook Tester (Invalid Signature)'
+        id: 'invalid_signature'
+        if: 'always()'
+        run: |-
+          set -euo pipefail
+          go run ./cmd/webhook-tester \
+            --webhook-url "${{ needs.deploy.outputs.service_url }}/webhook" \
+            --secret-name "projects/${{ env.WEBHOOK_PROJECT_ID }}/secrets/webhook-pr-test-secret/versions/latest" \
+            --installation-id "${{ env.TEST_INSTALLATION_ID }}" \
+            --project-id "${{ env.RUNNER_PROJECT_ID }}" \
+            --run-id "${{ github.run_id }}" \
+            --id-token "${{ steps.auth.outputs.id_token }}" \
+            --payload-file "valid_payload.json" \
+            --signature "bad-signature" \
+            --expect-http-status 500 \
+            --expect-no-build
+
+      - name: 'Run Webhook Tester (Malformed JSON)'
+        id: 'malformed_json'
+        if: 'always()'
+        run: |-
+          set -euo pipefail
+          echo '{"foo": "bar"}' > payload.json
+          go run ./cmd/webhook-tester \
+            --webhook-url "${{ needs.deploy.outputs.service_url }}/webhook" \
+            --secret-name "projects/${{ env.WEBHOOK_PROJECT_ID }}/secrets/webhook-pr-test-secret/versions/latest" \
+            --installation-id "${{ env.TEST_INSTALLATION_ID }}" \
+            --project-id "${{ env.RUNNER_PROJECT_ID }}" \
+            --run-id "${{ github.run_id }}" \
+            --id-token "${{ steps.auth.outputs.id_token }}" \
+            --payload-file "payload.json" \
+            --expect-http-status 200 \
+            --expect-no-build
+
+      - name: 'Run Webhook Tester (Missing Required Field)'
+        id: 'missing_field'
+        if: 'always()'
+        run: |-
+          set -euo pipefail
+          echo '{"action": "queued"}' > payload.json
+          go run ./cmd/webhook-tester \
+            --webhook-url "${{ needs.deploy.outputs.service_url }}/webhook" \
+            --secret-name "projects/${{ env.WEBHOOK_PROJECT_ID }}/secrets/webhook-pr-test-secret/versions/latest" \
+            --installation-id "${{ env.TEST_INSTALLATION_ID }}" \
+            --project-id "${{ env.RUNNER_PROJECT_ID }}" \
+            --run-id "${{ github.run_id }}" \
+            --id-token "${{ steps.auth.outputs.id_token }}" \
+            --payload-file "payload.json" \
+            --expect-http-status 400 \
+            --expect-no-build
+
+      - name: 'Run Webhook Tester (Not Self-Hosted)'
+        id: 'not_self_hosted'
+        if: 'always()'
+        run: |-
+          set -euo pipefail
+          echo '{"action": "queued", "workflow_job": {"labels": ["not-self-hosted"]}, "installation": {"id": ${{ env.TEST_INSTALLATION_ID }} }}' > payload.json
+          go run ./cmd/webhook-tester \
+            --webhook-url "${{ needs.deploy.outputs.service_url }}/webhook" \
+            --secret-name "projects/${{ env.WEBHOOK_PROJECT_ID }}/secrets/webhook-pr-test-secret/versions/latest" \
+            --installation-id "${{ env.TEST_INSTALLATION_ID }}" \
+            --project-id "${{ env.RUNNER_PROJECT_ID }}" \
+            --run-id "${{ github.run_id }}" \
+            --id-token "${{ steps.auth.outputs.id_token }}" \
+            --payload-file "payload.json" \
+            --expect-http-status 200 \
+            --expect-no-build
+
+      - name: 'Run Webhook Tester (Incorrect Action)'
+        id: 'incorrect_action'
+        if: 'always()'
+        run: |-
+          set -euo pipefail
+          echo '{"action": "completed", "workflow_job": {"labels": ["self-hosted"]}, "installation": {"id": ${{ env.TEST_INSTALLATION_ID }} }}' > payload.json
+          go run ./cmd/webhook-tester \
+            --webhook-url "${{ needs.deploy.outputs.service_url }}/webhook" \
+            --secret-name "projects/${{ env.WEBHOOK_PROJECT_ID }}/secrets/webhook-pr-test-secret/versions/latest" \
+            --installation-id "${{ env.TEST_INSTALLATION_ID }}" \
+            --project-id "${{ env.RUNNER_PROJECT_ID }}" \
+            --run-id "${{ github.run_id }}" \
+            --id-token "${{ steps.auth.outputs.id_token }}" \
+            --payload-file "payload.json" \
+            --expect-http-status 200 \
+            --expect-no-build
+
+  cleanup-runner:
+    name: 'Cleanup GitHub Runner'
+    needs: ['deploy', 'test']
+    if: 'always()'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Delete GitHub Runner'
+        env:
+          GH_TOKEN: '${{ secrets.E2E_TEST_REPO_TOKEN }}'
+        run: |
+          set -x
+          RUNNER_NAME="GCP-${{ github.run_id }}"
+          RUNNER_ID=$(gh api repos/abcxyz/github-action-dispatcher-testing/actions/runners --jq ".runners[] | select(.name == \"${RUNNER_NAME}\") | .id")
+          if [ -n "$RUNNER_ID" ]; then
+            echo "Deleting runner ${RUNNER_NAME} (ID: ${RUNNER_ID})"
+            gh api "repos/abcxyz/github-action-dispatcher-testing/actions/runners/${RUNNER_ID}" -X DELETE
+          else
+            echo "No runner found with name ${RUNNER_NAME}."
+          fi
+
+  cleanup-service:
+    name: 'Cleanup Cloud Run Service'
+    needs: ['deploy', 'test']
+    if: 'always()'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - name: 'Delete Cloud Run Service'
+        run: |-
+          SERVICE_NAME='${{ needs.deploy.outputs.service_name }}'
+          gcloud run services delete "${SERVICE_NAME}" \
+            --project='${{ env.WEBHOOK_PROJECT_ID }}' \
+            --region='${{ env.INTEGRATION_REGION }}' \
+            --quiet
+
+  cleanup-build:
+    name: 'Cleanup Cloud Build Job'
+    needs: ['deploy', 'test', 'cleanup-runner']
+    if: 'always()'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - name: 'Cancel Cloud Build Job'
+        run: |-
+          set -x
+          build_ids=$(gcloud builds list --project="${{ env.RUNNER_PROJECT_ID }}" --filter="tags=e2e-run-id-${{ github.run_id }}" --format="value(id)")
+          if [ -n "${build_ids}" ]; then
+            echo "${build_ids}" | xargs gcloud builds cancel --project="${{ env.RUNNER_PROJECT_ID }}"
+          else
+            echo "No builds found to cancel."
+          fi

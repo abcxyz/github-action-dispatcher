@@ -199,3 +199,6 @@ go.work.sum
 
 # Local Terraform CLI state
 .terraform/
+
+# Temporary credentials files
+gha-creds-*.json

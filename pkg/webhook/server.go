@@ -48,6 +48,7 @@ type Server struct {
 	runnerServiceAccount string
 	runnerWorkerPoolID   string
 	webhookSecret        []byte
+	e2eTestRunID         string
 }
 
 // FileReader can read a file and return the content.
@@ -137,6 +138,7 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 		runnerServiceAccount: cfg.RunnerServiceAccount,
 		runnerWorkerPoolID:   cfg.RunnerWorkerPoolID,
 		webhookSecret:        webhookSecret,
+		e2eTestRunID:         cfg.E2ETestRunID,
 	}, nil
 }
 
@@ -153,6 +155,11 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 	root := logging.HTTPInterceptor(logger, s.runnerProjectID)(mux)
 
 	return root
+}
+
+// SetAppClient sets the app client for the server.
+func (s *Server) SetAppClient(app *githubauth.App) {
+	s.appClient = app
 }
 
 // handleVersion is a simple http.HandlerFunc that responds with version
