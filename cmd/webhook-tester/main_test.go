@@ -162,7 +162,7 @@ func TestWebhookHarness(t *testing.T) {
 	}
 
 	// Check that the mock Cloud Build client was called.
-	if mockCloudBuild.CreateBuildReq == nil {
-		t.Error("expected CreateBuild to be called, but it was not")
+	if num := len(mockCloudBuild.CreateBuildReqs); num != 1 {
+		t.Errorf("expected CreateBuild to be called once, but it was not called %d times", num)
 	}
 }

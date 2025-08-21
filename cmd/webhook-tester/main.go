@@ -276,7 +276,7 @@ func verifyRunnerOnline(ctx context.Context, owner, repo, runID string) error {
 		delay      = 30 * time.Second
 	)
 
-	runnerName := fmt.Sprintf("GCP-%s", runID)
+	runnerName := fmt.Sprintf("GCP-%s-1", runID)
 
 	var httpClient *http.Client
 	if *githubToken != "" {

@@ -22,12 +22,12 @@ import (
 )
 
 type MockCloudBuildClient struct {
-	CreateBuildReq *cloudbuildpb.CreateBuildRequest
-	createBuildErr error
+	CreateBuildReqs []*cloudbuildpb.CreateBuildRequest
+	createBuildErr  error
 }
 
 func (m *MockCloudBuildClient) CreateBuild(ctx context.Context, req *cloudbuildpb.CreateBuildRequest, opts ...gax.CallOption) error {
-	m.CreateBuildReq = req
+	m.CreateBuildReqs = append(m.CreateBuildReqs, req)
 	if m.createBuildErr != nil {
 		return m.createBuildErr
 	}

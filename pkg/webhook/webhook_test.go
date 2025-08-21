@@ -64,6 +64,7 @@ func TestHandleWebhook(t *testing.T) {
 		action               string
 		runnerLabels         []string
 		payloadWebhookSecret string
+		extraSpawnNumber     int
 		contentType          string
 		createdAt            *github.Timestamp
 		startedAt            *github.Timestamp
@@ -73,7 +74,7 @@ func TestHandleWebhook(t *testing.T) {
 		jobName              *string
 		expStatusCode        int
 		expRespBody          string
-		expectBuild          bool
+		expectBuildCount     int
 		expectedImageTag     string
 	}{
 		{
@@ -91,7 +92,7 @@ func TestHandleWebhook(t *testing.T) {
 			jobName:              &jobName,
 			expStatusCode:        200,
 			expRespBody:          runnerStartedMsg,
-			expectBuild:          true,
+			expectBuildCount:     1,
 			expectedImageTag:     "latest",
 		},
 		{
@@ -109,7 +110,7 @@ func TestHandleWebhook(t *testing.T) {
 			jobName:              &jobName,
 			expStatusCode:        200,
 			expRespBody:          runnerStartedMsg,
-			expectBuild:          true,
+			expectBuildCount:     1,
 			expectedImageTag:     "pr-123-abc",
 		},
 		{
@@ -127,8 +128,27 @@ func TestHandleWebhook(t *testing.T) {
 			jobName:              &jobName,
 			expStatusCode:        200,
 			expRespBody:          runnerStartedMsg,
-			expectBuild:          true,
+			expectBuildCount:     1,
 			expectedImageTag:     "latest", // Should ignore dynamic label in prod
+		},
+		{
+			name:                 "Workflow Job Queued - Multiple Builds Spawned",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{defaultRunnerLabel},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			extraSpawnNumber:     2,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          runnerStartedMsg,
+			expectBuildCount:     3,
+			expectedImageTag:     "latest",
 		},
 		{
 			name:                 "Workflow Job Queued - No Matching Label",
@@ -145,7 +165,7 @@ func TestHandleWebhook(t *testing.T) {
 			jobName:              &jobName,
 			expStatusCode:        200,
 			expRespBody:          fmt.Sprintf("no action taken for labels: %s", []string{"other-label"}),
-			expectBuild:          false,
+			expectBuildCount:     0,
 		},
 		{
 			name:                 "Workflow Job In Progress",
@@ -162,7 +182,7 @@ func TestHandleWebhook(t *testing.T) {
 			jobName:              &jobName,
 			expStatusCode:        200,
 			expRespBody:          "workflow job in progress event logged",
-			expectBuild:          false,
+			expectBuildCount:     0,
 		},
 		{
 			name:                 "Workflow Job Completed - Success",
@@ -179,7 +199,7 @@ func TestHandleWebhook(t *testing.T) {
 			jobName:              &jobName,
 			expStatusCode:        200,
 			expRespBody:          "workflow job completed event logged",
-			expectBuild:          false,
+			expectBuildCount:     0,
 		},
 	}
 
@@ -275,12 +295,13 @@ func TestHandleWebhook(t *testing.T) {
 			mockCloudBuildClient := &MockCloudBuildClient{}
 
 			srv := &Server{
-				webhookSecret:  []byte(tc.payloadWebhookSecret),
-				appClient:      app,
-				cbc:            mockCloudBuildClient,
-				ghAPIBaseURL:   fakeGitHub.URL,
-				runnerImageTag: "latest",
-				environment:    testEnv,
+				webhookSecret:    []byte(tc.payloadWebhookSecret),
+				appClient:        app,
+				cbc:              mockCloudBuildClient,
+				ghAPIBaseURL:     fakeGitHub.URL,
+				runnerImageTag:   "latest",
+				extraRunnerCount: tc.extraSpawnNumber,
+				environment:      testEnv,
 			}
 			srv.handleWebhook().ServeHTTP(resp, req)
 
@@ -292,17 +313,18 @@ func TestHandleWebhook(t *testing.T) {
 				t.Errorf("expected %q to be %q", got, want)
 			}
 
-			if tc.expectBuild {
-				if mockCloudBuildClient.CreateBuildReq == nil {
-					t.Fatalf("expected a build to be created, but it was not")
-				}
-				if got, want := mockCloudBuildClient.CreateBuildReq.GetBuild().GetSubstitutions()["_IMAGE_TAG"], tc.expectedImageTag; got != want {
-					t.Errorf("expected image tag %q to be %q", got, want)
+			if tc.expectBuildCount == len(mockCloudBuildClient.CreateBuildReqs) {
+				for _, buildReq := range mockCloudBuildClient.CreateBuildReqs {
+					if got, want := buildReq.GetBuild().GetSubstitutions()["_IMAGE_TAG"], tc.expectedImageTag; got != want {
+						t.Errorf("expected image tag %q to be %q", got, want)
+					}
 				}
 			} else {
-				if mockCloudBuildClient.CreateBuildReq != nil {
-					t.Errorf("expected no build to be created, but a build was created with request: %v", mockCloudBuildClient.CreateBuildReq)
-				}
+				t.Errorf("expected %d build(s) to be created, but %d build(s) were created with requests: %v",
+					tc.expectBuildCount,
+					len(mockCloudBuildClient.CreateBuildReqs),
+					mockCloudBuildClient.CreateBuildReqs,
+				)
 			}
 		})
 	}
