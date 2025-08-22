@@ -157,3 +157,13 @@ variable "runner_project_ids" {
     error_message = "Exactly one runner project must be specified."
   }
 }
+
+variable "extra_runner_count" {
+  description = "How many additional runner to spawn for every webhook. Used to ensure jobs get run if there is a temporary issue with webhook processing."
+  type        = number
+  default     = 0
+  validation {
+    condition     = var.extra_runner_count >= 0 && var.extra_runner_count < 10 && (floor(var.extra_runner_count) == var.extra_runner_count)
+    error_message = "extra_runner_count must be an integer in the range [0, 10)."
+  }
+}
