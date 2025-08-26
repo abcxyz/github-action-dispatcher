@@ -40,9 +40,9 @@ func TestConfig_Validate(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name    string
-		cfg     *Config
-		expErr  string
+		name   string
+		cfg    *Config
+		expErr string
 	}{
 		{
 			name: "valid",
@@ -160,4 +160,3 @@ func TestConfig_Validate(t *testing.T) {
 		})
 	}
 }
-
