@@ -35,19 +35,19 @@ https://github.com/organizations/${YOUR_ORG}/settings/profile
 3. Give your App a name and Homepage URL (it doesn't matter what you have there).
 4. Note where "Webhook" is. Uncheck "Active" for now, we will configure later.
 5. Expand "Repository Permissions". Add following:
-    - Actions: Read-only
-    - Administration: Read and Write
-    - Metadata: Read-Only
+   - Actions: Read-only
+   - Administration: Read and Write
+   - Metadata: Read-Only
 6. Expand "Organization Permissions". Add following:
-    - Administration: Read and Write # **TODO: is this needed?**
-    - Self-hosted runners: Read and Write
+   - Administration: Read and Write # **TODO: is this needed?**
+   - Self-hosted runners: Read and Write
 7. Click "Create GitHub App" at bottom of screen.
 8. Find your app listed in Developer Settings in your org settings page.
-    - Take note of **App ID**
-    - Click Edit
-    - Scroll down to almost the bottom for "Private Keys"
-    - Click "Generate a private key"
-    - A .pem file will be downloaded. This is a secret. Keep it safe.
+   - Take note of **App ID**
+   - Click Edit
+   - Scroll down to almost the bottom for "Private Keys"
+   - Click "Generate a private key"
+   - A .pem file will be downloaded. This is a secret. Keep it safe.
 
 ### GitHub App Installation
 
@@ -60,6 +60,7 @@ Now that the GitHub App exists, it needs to be added to your org.
 5. Select your org.
 
 ### Validate JIT Config Locally (Optional)
+
 Prereqs: Sudoless docker installed. Not currently set up to work with GitHub Enterprise Server.
 
 Now we have an app and a .pem key, we should be able to create JIT configs. These
@@ -67,6 +68,7 @@ are one-time tokens that allow a runner to register itself with GitHub.
 
 `test_local.sh` is set up for this. You just need to change a few values in
 the `go run` command under `# Generate JIT Config`:
+
 1. Set **app-id** to the app id found in Step 8. of GitHub App Creation.
 2. Set `private-key` to the path of your `.pem` file you downloaded.
 3. Set `org` to the name of your GitHub org.
@@ -81,6 +83,28 @@ continuing.
 ### Setup GCP Infrastructure
 
 TODO
+
+## Deployment
+
+The project has two main components that are deployed independently: the webhook and the runner.
+
+### Webhook
+
+The webhook is a containerized application that receives `workflow_job` events from GitHub.
+
+- **Continuous Integration & Build**: On every push to the `main` branch, the `build_webhook_container` workflow is triggered. This workflow builds a Docker image for the webhook and tags it with the commit SHA. The image is then pushed to Google Artifact Registry.
+
+- **Autopush Environment**: After a successful build on the `main` branch, the `autopush_webhook_container` workflow automatically deploys the newly built container image to an "autopush" environment. This provides a way to test changes in a live environment before a production deployment.
+
+- **Production Deployment**: Production deployments are manual and triggered via the `Promote to Production` workflow. This workflow requires an `image_tag` (the commit SHA of the version to be deployed) as input. It then updates the production Cloud Run service to use the specified image.
+
+### Runner
+
+The runner is a containerized application that executes the GitHub Actions jobs.
+
+- **Continuous Integration & Build**: The `build_runner_container` workflow builds the runner Docker image and pushes it to Google Artifact Registry with the `latest` tag. This workflow is triggered on pushes to the `main` branch that include changes in the `runner/` directory.
+
+- **Deployment**: There is no separate deployment process for the runner. The webhook is configured to dynamically pull and use the `latest` tag of the runner image from the Artifact Registry at runtime. This means that once a new runner image is pushed, newly created runners will automatically use the updated version without any manual intervention.
 
 ## CI/CD Testing Setup
 
@@ -97,6 +121,7 @@ The `github-automation-bot` service account has the `roles/secretmanager.secretA
 If this secret needs to be rotated, follow these steps:
 
 1.  **Generate a new secret value:**
+
     ```shell
     openssl rand -hex 32
     ```
