@@ -195,6 +195,7 @@ jobs:
       GITHUB_APP_ID: '1617912'
       KMS_APP_PRIVATE_KEY_ID: 'projects/webhook-i-34/locations/global/keyRings/webhook-pr-test-keyring/cryptoKeys/webhook-pr-test-app-key/cryptoKeyVersions/2'
       RUNNER_IMAGE_TAG: '${{ needs.build-runner.outputs.image_tag }}'
+      RUNNER_LABEL: 'self-hosted-integration'
       RUNNER_LOCATION: 'us-central1'
       RUNNER_SERVICE_ACCOUNT: 'projects/runner-i-34/serviceAccounts/action-dispatcher-runner-sa@runner-i-34.iam.gserviceaccount.com'
       RUNTIME_SERVICE_ACCOUNT: 'action-dispatcher-webhook-sa@webhook-i-34.iam.gserviceaccount.com'
@@ -232,12 +233,12 @@ jobs:
             --ingress=all \
             --no-allow-unauthenticated \
             --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=webhook-pr-test-secret:latest" \
-            --update-env-vars="DOCKER_REGISTRY=${{ env.DOCKER_REGISTRY }},GITHUB_APP_ID=${{ env.GITHUB_APP_ID }},KMS_APP_PRIVATE_KEY_ID=${{ env.KMS_APP_PRIVATE_KEY_ID }},RUNNER_IMAGE_NAME=${{ env.RUNNER_IMAGE_NAME }},RUNNER_IMAGE_TAG=${{ env.RUNNER_IMAGE_TAG }},RUNNER_LOCATION=${{ env.RUNNER_LOCATION }},RUNNER_PROJECT_ID=${{ env.RUNNER_PROJECT_ID }},RUNNER_REPOSITORY_ID=${{ env.DOCKER_REPO }},RUNNER_SERVICE_ACCOUNT=${{ env.RUNNER_SERVICE_ACCOUNT }},WEBHOOK_KEY_MOUNT_PATH=${WEBHOOK_SECRET_MOUNT_PATH},WEBHOOK_KEY_NAME=${WEBHOOK_SECRET_NAME},E2E_TEST_RUN_ID=${{ env.E2E_TEST_RUN_ID }}" \
+            --update-env-vars="DOCKER_REGISTRY=${{ env.DOCKER_REGISTRY }},GITHUB_APP_ID=${{ env.GITHUB_APP_ID }},KMS_APP_PRIVATE_KEY_ID=${{ env.KMS_APP_PRIVATE_KEY_ID }},RUNNER_IMAGE_NAME=${{ env.RUNNER_IMAGE_NAME }},RUNNER_IMAGE_TAG=${{ env.RUNNER_IMAGE_TAG }},RUNNER_LOCATION=${{ env.RUNNER_LOCATION }},RUNNER_PROJECT_ID=${{ env.RUNNER_PROJECT_ID }},RUNNER_REPOSITORY_ID=${{ env.DOCKER_REPO }},RUNNER_SERVICE_ACCOUNT=${{ env.RUNNER_SERVICE_ACCOUNT }},WEBHOOK_KEY_MOUNT_PATH=${WEBHOOK_SECRET_MOUNT_PATH},WEBHOOK_KEY_NAME=${WEBHOOK_SECRET_NAME},E2E_TEST_RUN_ID=${{ env.E2E_TEST_RUN_ID }},RUNNER_LABEL=${{ env.RUNNER_LABEL }}" \
             --format='value(status.url)')
           echo "service_url=${SERVICE_URL}" >> "$GITHUB_OUTPUT"
           echo "service_name=${SERVICE_NAME}" >> "$GITHUB_OUTPUT"
 
-  test:
+  test-valid-signature:
     needs: 'deploy'
     runs-on: 'ubuntu-latest'
     env:
@@ -276,7 +277,7 @@ jobs:
               "id": ${{ github.run_id }},
               "run_id": ${{ github.run_id }},
               "name": "test-job",
-              "labels": ["self-hosted"],
+              "labels": ["self-hosted-integration"],
               "created_at": "2024-01-01T00:00:00Z"
             },
             "organization": {
@@ -303,11 +304,59 @@ jobs:
             --github-repo "github-action-dispatcher-testing" \
             --github-token "${{ secrets.E2E_TEST_REPO_TOKEN }}"
 
+  test-invalid-signature:
+    needs: 'deploy'
+    runs-on: 'ubuntu-latest'
+    env:
+      TEST_INSTALLATION_ID: 80783309
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'id_token'
+          id_token_audience: '${{ needs.deploy.outputs.service_url }}'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - name: 'Setup Go'
+        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - name: 'Run Webhook Tester (Invalid Signature)'
         id: 'invalid_signature'
-        if: 'always()'
         run: |-
           set -euo pipefail
+          cat <<EOF > valid_payload.json
+          {
+            "action": "queued",
+            "workflow_job": {
+              "id": ${{ github.run_id }},
+              "run_id": ${{ github.run_id }},
+              "name": "test-job",
+              "labels": ["self-hosted-integration"],
+              "created_at": "2024-01-01T00:00:00Z"
+            },
+            "organization": {
+              "login": "abcxyz"
+            },
+            "repository": {
+              "name": "github-action-dispatcher-testing"
+            },
+            "installation": {
+              "id": ${{ env.TEST_INSTALLATION_ID }}
+            }
+          }
+          EOF
           go run ./cmd/webhook-tester \
             --webhook-url "${{ needs.deploy.outputs.service_url }}/webhook" \
             --secret-name "projects/${{ env.WEBHOOK_PROJECT_ID }}/secrets/webhook-pr-test-secret/versions/latest" \
@@ -320,9 +369,36 @@ jobs:
             --expect-http-status 400 \
             --expect-no-build
 
+  test-malformed-json:
+    needs: 'deploy'
+    runs-on: 'ubuntu-latest'
+    env:
+      TEST_INSTALLATION_ID: 80783309
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'id_token'
+          id_token_audience: '${{ needs.deploy.outputs.service_url }}'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - name: 'Setup Go'
+        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - name: 'Run Webhook Tester (Malformed JSON)'
         id: 'malformed_json'
-        if: 'always()'
         run: |-
           set -euo pipefail
           echo '{"foo": "bar"}' > payload.json
@@ -337,9 +413,36 @@ jobs:
             --expect-http-status 400 \
             --expect-no-build
 
+  test-missing-field:
+    needs: 'deploy'
+    runs-on: 'ubuntu-latest'
+    env:
+      TEST_INSTALLATION_ID: 80783309
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'id_token'
+          id_token_audience: '${{ needs.deploy.outputs.service_url }}'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - name: 'Setup Go'
+        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - name: 'Run Webhook Tester (Missing Required Field)'
         id: 'missing_field'
-        if: 'always()'
         run: |-
           set -euo pipefail
           echo '{"action": "queued"}' > payload.json
@@ -354,9 +457,36 @@ jobs:
             --expect-http-status 400 \
             --expect-no-build
 
+  test-not-self-hosted:
+    needs: 'deploy'
+    runs-on: 'ubuntu-latest'
+    env:
+      TEST_INSTALLATION_ID: 80783309
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'id_token'
+          id_token_audience: '${{ needs.deploy.outputs.service_url }}'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - name: 'Setup Go'
+        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - name: 'Run Webhook Tester (Not Self-Hosted)'
         id: 'not_self_hosted'
-        if: 'always()'
         run: |-
           set -euo pipefail
           echo '{"action": "queued", "workflow_job": {"labels": ["not-self-hosted"]}, "installation": {"id": ${{ env.TEST_INSTALLATION_ID }} }}' > payload.json
@@ -371,9 +501,36 @@ jobs:
             --expect-http-status 200 \
             --expect-no-build
 
+  test-incorrect-action:
+    needs: 'deploy'
+    runs-on: 'ubuntu-latest'
+    env:
+      TEST_INSTALLATION_ID: 80783309
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'id_token'
+          id_token_audience: '${{ needs.deploy.outputs.service_url }}'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - name: 'Setup Go'
+        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - name: 'Run Webhook Tester (Incorrect Action)'
         id: 'incorrect_action'
-        if: 'always()'
         run: |-
           set -euo pipefail
           echo '{"action": "completed", "workflow_job": {"labels": ["self-hosted"]}, "installation": {"id": ${{ env.TEST_INSTALLATION_ID }} }}' > payload.json
@@ -390,7 +547,16 @@ jobs:
 
   cleanup-runner:
     name: 'Cleanup GitHub Runner'
-    needs: ['deploy', 'test']
+    needs:
+      [
+        'deploy',
+        'test-valid-signature',
+        'test-invalid-signature',
+        'test-malformed-json',
+        'test-missing-field',
+        'test-not-self-hosted',
+        'test-incorrect-action',
+      ]
     if: 'always()'
     runs-on: 'ubuntu-latest'
     steps:
@@ -410,7 +576,16 @@ jobs:
 
   cleanup-service:
     name: 'Cleanup Cloud Run Service'
-    needs: ['deploy', 'test']
+    needs:
+      [
+        'deploy',
+        'test-valid-signature',
+        'test-invalid-signature',
+        'test-malformed-json',
+        'test-missing-field',
+        'test-not-self-hosted',
+        'test-incorrect-action',
+      ]
     if: 'always()'
     runs-on: 'ubuntu-latest'
     steps:
@@ -436,7 +611,16 @@ jobs:
 
   cleanup-build:
     name: 'Cleanup Cloud Build Job'
-    needs: ['deploy', 'test', 'cleanup-runner']
+    needs:
+      [
+        'deploy',
+        'test-valid-signature',
+        'test-invalid-signature',
+        'test-malformed-json',
+        'test-missing-field',
+        'test-not-self-hosted',
+        'test-incorrect-action',
+      ]
     if: 'always()'
     runs-on: 'ubuntu-latest'
     steps:

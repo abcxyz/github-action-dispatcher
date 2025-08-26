@@ -22,6 +22,7 @@ env:
   PRODUCTION_SERVICE_NAME: 'action-dispatcher-fed9'
   PRODUCTION_PROJECT_ID: 'action-dispatcher-webhook-p-18'
   PRODUCTION_REGION: 'us-central1'
+  RUNNER_LABEL: 'self-hosted'
 
 permissions:
   contents: 'read'
@@ -53,4 +54,5 @@ jobs:
           gcloud run services update ${{ env.PRODUCTION_SERVICE_NAME }} \
             --project="${{ env.PRODUCTION_PROJECT_ID }}" \
             --region="${{ env.PRODUCTION_REGION }}" \
-            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}-amd64"
+            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}-amd64" \
+            --update-env-vars="RUNNER_LABEL=${{ env.RUNNER_LABEL }}"

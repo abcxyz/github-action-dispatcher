@@ -23,6 +23,7 @@ env:
   AUTOPUSH_SERVICE_NAME: 'action-dispatcher-1863'
   AUTOPUSH_PROJECT_ID: 'action-dispatcher-webhook-a-18'
   AUTOPUSH_REGION: 'us-central1'
+  RUNNER_LABEL: 'self-hosted-autopush'
 
 permissions:
   contents: 'read'
@@ -57,4 +58,5 @@ jobs:
             --project="${{ env.AUTOPUSH_PROJECT_ID }}" \
             --region="${{ env.AUTOPUSH_REGION }}" \
             --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.DOCKER_TAG }}-amd64" \
-            --ingress="internal-and-cloud-load-balancing"
+            --ingress="internal-and-cloud-load-balancing" \
+            --update-env-vars="RUNNER_LABEL=${{ env.RUNNER_LABEL }}"
