@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"github.com/google/go-github/v69/github"
@@ -37,7 +36,7 @@ var (
 	privateKeyPath = flag.String("private-key", "", "Path to your private key PEM file")
 	orgName        = flag.String("org", "", "GitHub organization name")
 	runnerName     = flag.String("runner-name", "my-gcp-runner", "Name for the new runner")
-	runnerLabels   = flag.String("runner-labels", "self-hosted,Linux,X64", "Comma-separated labels for the runner")
+	runnerLabel    = flag.String("runner-label", "self-hosted", "The single label for the runner")
 	runnerGroupID  = flag.Int64("runner-group-id", 1, "The ID of the runner group to assign the new runner to")
 )
 
@@ -96,7 +95,7 @@ func realMain(ctx context.Context) error {
 	jitconfig, _, err := gh.Actions.GenerateOrgJITConfig(ctx, *orgName, &github.GenerateJITConfigRequest{
 		Name:          *runnerName,
 		RunnerGroupID: *runnerGroupID,
-		Labels:        strings.Split(*runnerLabels, ","),
+		Labels:        []string{*runnerLabel},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to generate jitconfig: %w", err)

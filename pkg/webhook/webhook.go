@@ -142,7 +142,7 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 	logger := logging.FromContext(ctx)
 	logger.InfoContext(ctx, "Workflow job queued")
 
-	if !slices.Contains(event.WorkflowJob.Labels, defaultRunnerLabel) {
+	if !slices.Contains(event.WorkflowJob.Labels, s.runnerLabel) {
 		logger.WarnContext(ctx, "no action taken for labels", "labels", event.WorkflowJob.Labels)
 		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken for labels: %s", event.WorkflowJob.Labels), nil}
 	}
@@ -254,7 +254,7 @@ func compressAndBase64EncodeString(input string) (string, error) {
 }
 
 func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageTag string) (string, error) {
-	jitConfig, err := s.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID)
+	jitConfig, err := s.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID, s.runnerLabel)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to generate JIT config",
 			"error", err.Error(),

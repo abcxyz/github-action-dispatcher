@@ -44,6 +44,7 @@ type Config struct {
 	ExtraRunnerCount          string `env:"EXTRA_RUNNER_COUNT,default=0"`
 	RunnerWorkerPoolID        string `env:"RUNNER_WORKER_POOL_ID"`
 	E2ETestRunID              string `env:"E2E_TEST_RUN_ID"`
+	RunnerLabel               string `env:"RUNNER_LABEL,default=self-hosted"`
 }
 
 // Validate validates the webhook config after load.
@@ -86,6 +87,10 @@ func (cfg *Config) Validate() error {
 
 	if _, err := validateExtraRunnerCount(cfg.ExtraRunnerCount); err != nil {
 		return err
+	}
+
+	if cfg.RunnerLabel == "" {
+		return fmt.Errorf("RUNNER_LABEL is required")
 	}
 
 	return nil
@@ -233,6 +238,14 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Target: &cfg.RunnerWorkerPoolID,
 		EnvVar: "RUNNER_WORKER_POOL_ID",
 		Usage:  `The private runner worker pool ID`,
+	})
+
+	f.StringVar(&cli.StringVar{
+		Name:    "runner-label",
+		Target:  &cfg.RunnerLabel,
+		EnvVar:  "RUNNER_LABEL",
+		Default: "self-hosted",
+		Usage:   `The single, exact label that the webhook will process for self-hosted runners.`,
 	})
 
 	return set

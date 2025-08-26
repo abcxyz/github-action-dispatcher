@@ -64,6 +64,7 @@ func TestHandleWebhook(t *testing.T) {
 		action               string
 		runnerLabels         []string
 		payloadWebhookSecret string
+		serverRunnerLabel    string
 		extraSpawnNumber     int
 		contentType          string
 		createdAt            *github.Timestamp
@@ -83,6 +84,26 @@ func TestHandleWebhook(t *testing.T) {
 			action:               queuedAction,
 			runnerLabels:         []string{defaultRunnerLabel},
 			payloadWebhookSecret: serverGitHubWebhookSecret,
+			serverRunnerLabel:    "self-hosted",
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          runnerStartedMsg,
+			expectBuildCount:     1,
+			expectedImageTag:     "latest",
+		},
+		{
+			name:                 "Workflow Job Queued - Custom Label",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{"custom-label"},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			serverRunnerLabel:    "custom-label",
 			contentType:          contentType,
 			createdAt:            &queuedTime,
 			startedAt:            nil,
@@ -101,6 +122,7 @@ func TestHandleWebhook(t *testing.T) {
 			action:               queuedAction,
 			runnerLabels:         []string{defaultRunnerLabel, "pr-123-abc"},
 			payloadWebhookSecret: serverGitHubWebhookSecret,
+			serverRunnerLabel:    "self-hosted",
 			contentType:          contentType,
 			createdAt:            &queuedTime,
 			startedAt:            nil,
@@ -119,6 +141,7 @@ func TestHandleWebhook(t *testing.T) {
 			action:               queuedAction,
 			runnerLabels:         []string{defaultRunnerLabel, "pr-123-abc"},
 			payloadWebhookSecret: serverGitHubWebhookSecret,
+			serverRunnerLabel:    "self-hosted",
 			contentType:          contentType,
 			createdAt:            &queuedTime,
 			startedAt:            nil,
@@ -137,6 +160,7 @@ func TestHandleWebhook(t *testing.T) {
 			action:               queuedAction,
 			runnerLabels:         []string{defaultRunnerLabel},
 			payloadWebhookSecret: serverGitHubWebhookSecret,
+			serverRunnerLabel:    "self-hosted",
 			extraSpawnNumber:     2,
 			contentType:          contentType,
 			createdAt:            &queuedTime,
@@ -156,6 +180,7 @@ func TestHandleWebhook(t *testing.T) {
 			action:               queuedAction,
 			runnerLabels:         []string{"other-label"}, // No defaultRunnerLabel
 			payloadWebhookSecret: serverGitHubWebhookSecret,
+			serverRunnerLabel:    "self-hosted",
 			contentType:          contentType,
 			createdAt:            &queuedTime,
 			startedAt:            nil,
@@ -173,6 +198,7 @@ func TestHandleWebhook(t *testing.T) {
 			action:               "in_progress",
 			runnerLabels:         []string{defaultRunnerLabel},
 			payloadWebhookSecret: serverGitHubWebhookSecret,
+			serverRunnerLabel:    "self-hosted",
 			contentType:          contentType,
 			createdAt:            &queuedTime,
 			startedAt:            &inProgressTime,
@@ -190,6 +216,7 @@ func TestHandleWebhook(t *testing.T) {
 			action:               "completed",
 			runnerLabels:         []string{defaultRunnerLabel},
 			payloadWebhookSecret: serverGitHubWebhookSecret,
+			serverRunnerLabel:    "self-hosted",
 			contentType:          contentType,
 			createdAt:            &queuedTime,
 			startedAt:            &inProgressTime,
@@ -302,6 +329,7 @@ func TestHandleWebhook(t *testing.T) {
 				runnerImageTag:   "latest",
 				extraRunnerCount: tc.extraSpawnNumber,
 				environment:      testEnv,
+				runnerLabel:      tc.serverRunnerLabel,
 			}
 			srv.handleWebhook().ServeHTTP(resp, req)
 
