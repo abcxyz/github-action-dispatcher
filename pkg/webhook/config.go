@@ -89,7 +89,7 @@ func (cfg *Config) Validate() error {
 		return err
 	}
 
-	if cfg.RunnerLabel == "" {
+	if strings.TrimSpace(cfg.RunnerLabel )== "" {
 		return fmt.Errorf("RUNNER_LABEL is required")
 	}
 
