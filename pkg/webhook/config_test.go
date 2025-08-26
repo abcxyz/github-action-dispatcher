@@ -20,154 +20,132 @@ import (
 	"github.com/abcxyz/pkg/testutil"
 )
 
+func generateValidConfig() *Config {
+	return &Config{
+		Environment:               "production",
+		GitHubAppID:               "test-app-id",
+		GitHubWebhookKeyMountPath: "/tmp",
+		GitHubWebhookKeyName:      "test-key",
+		KMSAppPrivateKeyID:        "test-kms-key",
+		RunnerLocation:            "test-location",
+		RunnerProjectID:           "test-project",
+		RunnerRepositoryID:        "test-repo",
+		RunnerServiceAccount:      "test-sa",
+		RunnerLabel:               "self-hosted",
+		ExtraRunnerCount:          "0",
+	}
+}
+
 func TestConfig_Validate(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name   string
-		cfg    *Config
-		expErr string
+		name    string
+		cfg     *Config
+		expErr  string
 	}{
 		{
 			name: "valid",
-			cfg: &Config{
-				Environment:               "production",
-				GitHubAppID:               "test-app-id",
-				GitHubWebhookKeyMountPath: "/tmp",
-				GitHubWebhookKeyName:      "test-key",
-				KMSAppPrivateKeyID:        "test-kms-key",
-				RunnerLocation:            "test-location",
-				RunnerProjectID:           "test-project",
-				RunnerRepositoryID:        "test-repo",
-				RunnerServiceAccount:      "test-sa",
-				RunnerLabel:               "self-hosted",
-				ExtraRunnerCount:          "0",
-			},
+			cfg:  generateValidConfig(),
+		},
+		{
+			name: "invalid_runner_label",
+			cfg: func() *Config {
+				c := generateValidConfig()
+				c.RunnerLabel = ""
+				return c
+			}(),
+			expErr: "RUNNER_LABEL is required",
 		},
 		{
 			name: "invalid_environment",
-			cfg: &Config{
-				Environment: "invalid",
-			},
+			cfg: func() *Config {
+				c := generateValidConfig()
+				c.Environment = "invalid"
+				return c
+			}(),
 			expErr: `ENVIRONMENT must be one of 'production' or 'autopush', got "invalid"`,
 		},
 		{
 			name: "missing_github_app_id",
-			cfg: &Config{
-				Environment: "production",
-			},
+			cfg: func() *Config {
+				c := generateValidConfig()
+				c.GitHubAppID = ""
+				return c
+			}(),
 			expErr: "GITHUB_APP_ID is required",
 		},
 		{
 			name: "missing_webhook_key_mount_path",
-			cfg: &Config{
-				Environment: "production",
-				GitHubAppID: "test-app-id",
-			},
+			cfg: func() *Config {
+				c := generateValidConfig()
+				c.GitHubWebhookKeyMountPath = ""
+				return c
+			}(),
 			expErr: "WEBHOOK_KEY_MOUNT_PATH is required",
 		},
 		{
 			name: "missing_webhook_key_name",
-			cfg: &Config{
-				Environment:               "production",
-				GitHubAppID:               "test-app-id",
-				GitHubWebhookKeyMountPath: "/tmp",
-			},
+			cfg: func() *Config {
+				c := generateValidConfig()
+				c.GitHubWebhookKeyName = ""
+				return c
+			}(),
 			expErr: "WEBHOOK_KEY_NAME is required",
 		},
 		{
 			name: "missing_kms_app_private_key_id",
-			cfg: &Config{
-				Environment:               "production",
-				GitHubAppID:               "test-app-id",
-				GitHubWebhookKeyMountPath: "/tmp",
-				GitHubWebhookKeyName:      "test-key",
-			},
+			cfg: func() *Config {
+				c := generateValidConfig()
+				c.KMSAppPrivateKeyID = ""
+				return c
+			}(),
 			expErr: "KMS_APP_PRIVATE_KEY_ID is required",
 		},
 		{
 			name: "missing_runner_location",
-			cfg: &Config{
-				Environment:               "production",
-				GitHubAppID:               "test-app-id",
-				GitHubWebhookKeyMountPath: "/tmp",
-				GitHubWebhookKeyName:      "test-key",
-				KMSAppPrivateKeyID:        "test-kms-key",
-			},
+			cfg: func() *Config {
+				c := generateValidConfig()
+				c.RunnerLocation = ""
+				return c
+			}(),
 			expErr: "RUNNER_LOCATION is required",
 		},
 		{
 			name: "missing_runner_project_id",
-			cfg: &Config{
-				Environment:               "production",
-				GitHubAppID:               "test-app-id",
-				GitHubWebhookKeyMountPath: "/tmp",
-				GitHubWebhookKeyName:      "test-key",
-				KMSAppPrivateKeyID:        "test-kms-key",
-				RunnerLocation:            "test-location",
-			},
+			cfg: func() *Config {
+				c := generateValidConfig()
+				c.RunnerProjectID = ""
+				return c
+			}(),
 			expErr: "RUNNER_PROJECT_ID is required",
 		},
 		{
 			name: "missing_runner_repository_id",
-			cfg: &Config{
-				Environment:               "production",
-				GitHubAppID:               "test-app-id",
-				GitHubWebhookKeyMountPath: "/tmp",
-				GitHubWebhookKeyName:      "test-key",
-				KMSAppPrivateKeyID:        "test-kms-key",
-				RunnerLocation:            "test-location",
-				RunnerProjectID:           "test-project",
-			},
+			cfg: func() *Config {
+				c := generateValidConfig()
+				c.RunnerRepositoryID = ""
+				return c
+			}(),
 			expErr: "RUNNER_REPOSITORY_ID is required",
 		},
 		{
 			name: "missing_runner_service_account",
-			cfg: &Config{
-				Environment:               "production",
-				GitHubAppID:               "test-app-id",
-				GitHubWebhookKeyMountPath: "/tmp",
-				GitHubWebhookKeyName:      "test-key",
-				KMSAppPrivateKeyID:        "test-kms-key",
-				RunnerLocation:            "test-location",
-				RunnerProjectID:           "test-project",
-				RunnerRepositoryID:        "test-repo",
-			},
+			cfg: func() *Config {
+				c := generateValidConfig()
+				c.RunnerServiceAccount = ""
+				return c
+			}(),
 			expErr: "RUNNER_SERVICE_ACCOUNT is required",
 		},
 		{
 			name: "invalid_extra_runner_count",
-			cfg: &Config{
-				Environment:               "production",
-				GitHubAppID:               "test-app-id",
-				GitHubWebhookKeyMountPath: "/tmp",
-				GitHubWebhookKeyName:      "test-key",
-				KMSAppPrivateKeyID:        "test-kms-key",
-				RunnerLocation:            "test-location",
-				RunnerProjectID:           "test-project",
-				RunnerRepositoryID:        "test-repo",
-				RunnerServiceAccount:      "test-sa",
-				RunnerLabel:               "self-hosted",
-				ExtraRunnerCount:          "abc",
-			},
+			cfg: func() *Config {
+				c := generateValidConfig()
+				c.ExtraRunnerCount = "abc"
+				return c
+			}(),
 			expErr: "EXTRA_RUNNER_COUNT must be an integer",
-		},
-		{
-			name: "invalid_runner_label",
-			cfg: &Config{
-				Environment:               "production",
-				GitHubAppID:               "test-app-id",
-				GitHubWebhookKeyMountPath: "/tmp",
-				GitHubWebhookKeyName:      "test-key",
-				KMSAppPrivateKeyID:        "test-kms-key",
-				RunnerLocation:            "test-location",
-				RunnerProjectID:           "test-project",
-				RunnerRepositoryID:        "test-repo",
-				RunnerServiceAccount:      "test-sa",
-				RunnerLabel:               "",
-				ExtraRunnerCount:          "0",
-			},
-			expErr: "RUNNER_LABEL is required",
 		},
 	}
 
@@ -182,3 +160,4 @@ func TestConfig_Validate(t *testing.T) {
 		})
 	}
 }
+
