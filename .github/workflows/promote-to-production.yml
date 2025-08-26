@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'The full image tag (e.g., 2023-10-26.1) to promote to production.'
+        description: 'The commit SHA of the image to promote to production.'
         required: true
         type: 'string'
 
