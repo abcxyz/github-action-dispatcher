@@ -50,6 +50,7 @@ type Server struct {
 	runnerWorkerPoolID   string
 	webhookSecret        []byte
 	e2eTestRunID         string
+	runnerLabel          string
 }
 
 // FileReader can read a file and return the content.
@@ -150,6 +151,7 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 		runnerWorkerPoolID:   cfg.RunnerWorkerPoolID,
 		webhookSecret:        webhookSecret,
 		e2eTestRunID:         cfg.E2ETestRunID,
+		runnerLabel:          cfg.RunnerLabel,
 	}, nil
 }
 

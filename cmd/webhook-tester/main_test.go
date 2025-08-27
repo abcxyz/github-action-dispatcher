@@ -108,6 +108,8 @@ func TestWebhookHarness(t *testing.T) {
 		Environment:      "autopush",
 		RunnerImageTag:   "latest",
 		GitHubAPIBaseURL: fakeGitHub.URL,
+		ExtraRunnerCount: "0",
+		RunnerLabel:      "self-hosted",
 	}
 
 	server, err := webhook.NewServer(ctx, h, cfg, opts)
