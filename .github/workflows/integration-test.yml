@@ -21,6 +21,8 @@ on:
         description: 'The runner environment to use for jobs.'
         type: 'choice'
         options:
+          - 'self-hosted-autopush'
+          - 'self-hosted-integration'
           - 'self-hosted'
           - 'ubuntu-latest'
   workflow_run:
@@ -34,7 +36,7 @@ on:
 
 jobs:
   test-github-script-action:
-    runs-on: "${{ inputs.runs-on || 'self-hosted' }}"
+    runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
     steps:
       - name: 'Hello world script'
         uses: 'actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea' # ratchet:actions/github-script@v7
@@ -43,7 +45,7 @@ jobs:
             core.info("Hello World");
 
   test-js-action:
-    runs-on: "${{ inputs.runs-on || 'self-hosted' }}"
+    runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
     steps:
       - name: 'Run action'
         uses: 'actions/hello-world-javascript-action@ad41a6c27317e688719c813b0d6a25685a9bce54' # ratchet:actions/hello-world-javascript-action@v1.1
@@ -53,7 +55,7 @@ jobs:
   check-docker-volume-mount:
     # This test is to check Docker-in-Docker volume mounting. It's possible that the docker run command will succeed but not properly mount the files and workflows subsequently fail.
     name: 'Verify Docker-in-Docker volume mounts on the self-hosted runner'
-    runs-on: "${{ inputs.runs-on || 'self-hosted' }}"
+    runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
     steps:
       - name: 'Checkout Repository'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
@@ -91,7 +93,7 @@ jobs:
     uses: 'abcxyz/actions/.github/workflows/go-test.yml@main' # ratchet:exclude
     with:
       directory: 'pkg/'
-      runs-on: "\"${{ inputs.runs-on || 'self-hosted' }}\""
+      runs-on: "\"${{ inputs.runs-on || 'self-hosted-autopush' }}\""
 
   run-lint-tests-pkg:
     name: 'Run Lint Suite on abcxyz/pkg'
@@ -99,7 +101,7 @@ jobs:
     with:
       repo-to-lint: 'abcxyz/pkg'
       ref: 'main'
-      runs-on: "${{ inputs.runs-on || 'self-hosted' }}"
+      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
 
   run-lint-tests-java-repo:
     name: 'Run Lint Suite on abcxyz/lumberjack to test a repo with java'
@@ -107,13 +109,13 @@ jobs:
     with:
       repo-to-lint: 'abcxyz/lumberjack'
       ref: 'main'
-      runs-on: "${{ inputs.runs-on || 'self-hosted' }}"
+      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
 
   test-buildx-buildkit-functionality:
     name: 'Test buildx Buildkit functionality'
     uses: './.github/workflows/integration-test-buildx-buildkit.yml'
     with:
-      runs-on: "${{ inputs.runs-on || 'self-hosted' }}"
+      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
 
   test-create-pull-request-minty:
     name: 'Test Create Pull Request flow with Minty'
@@ -124,13 +126,13 @@ jobs:
       contents: 'read'
       id-token: 'write'
     with:
-      runs-on: "${{ inputs.runs-on || 'self-hosted' }}"
+      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
 
   test-github-functionality:
     name: 'Test GitHub functionality'
     uses: './.github/workflows/integration-test-gh.yaml'
     with:
-      runs-on: "${{ inputs.runs-on || 'self-hosted' }}"
+      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
 
   test-gcp-functionality:
     name: 'Test GCP functionality'
@@ -138,17 +140,17 @@ jobs:
     permissions:
       id-token: 'write'
     with:
-      runs-on: "${{ inputs.runs-on || 'self-hosted' }}"
+      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
 
   setup-actions:
     name: 'Test setup actions'
     uses: './.github/workflows/integration-test-setup.yml'
     with:
-      runs-on: "${{ inputs.runs-on || 'self-hosted' }}"
+      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
 
   setup-binary:
     name: 'Test setup-binary action'
-    runs-on: "${{ inputs.runs-on || 'self-hosted' }}"
+    runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
     steps:
       - name: 'Setup abc'
         uses: 'abcxyz/actions/.github/actions/setup-binary@f26869a425d0b0217b9c8ad7e3f6ab70547272c9' # ratchet:main
@@ -168,4 +170,4 @@ jobs:
       contents: 'read'
       id-token: 'write'
     with:
-      runs-on: "${{ inputs.runs-on || 'self-hosted' }}"
+      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
