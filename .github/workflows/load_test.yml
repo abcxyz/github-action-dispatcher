@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   load-test-runner-job-2:
-    if: inputs.number == 2
+    if: '${{ inputs.number == 2 }}'
     runs-on: '${{ inputs.runs-on }}'
     strategy:
       fail-fast: false
@@ -40,7 +40,7 @@ jobs:
           # Adjust the number of parallel tasks to increase or decrease the load
           sleep 10s
   load-test-runner-job-50:
-    if: inputs.number == 50
+    if: '${{ inputs.number == 50 }}'
     runs-on: '${{ inputs.runs-on }}'
     strategy:
       fail-fast: false
@@ -55,7 +55,7 @@ jobs:
           sleep 10s
           echo "Finished job ${{ matrix.job_id }}!"
   load-test-runner-job-100:
-    if: inputs.number >= 100
+    if: '${{ inputs.number >= 100 }}'
     runs-on: '${{ inputs.runs-on }}'
     strategy:
       fail-fast: false
@@ -70,7 +70,7 @@ jobs:
           sleep 10s
           echo "Finished job ${{ matrix.job_id }}!"
   load-test-runner-job-200:
-    if: inputs.number >= 200
+    if: '${{ inputs.number >= 200 }}'
     runs-on: '${{ inputs.runs-on }}'
     strategy:
       fail-fast: false
@@ -85,7 +85,7 @@ jobs:
           sleep 10s
           echo "Finished job ${{ matrix.job_id }}!"
   load-test-runner-job-300:
-    if: inputs.number >= 300
+    if: '${{ inputs.number >= 300 }}'
     runs-on: '${{ inputs.runs-on }}'
     strategy:
       fail-fast: false
