@@ -59,4 +59,5 @@ jobs:
             --region="${{ env.AUTOPUSH_REGION }}" \
             --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.DOCKER_TAG }}-amd64" \
             --ingress="internal-and-cloud-load-balancing" \
-            --update-env-vars="RUNNER_LABEL=${{ env.RUNNER_LABEL }}"
+            --update-env-vars="RUNNER_LABEL=${{ env.RUNNER_LABEL }}" \
+            --to-latest
