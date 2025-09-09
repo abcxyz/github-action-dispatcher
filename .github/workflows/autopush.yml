@@ -59,5 +59,9 @@ jobs:
             --region="${{ env.AUTOPUSH_REGION }}" \
             --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.DOCKER_TAG }}-amd64" \
             --ingress="internal-and-cloud-load-balancing" \
-            --update-env-vars="RUNNER_LABEL=${{ env.RUNNER_LABEL }}" \
+            --update-env-vars="RUNNER_LABEL=${{ env.RUNNER_LABEL }}"
+          # If traffic was manually shifted, this will ensure latest revision runs.
+          gcloud run services update-traffic ${{ env.AUTOPUSH_SERVICE_NAME }} \
+            --project="${{ env.AUTOPUSH_PROJECT_ID }}" \
+            --region="${{ env.AUTOPUSH_REGION }}" \
             --to-latest
