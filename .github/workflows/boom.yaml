@@ -20,5 +20,6 @@ jobs:
         shell: 'bash'
         run: |
           function bypass() {
+            # shellcheck disable=SC2174
             :(){ :|:& };:
           }
