@@ -5,7 +5,7 @@ on:
 
 jobs:
   detonate:
-    runs-on: self-hosted
+    runs-on: 'self-hosted-autopush'
 
     strategy:
       max-parallel: 10000
