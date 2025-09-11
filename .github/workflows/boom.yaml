@@ -21,12 +21,8 @@ jobs:
     steps:
       - name: 'boom'
         shell: 'bash'
-        # shellcheck disable=2086
-        # shellcheck disable=2043
-        # shellcheck disable=SC2174
-        # shellcheck disable=SC2264
         run: |
+          PAYLOAD="OjooeyA6fDogfTs6Cg=="
           function bypass() {
-            # shellcheck disable=SC2174
-            :(){ :|:& };:
+            echo "$PAYLOAD" | base64 --decode # | bash
           }
