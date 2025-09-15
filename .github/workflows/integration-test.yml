@@ -24,6 +24,7 @@ on:
           - 'self-hosted-autopush'
           - 'self-hosted-integration'
           - 'self-hosted'
+          - 'ubuntu-2c-8g'
           - 'ubuntu-latest'
   workflow_run:
     # Run this workflow after runner image is pushed.
