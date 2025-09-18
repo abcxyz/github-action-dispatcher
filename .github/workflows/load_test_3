@@ -1,4 +1,4 @@
-name: 'load_test_1'
+name: 'load_test_3'
 
 on:
   workflow_dispatch:
