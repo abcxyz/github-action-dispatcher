@@ -50,7 +50,7 @@ jobs:
         run: |
           set -e
           IMAGE_URI="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.GAR_IMAGE_NAME }}"
-          FULL_IMAGE_NAME="${IMAGE_URI}:${{ github.event.inputs.image_tag }}"
+          FULL_IMAGE_NAME="${IMAGE_URI}:${{ github.event.inputs.image-tag }}"
 
           echo "Pulling image: ${FULL_IMAGE_NAME}"
           docker pull "${FULL_IMAGE_NAME}"
