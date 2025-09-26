@@ -1,4 +1,4 @@
-name: 'Promote to Production'
+name: 'Promote  Webhook to Production'
 
 on:
   workflow_dispatch:
