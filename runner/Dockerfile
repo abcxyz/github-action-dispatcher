@@ -170,6 +170,9 @@ RUN chmod +x /usr/local/bin/setup_docker.sh
 RUN chmod -R 777 /opt && \
     chmod -R 777 /usr/share
 
+# This allows the runner user to add more folders under HOME
+RUN chown -R runner:runner /home/runner
+
 WORKDIR /home/runner
 
 # We need to do some setup as the runner
