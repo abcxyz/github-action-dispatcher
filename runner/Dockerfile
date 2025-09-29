@@ -96,6 +96,10 @@ RUN curl -f -L -o runner.tar.gz https://github.com/actions/runner/releases/downl
     && rm runner.tar.gz \
     && rm -rf /var/lib/apt/lists/*
 
+# Ensure externals are available for ARC to use this custom image
+RUN mkdir -p /home/runner/externals/ \
+    && cp -r /actions-runner/externals/. /home/runner/externals/    
+
 # Copy pre-run script and add it to actions runner config file
 COPY pre-run.sh /actions-runner/pre-run.sh
 RUN chmod +x /actions-runner/pre-run.sh \
