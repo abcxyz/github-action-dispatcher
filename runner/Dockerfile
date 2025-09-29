@@ -190,7 +190,6 @@ ENV PATH="$HOME/.dotnet/tools:$PATH"
 RUN pipx ensurepath && \
     pipx install yamllint
 
-
 USER root
 
 # Docker socket is mounted at runtime, must fix permissions then.
