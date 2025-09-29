@@ -13,9 +13,7 @@ scope:
       if: |-
         (assertion.workflow_ref.startsWith("abcxyz/github-action-dispatcher/.github/workflows/integration-test.yml") ||
          assertion.workflow_ref.startsWith("abcxyz/github-action-dispatcher/.github/workflows/integration-test-minty.yml")) &&
-        assertion.job_workflow_ref.startsWith("abcxyz/github-action-dispatcher/.github/workflows/integration-test-minty.yml") &&
-        (assertion.event_name == 'workflow_dispatch' ||
-         assertion.event_name == 'workflow_call')
+        assertion.job_workflow_ref.startsWith("abcxyz/github-action-dispatcher/.github/workflows/integration-test-minty.yml")
     repositories:
       - 'github-action-dispatcher'
     permissions:
