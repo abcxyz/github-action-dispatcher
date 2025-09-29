@@ -48,7 +48,7 @@ jobs:
           password: '${{ steps.auth.outputs.access_token }}'
           registry: '${{ env.GAR_LOCATION }}-docker.pkg.dev'
 
-      - if: '${{ env.GAR_LOCATION != env.ABCXYZ_GAR_LOCATION }}''
+      - if: '${{ env.GAR_LOCATION != env.ABCXYZ_GAR_LOCATION }}'
         uses: 'docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc' # ratchet:docker/login-action@v2
         with:
           username: 'oauth2accesstoken'
