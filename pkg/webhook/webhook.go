@@ -252,7 +252,7 @@ func compressAndBase64EncodeString(input string) (string, error) {
 	return base64.StdEncoding.EncodeToString(compressedJIT.Bytes()), nil
 }
 
-func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageTag string, runnerLabel string) (string, error) {
+func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageTag, runnerLabel string) (string, error) {
 	jitConfig, err := s.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID, runnerLabel)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to generate JIT config",
