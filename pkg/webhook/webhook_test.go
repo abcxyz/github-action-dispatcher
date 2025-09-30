@@ -59,24 +59,24 @@ func TestHandleWebhook(t *testing.T) {
 	payloadType := "workflow_job"
 
 	cases := []struct {
-		name                 string
-		payloadType          string
-		action               string
-		runnerLabels         []string
-		payloadWebhookSecret string
-		serverRunnerLabel    string
-		extraSpawnNumber     int
-		contentType          string
-		createdAt            *github.Timestamp
-		startedAt            *github.Timestamp
-		completedAt          *github.Timestamp
-		runID                *int64
-		jobID                *int64
-		jobName              *string
-		expStatusCode        int
-		expRespBody          string
-		expectBuildCount     int
-		expectedImageTag     string
+		name                        string
+		payloadType                 string
+		action                      string
+		runnerLabels                []string
+		payloadWebhookSecret        string
+		serverRunnerLabel           string
+		serverEnableSelfHostedLabel bool
+		extraSpawnNumber            int
+		contentType                 string
+		createdAt                   *github.Timestamp
+		startedAt                   *github.Timestamp
+		completedAt                 *github.Timestamp
+		runID                       *int64
+		jobID                       *int64
+		jobName                     *string
+		expStatusCode               int
+		expRespBody                 string
+		expectBuildCount            int
 	}{
 		{
 			name:                 "Workflow Job Queued - Default Label",
@@ -95,7 +95,6 @@ func TestHandleWebhook(t *testing.T) {
 			expStatusCode:        200,
 			expRespBody:          runnerStartedMsg,
 			expectBuildCount:     1,
-			expectedImageTag:     "latest",
 		},
 		{
 			name:                 "Workflow Job Queued - Custom Label",
@@ -114,45 +113,25 @@ func TestHandleWebhook(t *testing.T) {
 			expStatusCode:        200,
 			expRespBody:          runnerStartedMsg,
 			expectBuildCount:     1,
-			expectedImageTag:     "latest",
 		},
 		{
-			name:                 "Workflow Job Queued - Dynamic Label Autopush",
-			payloadType:          payloadType,
-			action:               queuedAction,
-			runnerLabels:         []string{defaultRunnerLabel, "pr-123-abc"},
-			payloadWebhookSecret: serverGitHubWebhookSecret,
-			serverRunnerLabel:    "self-hosted",
-			contentType:          contentType,
-			createdAt:            &queuedTime,
-			startedAt:            nil,
-			completedAt:          nil,
-			runID:                &runID,
-			jobID:                &jobID,
-			jobName:              &jobName,
-			expStatusCode:        200,
-			expRespBody:          runnerStartedMsg,
-			expectBuildCount:     1,
-			expectedImageTag:     "pr-123-abc",
-		},
-		{
-			name:                 "Workflow Job Queued - Dynamic Label Production",
-			payloadType:          payloadType,
-			action:               queuedAction,
-			runnerLabels:         []string{defaultRunnerLabel, "pr-123-abc"},
-			payloadWebhookSecret: serverGitHubWebhookSecret,
-			serverRunnerLabel:    "self-hosted",
-			contentType:          contentType,
-			createdAt:            &queuedTime,
-			startedAt:            nil,
-			completedAt:          nil,
-			runID:                &runID,
-			jobID:                &jobID,
-			jobName:              &jobName,
-			expStatusCode:        200,
-			expRespBody:          runnerStartedMsg,
-			expectBuildCount:     1,
-			expectedImageTag:     "latest", // Should ignore dynamic label in prod
+			name:                        "Workflow Job Queued - Default And Custom Label",
+			payloadType:                 payloadType,
+			action:                      queuedAction,
+			runnerLabels:                []string{"self-hosted"},
+			payloadWebhookSecret:        serverGitHubWebhookSecret,
+			serverRunnerLabel:           "custom-label",
+			serverEnableSelfHostedLabel: true,
+			contentType:                 contentType,
+			createdAt:                   &queuedTime,
+			startedAt:                   nil,
+			completedAt:                 nil,
+			runID:                       &runID,
+			jobID:                       &jobID,
+			jobName:                     &jobName,
+			expStatusCode:               200,
+			expRespBody:                 runnerStartedMsg,
+			expectBuildCount:            1,
 		},
 		{
 			name:                 "Workflow Job Queued - Multiple Builds Spawned",
@@ -172,7 +151,25 @@ func TestHandleWebhook(t *testing.T) {
 			expStatusCode:        200,
 			expRespBody:          runnerStartedMsg,
 			expectBuildCount:     3,
-			expectedImageTag:     "latest",
+		},
+		{
+			name:                        "Workflow Job Queued - Multiple Label Fails",
+			payloadType:                 payloadType,
+			action:                      queuedAction,
+			runnerLabels:                []string{"self-hosted", "custom-label"}, // No defaultRunnerLabel
+			payloadWebhookSecret:        serverGitHubWebhookSecret,
+			serverRunnerLabel:           "custom-label",
+			serverEnableSelfHostedLabel: true,
+			contentType:                 contentType,
+			createdAt:                   &queuedTime,
+			startedAt:                   nil,
+			completedAt:                 nil,
+			runID:                       &runID,
+			jobID:                       &jobID,
+			jobName:                     &jobName,
+			expStatusCode:               200,
+			expRespBody:                 fmt.Sprintf("no action taken, only accept single label jobs, got: %s", []string{"self-hosted", "custom-label"}),
+			expectBuildCount:            0,
 		},
 		{
 			name:                 "Workflow Job Queued - No Matching Label",
@@ -189,7 +186,7 @@ func TestHandleWebhook(t *testing.T) {
 			jobID:                &jobID,
 			jobName:              &jobName,
 			expStatusCode:        200,
-			expRespBody:          fmt.Sprintf("no action taken for labels: %s", []string{"other-label"}),
+			expRespBody:          fmt.Sprintf("no action taken for label: %s", []string{"other-label"}),
 			expectBuildCount:     0,
 		},
 		{
@@ -322,14 +319,15 @@ func TestHandleWebhook(t *testing.T) {
 			mockCloudBuildClient := &MockCloudBuildClient{}
 
 			srv := &Server{
-				webhookSecret:    []byte(tc.payloadWebhookSecret),
-				appClient:        app,
-				cbc:              mockCloudBuildClient,
-				ghAPIBaseURL:     fakeGitHub.URL,
-				runnerImageTag:   "latest",
-				extraRunnerCount: tc.extraSpawnNumber,
-				environment:      testEnv,
-				runnerLabel:      tc.serverRunnerLabel,
+				webhookSecret:         []byte(tc.payloadWebhookSecret),
+				appClient:             app,
+				cbc:                   mockCloudBuildClient,
+				ghAPIBaseURL:          fakeGitHub.URL,
+				runnerImageTag:        "latest",
+				extraRunnerCount:      tc.extraSpawnNumber,
+				environment:           testEnv,
+				runnerLabel:           tc.serverRunnerLabel,
+				enableSelfHostedLabel: tc.serverEnableSelfHostedLabel,
 			}
 			srv.handleWebhook().ServeHTTP(resp, req)
 
@@ -343,7 +341,7 @@ func TestHandleWebhook(t *testing.T) {
 
 			if tc.expectBuildCount == len(mockCloudBuildClient.CreateBuildReqs) {
 				for _, buildReq := range mockCloudBuildClient.CreateBuildReqs {
-					if got, want := buildReq.GetBuild().GetSubstitutions()["_IMAGE_TAG"], tc.expectedImageTag; got != want {
+					if got, want := buildReq.GetBuild().GetSubstitutions()["_IMAGE_TAG"], "latest"; got != want {
 						t.Errorf("expected image tag %q to be %q", got, want)
 					}
 				}

@@ -34,23 +34,24 @@ import (
 
 // Server provides the server implementation.
 type Server struct {
-	appClient            *githubauth.App
-	cbc                  CloudBuildClient
-	environment          string
-	ghAPIBaseURL         string
-	h                    *renderer.Renderer
-	kmc                  KeyManagementClient
-	runnerLocation       string
-	runnerProjectID      string
-	runnerImageName      string
-	runnerImageTag       string
-	runnerRepositoryID   string
-	runnerServiceAccount string
-	extraRunnerCount     int
-	runnerWorkerPoolID   string
-	webhookSecret        []byte
-	e2eTestRunID         string
-	runnerLabel          string
+	appClient             *githubauth.App
+	cbc                   CloudBuildClient
+	environment           string
+	ghAPIBaseURL          string
+	h                     *renderer.Renderer
+	kmc                   KeyManagementClient
+	runnerLocation        string
+	runnerProjectID       string
+	runnerImageName       string
+	runnerImageTag        string
+	runnerRepositoryID    string
+	runnerServiceAccount  string
+	extraRunnerCount      int
+	runnerWorkerPoolID    string
+	webhookSecret         []byte
+	e2eTestRunID          string
+	runnerLabel           string
+	enableSelfHostedLabel bool
 }
 
 // FileReader can read a file and return the content.
@@ -135,23 +136,24 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 	extraRunnerCount = num
 
 	return &Server{
-		appClient:            appClient,
-		cbc:                  cbc,
-		environment:          cfg.Environment,
-		ghAPIBaseURL:         cfg.GitHubAPIBaseURL,
-		h:                    h,
-		kmc:                  kmc,
-		runnerLocation:       cfg.RunnerLocation,
-		runnerImageName:      cfg.RunnerImageName,
-		runnerImageTag:       cfg.RunnerImageTag,
-		runnerProjectID:      cfg.RunnerProjectID,
-		runnerRepositoryID:   cfg.RunnerRepositoryID,
-		runnerServiceAccount: cfg.RunnerServiceAccount,
-		extraRunnerCount:     extraRunnerCount,
-		runnerWorkerPoolID:   cfg.RunnerWorkerPoolID,
-		webhookSecret:        webhookSecret,
-		e2eTestRunID:         cfg.E2ETestRunID,
-		runnerLabel:          cfg.RunnerLabel,
+		appClient:             appClient,
+		cbc:                   cbc,
+		environment:           cfg.Environment,
+		ghAPIBaseURL:          cfg.GitHubAPIBaseURL,
+		h:                     h,
+		kmc:                   kmc,
+		runnerLocation:        cfg.RunnerLocation,
+		runnerImageName:       cfg.RunnerImageName,
+		runnerImageTag:        cfg.RunnerImageTag,
+		runnerProjectID:       cfg.RunnerProjectID,
+		runnerRepositoryID:    cfg.RunnerRepositoryID,
+		runnerServiceAccount:  cfg.RunnerServiceAccount,
+		extraRunnerCount:      extraRunnerCount,
+		runnerWorkerPoolID:    cfg.RunnerWorkerPoolID,
+		webhookSecret:         webhookSecret,
+		e2eTestRunID:          cfg.E2ETestRunID,
+		runnerLabel:           cfg.RunnerLabel,
+		enableSelfHostedLabel: cfg.EnableSelfHostedLabel,
 	}, nil
 }
 

@@ -46,6 +46,7 @@ type Config struct {
 	RunnerWorkerPoolID        string `env:"RUNNER_WORKER_POOL_ID"`
 	E2ETestRunID              string `env:"E2E_TEST_RUN_ID"`
 	RunnerLabel               string `env:"RUNNER_LABEL,default=self-hosted"`
+	EnableSelfHostedLabel     bool   `env:"ENABLE_SELF_HOSTED_LABEL,default=false"`
 }
 
 // Validate validates the webhook config after load.
@@ -247,6 +248,14 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		EnvVar:  "RUNNER_LABEL",
 		Default: "self-hosted",
 		Usage:   `The single, exact label that the webhook will process for self-hosted runners.`,
+	})
+
+	f.BoolVar(&cli.BoolVar{
+		Name:    "enable-self-hosted-label",
+		Target:  &cfg.EnableSelfHostedLabel,
+		Usage:   "Enable to also allow self-hosted in addition to runner-label. Temporary until org registration is enabled.",
+		Default: false,
+		EnvVar:  "ENABLE_SELF_HOSTED_LABEL",
 	})
 
 	return set
