@@ -252,6 +252,7 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 
 	f.BoolVar(&cli.BoolVar{
 		Name:    "enable-self-hosted-label",
+		Target:  &cfg.EnableSelfHostedLabel,
 		Usage:   "Enable to also allow self-hosted in addition to runner-label. Temporary until org registration is enabled.",
 		Default: false,
 		EnvVar:  "ENABLE_SELF_HOSTED_LABEL",
