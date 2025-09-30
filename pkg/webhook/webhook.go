@@ -148,6 +148,8 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 	} else if s.runnerLabel == event.WorkflowJob.Labels[0] {
 		label = s.runnerLabel
 	} else if s.enableSelfHostedLabel && event.WorkflowJob.Labels[0] == "self-hosted" {
+		// This case is a temporary hack to allow us to migrate away from the self-hosted label.
+		// It should be deleted once that is done.
 		label = "self-hosted"
 	}
 
