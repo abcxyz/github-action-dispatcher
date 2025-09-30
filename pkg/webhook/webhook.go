@@ -24,8 +24,6 @@ import (
 	"html"
 	"log/slog"
 	"net/http"
-	"slices"
-	"strings"
 	"time"
 
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
@@ -142,19 +140,20 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 	logger := logging.FromContext(ctx)
 	logger.InfoContext(ctx, "Workflow job queued")
 
-	if !slices.Contains(event.WorkflowJob.Labels, s.runnerLabel) {
-		logger.WarnContext(ctx, "no action taken for labels", "labels", event.WorkflowJob.Labels)
-		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken for labels: %s", event.WorkflowJob.Labels), nil}
+	var label string
+	// We don't support jobs with multiple labels.
+	if len(event.WorkflowJob.Labels) != 1 {
+		logger.WarnContext(ctx, "no action taken, only accept single label jobs", "labels", event.WorkflowJob.Labels)
+		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken, only accept single label jobs, got: %s", event.WorkflowJob.Labels), nil}
+	} else if s.runnerLabel == event.WorkflowJob.Labels[0] {
+		label = s.runnerLabel
+	} else if s.enableSelfHostedLabel && "self-hosted" == event.WorkflowJob.Labels[0] {
+		label = "self-hosted"
 	}
 
-	imageTag := s.runnerImageTag
-	if s.environment == "autopush" {
-		for _, label := range event.WorkflowJob.Labels {
-			if strings.HasPrefix(label, "pr-") {
-				imageTag = label
-				break
-			}
-		}
+	if label == "" {
+		logger.WarnContext(ctx, "no action taken for label", "labels", event.WorkflowJob.Labels)
+		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken for label: %s", event.WorkflowJob.Labels), nil}
 	}
 
 	if event.Installation == nil || event.Installation.ID == nil || event.Org == nil || event.Org.Login == nil || event.Repo == nil || event.Repo.Name == nil {
@@ -171,7 +170,7 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		}
 		ctx = logging.WithLogger(ctx, logger)
 
-		responseText, err := s.startGitHubRunner(ctx, event, runnerID, logger, imageTag)
+		responseText, err := s.startGitHubRunner(ctx, event, runnerID, logger, s.runnerImageTag, label)
 		if err != nil {
 			return &apiResponse{http.StatusInternalServerError, responseText, err}
 		}
@@ -253,8 +252,8 @@ func compressAndBase64EncodeString(input string) (string, error) {
 	return base64.StdEncoding.EncodeToString(compressedJIT.Bytes()), nil
 }
 
-func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageTag string) (string, error) {
-	jitConfig, err := s.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID, s.runnerLabel)
+func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageTag string, runnerLabel string) (string, error) {
+	jitConfig, err := s.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID, runnerLabel)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to generate JIT config",
 			"error", err.Error(),
