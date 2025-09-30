@@ -147,7 +147,7 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken, only accept single label jobs, got: %s", event.WorkflowJob.Labels), nil}
 	} else if s.runnerLabel == event.WorkflowJob.Labels[0] {
 		label = s.runnerLabel
-	} else if s.enableSelfHostedLabel && "self-hosted" == event.WorkflowJob.Labels[0] {
+	} else if s.enableSelfHostedLabel && event.WorkflowJob.Labels[0] == "self-hosted" {
 		label = "self-hosted"
 	}
 
