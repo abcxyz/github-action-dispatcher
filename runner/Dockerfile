@@ -96,10 +96,6 @@ RUN curl -f -L -o runner.tar.gz https://github.com/actions/runner/releases/downl
     && rm runner.tar.gz \
     && rm -rf /var/lib/apt/lists/*
 
-# Ensure externals are available for ARC to use this custom image
-RUN mkdir -p /home/runner/externals/ \
-    && cp -r /actions-runner/externals/. /home/runner/externals/    
-
 # Copy pre-run script and add it to actions runner config file
 COPY pre-run.sh /actions-runner/pre-run.sh
 RUN chmod +x /actions-runner/pre-run.sh \
@@ -169,9 +165,6 @@ RUN chmod +x /usr/local/bin/setup_docker.sh
 # https://github.com/actions/runner-images/blob/1ed26a6d42b1c856759a31823c9d99b9775cb5fa/images/ubuntu/scripts/build/configure-system.sh#L15
 RUN chmod -R 777 /opt && \
     chmod -R 777 /usr/share
-
-# This allows the runner user to add more folders under HOME
-RUN chown -R runner:runner /home/runner
 
 WORKDIR /home/runner
 
