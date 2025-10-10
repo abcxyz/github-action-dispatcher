@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'The commit SHA of the image to promote to production.'
+        description: 'The tag or "${commit SHA}-amd64" of the image to promote to production.'
         required: true
         type: 'string'
 
@@ -53,4 +53,4 @@ jobs:
           gcloud run services update ${{ env.PRODUCTION_SERVICE_NAME }} \
             --project="${{ env.PRODUCTION_PROJECT_ID }}" \
             --region="${{ env.PRODUCTION_REGION }}" \
-            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}-amd64"
+            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}"
