@@ -19,15 +19,17 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/google/go-github/v69/github"
+	"github.com/google/uuid"
 
 	"github.com/abcxyz/pkg/logging"
 )
@@ -47,6 +49,11 @@ type apiResponse struct {
 	Error   error
 }
 
+type runnersResponse struct {
+	Message     string   `json:"message"`
+	RunnerNames []string `json:"runnerNames"`
+}
+
 func (s *Server) handleWebhook() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -60,8 +67,14 @@ func (s *Server) handleWebhook() http.Handler {
 				"body", resp.Message)
 		}
 
+		// If the response is a JSON object, set the correct content type.
+		if strings.HasPrefix(resp.Message, "{") {
+			w.Header().Set("Content-Type", "application/json")
+		}
+
 		w.WriteHeader(resp.Code)
-		fmt.Fprint(w, html.EscapeString(resp.Message))
+
+		fmt.Fprint(w, resp.Message)
 	})
 }
 
@@ -136,6 +149,38 @@ func validateGitHubPayload(r *http.Request, webhookSecret []byte) (*github.Workf
 	return event, nil
 }
 
+// startRunnersForJob contains the core logic for spawning runners for a given
+// queued job. It returns the names of the runners it successfully started and
+// an error if anything went wrong.
+func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJobEvent, label string) ([]string, error) {
+	logger := logging.FromContext(ctx)
+
+	// This slice will hold the names of runners we successfully create.
+	var startedRunnerNames []string
+
+	for i := 1; i <= 1+s.extraRunnerCount; i++ {
+		runnerID := uuid.New().String()
+
+		runnerLogger := logger.With("runner_id", runnerID)
+		if i > 1 {
+			runnerLogger.InfoContext(ctx, "Spawning extra runner")
+		}
+
+		runnerCtx := logging.WithLogger(ctx, runnerLogger)
+
+		responseText, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, s.runnerImageTag, label)
+		if err != nil {
+			// If one fails, return the error and the list of any that succeeded before it.
+			return startedRunnerNames, fmt.Errorf("failed on runner %s: %w. response: %s", runnerID, err, responseText)
+		}
+
+		runnerLogger.InfoContext(ctx, runnerStartedMsg, slog.Any(githubWebhookEventKey, event))
+		startedRunnerNames = append(startedRunnerNames, runnerID)
+	}
+
+	return startedRunnerNames, nil
+}
+
 func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJobEvent, jobID string) *apiResponse {
 	logger := logging.FromContext(ctx)
 	logger.InfoContext(ctx, "Workflow job queued")
@@ -164,23 +209,23 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		return &apiResponse{http.StatusBadRequest, "unexpected event payload struture", err}
 	}
 
-	for i := 1; i <= 1+s.extraRunnerCount; i++ {
-		runnerID := fmt.Sprintf("GCP-%s-%d", jobID, i)
-		logger := logger.With("runner_id", runnerID) // Shadow logger per runner.
-		if i > 1 {
-			logger.InfoContext(ctx, "Spawning extra runner")
-		}
-		ctx = logging.WithLogger(ctx, logger)
-
-		responseText, err := s.startGitHubRunner(ctx, event, runnerID, logger, s.runnerImageTag, label)
-		if err != nil {
-			return &apiResponse{http.StatusInternalServerError, responseText, err}
-		}
-
-		logger.InfoContext(ctx, runnerStartedMsg, slog.Any(githubWebhookEventKey, event))
+	runnerNames, err := s.startRunnersForJob(ctx, event, label)
+	if err != nil {
+		return &apiResponse{http.StatusInternalServerError, err.Error(), err}
 	}
 
-	return &apiResponse{http.StatusOK, runnerStartedMsg, nil}
+	responsePayload := &runnersResponse{
+		Message:     runnerStartedMsg,
+		RunnerNames: runnerNames,
+	}
+
+	// Marshal the struct into a JSON string.
+	responseBytes, err := json.Marshal(responsePayload)
+	if err != nil {
+		return &apiResponse{http.StatusInternalServerError, "failed to serialize response", err}
+	}
+
+	return &apiResponse{http.StatusOK, string(responseBytes), nil}
 }
 
 func extractLoggedAttributes(event *github.WorkflowJobEvent) (string, []any) {

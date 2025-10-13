@@ -21,6 +21,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -60,6 +61,11 @@ var (
 	payloadFile      = flag.String("payload-file", "", "The path to a file containing the payload to send.")
 	expectNoBuild    = flag.Bool("expect-no-build", false, "If true, verify that no build was triggered.")
 )
+
+type runnersResponse struct {
+	Message     string   `json:"message"`
+	RunnerNames []string `json:"runnerNames"`
+}
 
 func main() {
 	ctx, done := signal.NotifyContext(context.Background(),
@@ -164,6 +170,19 @@ func realMain(ctx context.Context) error {
 
 	log.Printf("Successfully received expected status code %d.", *expectHTTPStatus)
 
+	var runnerNames []string
+	if *verifyRunner && *expectHTTPStatus == http.StatusOK {
+		var r runnersResponse
+		if err := json.Unmarshal(respBody, &r); err != nil {
+			return fmt.Errorf("failed to parse JSON response from webhook: %w", err)
+		}
+		if len(r.RunnerNames) == 0 {
+			return fmt.Errorf("webhook response did not include any runner names")
+		}
+		runnerNames = r.RunnerNames
+		log.Printf("Extracted runner names from response: %v", runnerNames)
+	}
+
 	cloudBuildClient, err := cloudbuild.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create cloudbuild client: %w", err)
@@ -183,7 +202,7 @@ func realMain(ctx context.Context) error {
 		log.Printf("Successfully sent webhook payload. Now verifying...")
 
 		if *verifyRunner {
-			if err := verifyRunnerOnline(ctx, *githubOwner, *githubRepo, *runID); err != nil {
+			if err := verifyRunnerOnline(ctx, *githubOwner, *githubRepo, runnerNames); err != nil {
 				return fmt.Errorf("failed to verify runner: %w", err)
 			}
 			log.Printf("Successfully verified runner is online.")
@@ -270,13 +289,17 @@ func verifyNoBuildTriggered(ctx context.Context, client *cloudbuild.Client, proj
 }
 
 // verifyRunnerOnline polls the GitHub API to check if a runner with the correct name is online.
-func verifyRunnerOnline(ctx context.Context, owner, repo, runID string) error {
+func verifyRunnerOnline(ctx context.Context, owner, repo string, expectedRunnerNames []string) error {
 	const (
 		maxRetries = 10
 		delay      = 30 * time.Second
 	)
 
-	runnerName := fmt.Sprintf("GCP-%s-1", runID)
+	// Create a map to track which runners we have found.
+	foundRunners := make(map[string]bool)
+	for _, name := range expectedRunnerNames {
+		foundRunners[name] = false
+	}
 
 	var httpClient *http.Client
 	if *githubToken != "" {
@@ -286,7 +309,7 @@ func verifyRunnerOnline(ctx context.Context, owner, repo, runID string) error {
 	client := github.NewClient(httpClient)
 
 	for i := 0; i < maxRetries; i++ {
-		log.Printf("Polling for runner (attempt %d/%d)...", i+1, maxRetries)
+		log.Printf("Polling for runners (attempt %d/%d)...", i+1, maxRetries)
 
 		opts := &github.ListRunnersOptions{}
 		runners, _, err := client.Actions.ListRunners(ctx, owner, repo, opts)
@@ -294,17 +317,38 @@ func verifyRunnerOnline(ctx context.Context, owner, repo, runID string) error {
 			return fmt.Errorf("failed to list runners: %w", err)
 		}
 
+		// Check the API results against our map of expected runners.
 		for _, runner := range runners.Runners {
-			if runner.GetName() == runnerName && runner.GetStatus() == "online" {
-				log.Printf("Found runner %s with status %s", runner.GetName(), runner.GetStatus())
-				return nil
+			if _, ok := foundRunners[runner.GetName()]; ok && runner.GetStatus() == "online" {
+				log.Printf("Found expected runner %s with status %s", runner.GetName(), runner.GetStatus())
+				foundRunners[runner.GetName()] = true
 			}
+		}
+
+		// Check if all expected runners have been found.
+		allFound := true
+		for _, found := range foundRunners {
+			if !found {
+				allFound = false
+				break
+			}
+		}
+
+		if allFound {
+			log.Printf("Successfully found all expected runners.")
+			return nil
 		}
 
 		time.Sleep(delay)
 	}
 
-	return fmt.Errorf("timed out waiting for runner to be online")
+	var missingRunners []string
+	for name, found := range foundRunners {
+		if !found {
+			missingRunners = append(missingRunners, name)
+		}
+	}
+	return fmt.Errorf("timed out waiting for runners to be online, missing: %v", missingRunners)
 }
 
 // getSecret gets the secret from Secret Manager.
