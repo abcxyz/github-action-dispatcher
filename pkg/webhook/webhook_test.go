@@ -75,7 +75,7 @@ func TestHandleWebhook(t *testing.T) {
 		jobID                       *int64
 		jobName                     *string
 		expStatusCode               int
-		expRespBody                 string
+		expRespBody                 string // This is now only for plain text responses.
 		expectBuildCount            int
 	}{
 		{
@@ -93,8 +93,10 @@ func TestHandleWebhook(t *testing.T) {
 			jobID:                &jobID,
 			jobName:              &jobName,
 			expStatusCode:        200,
-			expRespBody:          runnerStartedMsg,
-			expectBuildCount:     1,
+			// This now expects a JSON response, so we clear expRespBody.
+			// The test logic will parse the JSON instead of doing a string compare.
+			expRespBody:      "",
+			expectBuildCount: 1,
 		},
 		{
 			name:                 "Workflow Job Queued - Custom Label",
@@ -111,7 +113,7 @@ func TestHandleWebhook(t *testing.T) {
 			jobID:                &jobID,
 			jobName:              &jobName,
 			expStatusCode:        200,
-			expRespBody:          runnerStartedMsg,
+			expRespBody:          "", // Expects JSON
 			expectBuildCount:     1,
 		},
 		{
@@ -130,7 +132,7 @@ func TestHandleWebhook(t *testing.T) {
 			jobID:                       &jobID,
 			jobName:                     &jobName,
 			expStatusCode:               200,
-			expRespBody:                 runnerStartedMsg,
+			expRespBody:                 "", // Expects JSON
 			expectBuildCount:            1,
 		},
 		{
@@ -149,14 +151,14 @@ func TestHandleWebhook(t *testing.T) {
 			jobID:                &jobID,
 			jobName:              &jobName,
 			expStatusCode:        200,
-			expRespBody:          runnerStartedMsg,
+			expRespBody:          "", // Expects JSON
 			expectBuildCount:     3,
 		},
 		{
 			name:                        "Workflow Job Queued - Multiple Label Fails",
 			payloadType:                 payloadType,
 			action:                      queuedAction,
-			runnerLabels:                []string{"self-hosted", "custom-label"}, // No defaultRunnerLabel
+			runnerLabels:                []string{"self-hosted", "custom-label"},
 			payloadWebhookSecret:        serverGitHubWebhookSecret,
 			serverRunnerLabel:           "custom-label",
 			serverEnableSelfHostedLabel: true,
@@ -175,7 +177,7 @@ func TestHandleWebhook(t *testing.T) {
 			name:                 "Workflow Job Queued - No Matching Label",
 			payloadType:          payloadType,
 			action:               queuedAction,
-			runnerLabels:         []string{"other-label"}, // No defaultRunnerLabel
+			runnerLabels:         []string{"other-label"},
 			payloadWebhookSecret: serverGitHubWebhookSecret,
 			serverRunnerLabel:    "self-hosted",
 			contentType:          contentType,
@@ -199,7 +201,6 @@ func TestHandleWebhook(t *testing.T) {
 			contentType:          contentType,
 			createdAt:            &queuedTime,
 			startedAt:            &inProgressTime,
-			completedAt:          nil,
 			runID:                &runID,
 			jobID:                &jobID,
 			jobName:              &jobName,
@@ -335,8 +336,26 @@ func TestHandleWebhook(t *testing.T) {
 				t.Errorf("expected %d to be %d", got, want)
 			}
 
-			if got, want := strings.TrimSpace(resp.Body.String()), tc.expRespBody; got != want {
-				t.Errorf("expected %q to be %q", got, want)
+			// If the action was "queued" and we expected a build, we check for the JSON response.
+			if tc.action == "queued" && tc.expectBuildCount > 0 {
+				var r runnersResponse
+				if err := json.Unmarshal(resp.Body.Bytes(), &r); err != nil {
+					t.Fatalf("failed to unmarshal JSON response: %v, body: %s", err, resp.Body.String())
+				}
+
+				if got, want := r.Message, runnerStartedMsg; got != want {
+					t.Errorf("expected message %q, got %q", want, got)
+				}
+
+				if got, want := len(r.RunnerNames), tc.expectBuildCount; got != want {
+					t.Errorf("expected %d runner names in response, but got %d", want, got)
+				}
+			} else {
+				// For all other cases (e.g., "in_progress", "completed", or errors),
+				// we still expect a plain text response.
+				if got, want := strings.TrimSpace(resp.Body.String()), tc.expRespBody; got != want {
+					t.Errorf("expected %q to be %q", got, want)
+				}
 			}
 
 			if tc.expectBuildCount == len(mockCloudBuildClient.CreateBuildReqs) {

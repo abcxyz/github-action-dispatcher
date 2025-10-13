@@ -8,6 +8,7 @@ require (
 	cloud.google.com/go/secretmanager v1.14.3
 	github.com/abcxyz/pkg v1.5.4
 	github.com/google/go-github/v69 v69.2.0
+	github.com/google/uuid v1.6.0
 	github.com/googleapis/gax-go/v2 v2.14.1
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/sethvargo/go-envconfig v1.1.1
