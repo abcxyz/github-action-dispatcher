@@ -28,9 +28,22 @@ echo "Runner started with PID ${RUNNER_PID}. Idle timeout is ${IDLE_TIMEOUT_SECO
 KILLER_PID=$!
 
 # Wait for the runner to complete a job and exit.
-wait "${RUNNER_PID}"
+EXIT_CODE=0
+wait "${RUNNER_PID}" || EXIT_CODE=$?
 
 # If the runner exits, it means it ran a job, so we don't need the killer process anymore.
-kill "${KILLER_PID}"
+# It's possible the killer process has already exited (in the timeout case),
+# so we add `|| true` to prevent `set -e` from failing the script.
+kill "${KILLER_PID}" || true
 # Clean up the lock file on exit
 rm -f "${LOCK_FILE}"
+
+# Exit with a success code if the runner was terminated by the idle timeout.
+# Exit code 143 corresponds to SIGTERM.
+if [[ "${EXIT_CODE}" == "143" || "${EXIT_CODE}" == "0" ]]; then
+  echo "Runner exited with code ${EXIT_CODE}. Assuming success."
+  exit 0
+else
+  echo "Runner exited with unexpected code ${EXIT_CODE}. Failing."
+  exit "${EXIT_CODE}"
+fi
