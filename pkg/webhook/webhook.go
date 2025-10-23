@@ -34,10 +34,11 @@ import (
 	"github.com/abcxyz/pkg/logging"
 )
 
-var (
-	defaultRunnerLabel    = "self-hosted"
-	runnerStartedMsg      = "runner started"
-	githubWebhookEventKey = "github_webhook_event"
+const (
+	deprecatedSelfHostedRunnerLabel   = "self-hosted"
+	runnerStartedMsg                  = "runner started"
+	githubWebhookEventKey             = "github_webhook_event"
+	selfHostedUbuntuLatestRunnerLabel = "sh-ubuntu-latest"
 )
 
 // apiResponse is a structure that contains a http status code,
@@ -185,20 +186,24 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 	logger := logging.FromContext(ctx)
 	logger.InfoContext(ctx, "Workflow job queued")
 
-	var label string
 	// We don't support jobs with multiple labels.
 	if len(event.WorkflowJob.Labels) != 1 {
 		logger.WarnContext(ctx, "no action taken, only accept single label jobs", "labels", event.WorkflowJob.Labels)
 		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken, only accept single label jobs, got: %s", event.WorkflowJob.Labels), nil}
-	} else if s.runnerLabel == event.WorkflowJob.Labels[0] {
-		label = s.runnerLabel
-	} else if s.enableSelfHostedLabel && event.WorkflowJob.Labels[0] == "self-hosted" {
-		// This case is a temporary hack to allow us to migrate away from the self-hosted label.
-		// It should be deleted once that is done.
-		label = "self-hosted"
 	}
 
-	if label == "" {
+	incomingLabel := event.WorkflowJob.Labels[0]
+	var labelToUse string
+
+	if incomingLabel == s.runnerLabel || incomingLabel == selfHostedUbuntuLatestRunnerLabel {
+		labelToUse = s.runnerLabel
+	} else if s.enableSelfHostedLabel && incomingLabel == deprecatedSelfHostedRunnerLabel {
+		// This case is a temporary hack to allow us to migrate away from the self-hosted label.
+		// It should be deleted once that is done.
+		labelToUse = deprecatedSelfHostedRunnerLabel
+	}
+
+	if labelToUse == "" {
 		logger.WarnContext(ctx, "no action taken for label", "labels", event.WorkflowJob.Labels)
 		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken for label: %s", event.WorkflowJob.Labels), nil}
 	}
@@ -209,7 +214,7 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		return &apiResponse{http.StatusBadRequest, "unexpected event payload struture", err}
 	}
 
-	runnerNames, err := s.startRunnersForJob(ctx, event, label)
+	runnerNames, err := s.startRunnersForJob(ctx, event, labelToUse)
 	if err != nil {
 		return &apiResponse{http.StatusInternalServerError, err.Error(), err}
 	}
