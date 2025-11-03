@@ -1,0 +1,69 @@
+# Copyright 2025 The Authors (see AUTHORS file)
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Patterned after https://github.com/abcxyz/jvs/blob/main/.github/workflows/ci.yml
+name: 'Maven Integration Tests'
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: 'The runner environment to use for jobs.'
+        required: false
+        type: 'string'
+        default: 'self-hosted'
+
+env:
+  WIF_PROVIDER: 'projects/727875687543/locations/global/workloadIdentityPools/github-actions-on-gcp-p-a63b4c/providers/github-actions-on-gcp-p-a63b4c'
+  WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-on-gcp-p-a63b4c.iam.gserviceaccount.com'
+
+permissions:
+  id-token: 'write'
+
+jobs:
+  test-maven-test:
+    name: 'Test Maven Test'
+    runs-on: '${{ inputs.runs-on }}'
+    env:
+      GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+    steps:
+      - name: 'Checkout Java Repo'
+        uses: 'actions/checkout@v4'
+        with:
+          repository: 'abcxyz/jvs'
+          ref: 'f5f2ba746c20d3e2022945c6e97bd0ad4f156473'
+      # We don't actually need to authenticate here, but the Artifact Regsitry
+      # Wagon[1] expects authentication and infinitely retries if it does not
+      # find any.
+      #
+      # [1]: https://github.com/GoogleCloudPlatform/artifact-registry-maven-tools
+      - name: 'Authenticate to Google Cloud'
+        id: 'auth'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+      # Note: The JVS workflow didn't set up java or maven, instead relying on
+      # the runner to already have them.
+      # The setup-java docs mention using maven, but it doesn't install it.
+      # There is no official setup-maven, which makes me wonder if we will need
+      # to include it in the base image for compatibility.
+      - name: 'setup-java'
+        uses: 'actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00' # ratchet:actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '24'
+      - name: 'Run tests'
+        run: |-
+          mvn --no-transfer-progress --batch-mode clean flatten:flatten test -f client-lib/java
