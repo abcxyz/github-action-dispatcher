@@ -157,3 +157,8 @@ variable "runner_project_ids" {
     error_message = "Exactly one runner project must be specified."
   }
 }
+
+variable "region" {
+  description = "The region to deploy resources in."
+  type        = string
+}
