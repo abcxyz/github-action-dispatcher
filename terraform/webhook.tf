@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-resource "random_id" "default" {
-  byte_length = 2
+locals {
+  key_mount_path = "/etc/secrets/webhook/key"
+  key_name       = "webhook-secret-file"
 }
 
 resource "google_project_service" "default" {
@@ -21,6 +22,7 @@ resource "google_project_service" "default" {
     "cloudbuild.googleapis.com",
     "cloudkms.googleapis.com",
     "cloudresourcemanager.googleapis.com",
+    "compute.googleapis.com", # Needed to give the automation bot serviceAccountUser permission over the default compute SA 
     "logging.googleapis.com",
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
@@ -39,53 +41,8 @@ resource "google_project_service" "default" {
 resource "google_service_account" "run_service_account" {
   project = var.project_id
 
-  account_id   = "${var.name}-webhook-sa"
-  display_name = "${var.name}-webhook-sa Cloud Run Service Account"
-}
-
-resource "google_kms_key_ring" "webhook_keyring" {
-  project = var.project_id
-
-  name     = "${var.kms_keyring_name}-${random_id.default.hex}"
-  location = var.kms_key_location
-
-  depends_on = [
-    google_project_service.default["cloudkms.googleapis.com"],
-  ]
-}
-
-resource "google_kms_crypto_key" "webhook_app_private_key" {
-  name     = "${var.kms_key_name}-${random_id.default.hex}"
-  key_ring = google_kms_key_ring.webhook_keyring.id
-  purpose  = var.kms_key_purpose
-
-  version_template {
-    algorithm = var.kms_key_algorithm
-  }
-
-  # There's no guarantee that the underlying crypto key version is actually created,
-  # instead manually create the version
-  skip_initial_version_creation = "true"
-
-  depends_on = [
-    google_project_service.default["cloudkms.googleapis.com"],
-  ]
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-resource "google_kms_crypto_key_iam_member" "webhook_app_private_key_public_key_viewer" {
-  crypto_key_id = google_kms_crypto_key.webhook_app_private_key.id
-  role          = "roles/cloudkms.publicKeyViewer"
-  member        = "serviceAccount:${google_service_account.run_service_account.email}"
-}
-
-resource "google_kms_crypto_key_iam_member" "webhook_app_private_key_signer" {
-  crypto_key_id = google_kms_crypto_key.webhook_app_private_key.id
-  role          = "roles/cloudkms.signer"
-  member        = "serviceAccount:${google_service_account.run_service_account.email}"
+  account_id   = "gad-webhook-sa"
+  display_name = "gad-webhook-sa Cloud Run Service Account"
 }
 
 module "gclb" {
@@ -109,7 +66,7 @@ module "cloud_run" {
   image                 = var.image
   ingress               = var.enable_gclb ? "internal-and-cloud-load-balancing" : "all"
   min_instances         = 1
-  secrets               = ["webhook-secret-file"]
+  secrets               = [local.key_name]
   service_account_email = google_service_account.run_service_account.email
   args                  = ["webhook", "server"]
   service_iam = {
@@ -127,17 +84,17 @@ module "cloud_run" {
   envvars = merge(
     var.envvars,
     {
-      "KMS_APP_PRIVATE_KEY_ID" : format("%s/cryptoKeyVersions/%s", google_kms_crypto_key.webhook_app_private_key.id, var.kms_key_version)
-      "RUNNER_PROJECT_ID" : var.runner_project_ids[0]
-      "RUNNER_SERVICE_ACCOUNT" : one(values(module.runner)).runner_service_account.id
+      "KMS_APP_PRIVATE_KEY_ID" : "${google_kms_crypto_key.private_key.id}/cryptoKeyVersions/${var.kms_private_key_version_number}"
+      "WEBHOOK_KEY_MOUNT_PATH" : local.key_mount_path
+      "WEBHOOK_KEY_NAME" : local.key_name
     }
   )
 
   secret_envvars = {}
 
   secret_volumes = {
-    "${var.envvars["WEBHOOK_KEY_MOUNT_PATH"]}" : {
-      name : "webhook-secret-file",
+    "${local.key_mount_path}" : {
+      name : "${local.key_name}",
       version : "latest",
     }
   }
