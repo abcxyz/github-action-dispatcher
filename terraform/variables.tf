@@ -77,24 +77,6 @@ variable "github_enterprise_id" {
   default     = ""
 }
 
-variable "alerts" {
-  description = "The configuration block for service alerts and notifications"
-  type = object({
-    enabled             = bool
-    channels_non_paging = map(any)
-  })
-  default = {
-    enabled = false
-    channels_non_paging = {
-      email = {
-        labels = {
-          email_address = ""
-        }
-      }
-    }
-  }
-}
-
 variable "envvars" {
   type = map(string)
   default = {
@@ -107,47 +89,6 @@ variable "envvars" {
   description = "Environment variables for the Cloud Run service (plain text)."
 }
 
-variable "kms_keyring_name" {
-  description = "Keyring name."
-  type        = string
-  default     = "webhook-keyring"
-}
-
-variable "kms_key_location" {
-  description = "The location where kms key will be created."
-  type        = string
-  default     = "global"
-}
-
-variable "kms_key_name" {
-  description = "Name of the key containing the GitHub App secret key."
-  type        = string
-  default     = "webhook-github-app-secret-key"
-}
-
-variable "kms_key_purpose" {
-  description = "Purpose of the GitHub App secret key."
-  type        = string
-  default     = "ASYMMETRIC_SIGN"
-}
-
-variable "kms_key_algorithm" {
-  description = "Algorithm of the GitHub App secret key."
-  type        = string
-  # This is how GitHub App private keys import as of 2025-02-25.
-  default = "RSA_SIGN_PKCS1_2048_SHA256"
-}
-
-variable "kms_key_version" {
-  description = "Version of the KMS key to use."
-  type        = string
-  default     = "1"
-  validation {
-    condition     = can(regex("^\\d+$", var.kms_key_version))
-    error_message = "The KMS key version must be a positive integer."
-  }
-}
-
 variable "runner_project_ids" {
   description = "The project IDs to be used as a runner."
   type        = list(string)
@@ -157,4 +98,14 @@ variable "runner_project_ids" {
 variable "region" {
   description = "The region to deploy resources in."
   type        = string
+}
+variable "gad_prefix" {
+  description = "A prefix to use when naming resources"
+  type        = string
+}
+
+variable "kms_private_key_version_number" {
+  description = "KMS key version"
+  type        = number
+  default     = 1
 }
