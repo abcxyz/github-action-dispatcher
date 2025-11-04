@@ -98,7 +98,7 @@ jobs:
 
   run-lint-tests-pkg:
     name: 'Run Lint Suite on abcxyz/pkg'
-    uses: './.github/workflows/integration-test-lint.yml'
+    uses: './.github/workflows/integration/integration-test-lint.yml'
     with:
       repo-to-lint: 'abcxyz/pkg'
       ref: 'main'
@@ -106,7 +106,7 @@ jobs:
 
   run-lint-tests-java-repo:
     name: 'Run Lint Suite on abcxyz/lumberjack to test a repo with java'
-    uses: './.github/workflows/integration-test-lint.yml'
+    uses: './.github/workflows/integration/integration-test-lint.yml'
     with:
       repo-to-lint: 'abcxyz/lumberjack'
       ref: 'main'
@@ -114,7 +114,7 @@ jobs:
 
   test-buildx-buildkit-functionality:
     name: 'Test buildx Buildkit functionality'
-    uses: './.github/workflows/integration-test-buildx-buildkit.yml'
+    uses: './.github/workflows/integration/integration-test-buildx-buildkit.yml'
     with:
       runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
 
@@ -122,7 +122,7 @@ jobs:
     name: 'Test Create Pull Request flow with Minty'
     # WIF attribute means will only pass if running on main.
     if: "${{ github.ref == 'refs/heads/main' }}"
-    uses: './.github/workflows/integration-test-minty.yml'
+    uses: './.github/workflows/integration/integration-test-minty.yml'
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -131,13 +131,13 @@ jobs:
 
   test-github-functionality:
     name: 'Test GitHub functionality'
-    uses: './.github/workflows/integration-test-gh.yaml'
+    uses: './.github/workflows/integration/integration-test-gh.yaml'
     with:
       runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
 
   test-gcp-functionality:
     name: 'Test GCP functionality'
-    uses: './.github/workflows/integration-test-gcp.yml'
+    uses: './.github/workflows/integration/integration-test-gcp.yml'
     permissions:
       id-token: 'write'
     with:
@@ -145,7 +145,7 @@ jobs:
 
   setup-actions:
     name: 'Test setup actions'
-    uses: './.github/workflows/integration-test-setup.yml'
+    uses: './.github/workflows/integration/integration-test-setup.yml'
     with:
       runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
 
