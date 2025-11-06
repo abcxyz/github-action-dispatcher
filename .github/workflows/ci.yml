@@ -7,14 +7,432 @@ on:
   pull_request:
     branches:
       - 'main'
-  workflow_dispatch:
 
-concurrency:
-  group: '${{ github.workflow }}-${{ github.head_ref || github.ref }}'
-  cancel-in-progress: true
+env:
+  WIF_PROVIDER: 'projects/643301186155/locations/global/workloadIdentityPools/github-automation/providers/gad-ci-i'
+  WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-gad-ci-i-832939.iam.gserviceaccount.com'
+  DOCKER_REGISTRY: 'us-central1-docker.pkg.dev'
+  DOCKER_REPO: 'us-central1-docker.pkg.dev/gad-i-e3/ci-images'
+
+  IMAGE_TAG: 'ci-${{ github.run_id }}-${{ github.run_number }}'
+  IMAGE_NAME: 'github-action-dispatcher'
+
+  RUNNER_IMAGE_TAG: 'runner-ci-${{ github.run_id }}-${{ github.run_number }}'
+  RUNNER_IMAGE_NAME: 'github-action-runner'
+
+  INTEGRATION_PROJECT_ID: 'gad-i-e3'
+  INTEGRATION_RUNNER_PROJECT_ID: 'abcxyz-runner-i-4f'
+  INTEGRATION_RUNNER_LABEL: 'self-hosted-integration'
+  INTEGRATION_REGION: 'us-central1'
+  INTEGRATION_SERVICE_NAME: 'github-action-dispatcher-266a'
+  INTEGRATION_SERVICE_ACCOUNT: 'gad-webhook-sa@gad-i-e3.iam.gserviceaccount.com' # 'gad-integration-4de7-sa@gad-i-e3.iam.gserviceaccount.com'
+  INTEGRATION_GH_APP_INSTALLATION_ID: '80783309'
+
+permissions:
+  actions: 'read'
+  contents: 'read'
+  id-token: 'write'
+  issues: 'write'
 
 jobs:
   go_test:
     uses: 'abcxyz/actions/.github/workflows/go-test.yml@main' # ratchet:exclude
     with:
       directory: 'pkg/'
+
+  check_pat:
+    needs: ['go_test']
+    runs-on: 'ubuntu-latest'
+    outputs:
+      days_remaining: '${{ steps.check_pat.outputs.days_remaining }}'
+    steps:
+      - name: 'Check PAT Expiration'
+        id: 'check_pat'
+        env:
+          GH_TOKEN: '${{ secrets.E2E_TEST_REPO_TOKEN }}'
+        run: |-
+          set -euo pipefail
+
+          # The -i flag includes headers in the output. The meta endpoint is lightweight.
+          # Use tr -d '\r' to handle potential carriage return issues from different shells.
+          EXPIRATION_HEADER=$(gh api meta -i | tr -d '\r' | grep -i "github-authentication-token-expiration:")
+
+          if [ -z "$EXPIRATION_HEADER" ]; then
+            echo "::error::Could not determine token expiration. The 'github-authentication-token-expiration' header was not found."
+            echo "Please ensure E2E_TEST_REPO_TOKEN is a fine-grained PAT."
+            exit 1
+          fi
+
+          # Extract the date string (e.g., "2025-11-10 12:00:00 UTC")
+          EXPIRATION_DATE_STR=$(echo "$EXPIRATION_HEADER" | cut -d':' -f2- | xargs)
+
+          # Convert dates to seconds since epoch for comparison
+          EXPIRATION_SECONDS=$(date -d "$EXPIRATION_DATE_STR" +%s)
+          CURRENT_SECONDS=$(date +%s)
+
+          # Calculate days remaining
+          DAYS_REMAINING=$(((EXPIRATION_SECONDS - CURRENT_SECONDS) / 86400))
+
+          echo "Token expires on: $EXPIRATION_DATE_STR ($DAYS_REMAINING days remaining)"
+          echo "days_remaining=${DAYS_REMAINING}" >> "$GITHUB_OUTPUT"
+
+      - name: 'Fail if Expired'
+        if: 'steps.check_pat.outputs.days_remaining < 1'
+        run: |-
+          echo "::error::E2E_TEST_REPO_TOKEN has expired. Please rotate it."
+          exit 1
+
+      - name: 'Create Expiration Warning Issue'
+        if: 'steps.check_pat.outputs.days_remaining < 7'
+        env:
+          GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+        run: |-
+          set -euo pipefail
+
+          ISSUE_TITLE="E2E Test PAT is expiring soon"
+
+          # Check if an issue with the same title already exists
+          EXISTING_ISSUE=$(gh issue list --label "technical-debt" --search "$ISSUE_TITLE in:title" --state open --json number)
+
+          if [ "$EXISTING_ISSUE" == "[]" ]; then
+            echo "Creating new issue for PAT expiration."
+            gh issue create \
+              --title "$ISSUE_TITLE" \
+              --body "The fine-grained PAT stored in the E2E_TEST_REPO_TOKEN secret is expiring in ${{ steps.check_pat.outputs.days_remaining }} days. Please rotate it to prevent E2E test failures." \
+              --label "technical-debt"
+          else
+            echo "An open issue for PAT expiration already exists."
+          fi
+
+  # integration environment #
+          
+  build-push-runner-integration:
+    needs: ['check_pat']
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'access_token'
+
+      - uses: 'docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772' # ratchet:docker/login-action@v3
+        with:
+          username: 'oauth2accesstoken'
+          password: '${{ steps.auth.outputs.access_token }}'
+          registry: '${{ env.DOCKER_REGISTRY }}'
+
+      - name: 'Build and push runner image'
+        uses: 'docker/build-push-action@5176d81f87c23d6fc96624dfdbcd9f3830bbe445' # ratchet:docker/build-push-action@v6.5.0
+        with:
+          context: './runner'
+          push: true
+          tags: '${{ env.DOCKER_REPO }}/${{ env.RUNNER_IMAGE_NAME }}:${{ env.RUNNER_IMAGE_TAG }}'
+
+  build-push-webhook-integration:
+    needs: ['check_pat']
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 'Setup Go'
+        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'access_token'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - uses: 'docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772' # ratchet:docker/login-action@v3
+        with:
+          username: 'oauth2accesstoken'
+          password: '${{ steps.auth.outputs.access_token }}'
+          registry: '${{ env.DOCKER_REGISTRY }}'
+
+      - name: 'Create dummy tag for goreleaser'
+        run: 'git tag v0.0.0-pr-${{ github.event.number }}'
+
+      - name: 'Build the server container and push to the registry with goreleaser'
+        uses: 'goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552' # ratchet:goreleaser/goreleaser-action@v6
+        with:
+          version: 'v1.12.3'
+          args: 'release -f .goreleaser.e2e.yml --rm-dist --skip-validate'
+        env:
+          DOCKER_TAG: '${{ env.IMAGE_TAG }}'
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+
+  deploy-webhook-integration:
+    needs: ['build-push-webhook-integration', 'build-push-runner-integration']
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    outputs:
+      service_url: '${{ steps.deploy.outputs.service_url }}'
+    env:
+      E2E_TEST_RUN_ID: '${{ github.run_id }}'
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'access_token'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - name: 'Deploy to Cloud Run'
+        id: 'deploy'
+        run: |-
+          WEBHOOK_SECRET_MOUNT_PATH="/etc/secrets/webhook/key"
+          WEBHOOK_SECRET_NAME="webhook-key"
+          WEBHOOK_SECRET_VERSION="latest"
+
+          gcloud run deploy "${{ env.INTEGRATION_SERVICE_NAME }}" \
+            --project="${{ env.INTEGRATION_PROJECT_ID }}" \
+            --region="${{ env.INTEGRATION_REGION }}" \
+            --service-account="${{ env.INTEGRATION_SERVICE_ACCOUNT }}" \
+            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}-amd64" \
+            --ingress=internal-and-cloud-load-balancing \
+            --no-allow-unauthenticated \
+            --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=${WEBHOOK_SECRET_NAME}:${WEBHOOK_SECRET_VERSION}" \
+            --update-env-vars="E2E_TEST_RUN_ID=${{ env.IMAGE_TAG }},RUNNER_LABEL=${{env.INTEGRATION_RUNNER_LABEL }}" \
+            --format='value(status.url)'
+          echo "service_url=${SERVICE_URL}" >> "$GITHUB_OUTPUT"
+
+  runner-smoke-tests-integration:
+    needs: ['deploy-webhook-integration']
+    uses: './.github/workflows/runner-smoke-tests.yml'
+    with:
+      runs-on: 'self-hosted' # unable to use env here
+
+  webhook-smoke-tests-integration:
+    needs: ['deploy-webhook-integration']
+    uses: './.github/workflows/webhook-smoke-tests.yml'
+    with:
+      WIF_PROVIDER: 'projects/643301186155/locations/global/workloadIdentityPools/github-automation/providers/gad-ci-i'
+      WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-gad-ci-i-832939.iam.gserviceaccount.com'
+      INTEGRATION_PROJECT_ID: 'gad-i-e3'
+      INTEGRATION_RUNNER_PROJECT_ID: 'abcxyz-runner-i-4f'
+      INTEGRATION_GH_APP_INSTALLATION_ID: '80783309'
+      service_url: '${{ needs.deploy-webhook-integration.outputs.service_url }}'
+    secrets:
+      E2E_TEST_REPO_TOKEN: '${{ secrets.E2E_TEST_REPO_TOKEN }}'
+
+  all-tests-passed-integration:
+    runs-on: 'ubuntu-latest'
+    needs:
+      - 'runner-smoke-tests-integration'
+      - 'webhook-smoke-tests-integration'
+    steps:
+      - run: 'echo \"All runner and webhook tests passed in integration\"'
+
+  # autopush environment #
+
+  build-push-runner-autopush:
+    needs: 'all-tests-passed-integration'
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    outputs:
+      image_tag: '${{ steps.tag.outputs.image_tag }}'
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'access_token'
+
+      - uses: 'docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772' # ratchet:docker/login-action@v3
+        with:
+          username: 'oauth2accesstoken'
+          password: '${{ steps.auth.outputs.access_token }}'
+          registry: '${{ env.DOCKER_REGISTRY }}'
+
+      - name: 'Build and push runner image'
+        uses: 'docker/build-push-action@5176d81f87c23d6fc96624dfdbcd9f3830bbe445' # ratchet:docker/build-push-action@v6.5.0
+        with:
+          context: './runner'
+          push: true
+          tags: '${{ env.DOCKER_REPO }}/${{ env.RUNNER_IMAGE_NAME }}:${{ env.RUNNER_IMAGE_TAG }},${{ env.DOCKER_REPO }}/${{ env.RUNNER_IMAGE_NAME }}:autopush'
+
+  build-push-webhook-autopush:
+    needs: 'all-tests-passed-integration'
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+      id-token: 'write'    
+    outputs:
+      image_tag: '${{ steps.tag.outputs.image_tag }}'
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 'Setup Go'
+        uses: 'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5' # ratchet:actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'access_token'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - uses: 'docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772' # ratchet:docker/login-action@v3
+        with:
+          username: 'oauth2accesstoken'
+          password: '${{ steps.auth.outputs.access_token }}'
+          registry: '${{ env.DOCKER_REGISTRY }}'
+
+      - name: 'Create dummy tag for goreleaser'
+        run: 'git tag v0.0.0-pr-${{ github.event.number }}'
+
+      - name: 'Build the server container and push to the registry with goreleaser'
+        uses: 'goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552' # ratchet:goreleaser/goreleaser-action@v6
+        with:
+          version: 'v1.12.3'
+          args: 'release -f .goreleaser.e2e.yml --rm-dist --skip-validate'
+        env:
+          DOCKER_TAG: '${{ env.IMAGE_TAG }}'
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+
+      - name: 'Add autopush tag'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |-
+          set -euo pipefail
+
+          SOURCE_IMAGE="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}-amd64"
+          TARGET_IMAGE="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:autopush"
+
+          echo "Tagging ${SOURCE_IMAGE} as ${TARGET_IMAGE}..."
+          
+          gcloud container images add-tag "${SOURCE_IMAGE}" "${TARGET_IMAGE}" \
+            --quiet          
+
+  deploy-webhook-autopush:
+    name: 'Deploy to autopush'
+    needs: ['build-push-webhook-autopush', 'build-push-runner-autopush']
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: 'ubuntu-latest'
+    env:
+      WIF_PROVIDER: 'projects/727875687543/locations/global/workloadIdentityPools/github-actions-on-gcp-p-a63b4c/providers/github-actions-on-gcp-p-a63b4c'
+      WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-on-gcp-p-a63b4c.iam.gserviceaccount.com'
+      DOCKER_REGISTRY: 'us-docker.pkg.dev'
+      DOCKER_TAG: '${{ github.sha }}'
+      DOCKER_REPO: 'us-docker.pkg.dev/ghss-artifacts-p-25/docker-images'
+      IMAGE_NAME: 'github-action-dispatcher'
+      AUTOPUSH_SERVICE_NAME: 'action-dispatcher-1863'
+      AUTOPUSH_PROJECT_ID: 'action-dispatcher-webhook-a-18'
+      AUTOPUSH_REGION: 'us-central1'
+      RUNNER_LABEL: 'self-hosted-autopush'
+    outputs:
+      service_url: '${{ steps.deploy.outputs.service_url }}'
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+          token_format: 'access_token'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@98ddc00a17442e89a24bbf282954a3b65ce6d200' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - name: 'Deploy to Cloud Run'
+        id: 'deploy'
+        run: |-
+          WEBHOOK_SECRET_MOUNT_PATH="/etc/secrets/webhook/key"
+          WEBHOOK_SECRET_NAME="webhook-key"
+          WEBHOOK_SECRET_VERSION="latest"
+
+          gcloud run deploy "${{ env.INTEGRATION_SERVICE_NAME }}" \
+            --project="${{ env.INTEGRATION_PROJECT_ID }}" \
+            --region="${{ env.INTEGRATION_REGION }}" \
+            --service-account="${{ env.INTEGRATION_SERVICE_ACCOUNT }}" \
+            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}-amd64" \
+            --ingress=internal-and-cloud-load-balancing \
+            --no-allow-unauthenticated \
+            --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=${WEBHOOK_SECRET_NAME}:${WEBHOOK_SECRET_VERSION}" \
+            --update-env-vars="E2E_TEST_RUN_ID=${{ env.IMAGE_TAG }},RUNNER_LABEL=${{env.INTEGRATION_RUNNER_LABEL }}" \
+            --format='value(status.url)'
+          echo "service_url=${SERVICE_URL}" >> "$GITHUB_OUTPUT"
+
+  runner-smoke-tests-autopush:
+    needs: ['deploy-webhook-autopush']
+    uses: './.github/workflows/runner-smoke-tests.yml'
+    with:
+      runs-on: 'self-hosted-autopush'
+
+  webhook-smoke-tests-autopush:
+    needs: ['deploy-webhook-autopush']
+    uses: './.github/workflows/webhook-smoke-tests.yml'
+    with:
+      WIF_PROVIDER: 'projects/643301186155/locations/global/workloadIdentityPools/github-automation/providers/gad-ci-i'
+      WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-gad-ci-i-832939.iam.gserviceaccount.com'
+      INTEGRATION_PROJECT_ID: 'gad-a-e3'
+      INTEGRATION_RUNNER_PROJECT_ID: 'abcxyz-runner-a-4f'
+      INTEGRATION_GH_APP_INSTALLATION_ID: '80783309'
+      service_url: '${{ needs.deploy-webhook-autopush.outputs.service_url }}'
+    secrets:
+      E2E_TEST_REPO_TOKEN: '${{ secrets.E2E_TEST_REPO_TOKEN }}'
+
+  all-tests-passed-autopush:
+    runs-on: 'ubuntu-latest'
+    needs:
+      - 'runner-smoke-tests-autopush'
+      - 'webhook-smoke-tests-autopush'
+    steps:
+      - run: 'echo \"All runner and webhook tests passed in autopush\"'

@@ -12,32 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: 'Self-Hosted Integration Tests'
+name: 'Self-Hosted Runner Smoke Tests'
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       runs-on:
         description: 'The runner environment to use for jobs.'
-        type: 'choice'
-        options:
-          - 'self-hosted-autopush'
-          - 'self-hosted-integration'
-          - 'self-hosted'
-          - 'ubuntu-2c-8g'
-          - 'ubuntu-latest'
-  workflow_run:
-    # Run this workflow after runner image is pushed.
-    workflows:
-      - 'build_runner_container'
-    types:
-      - 'completed'
-    branches:
-      - 'main'
+        type: 'string'
+        default: 'self-hosted'
 
 jobs:
   test-github-script-action:
-    runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
+    runs-on: '${{ inputs.runs-on }}'
     steps:
       - name: 'Hello world script'
         uses: 'actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea' # ratchet:actions/github-script@v7
@@ -46,17 +33,16 @@ jobs:
             core.info("Hello World");
 
   test-js-action:
-    runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
+    runs-on: '${{ inputs.runs-on }}'
     steps:
       - name: 'Run action'
         uses: 'actions/hello-world-javascript-action@ad41a6c27317e688719c813b0d6a25685a9bce54' # ratchet:actions/hello-world-javascript-action@v1.1
         with:
           who-to-greet: 'self hosted runner users'
 
+  # This test is to check Docker-in-Docker volume mounting. It's possible that the docker run command will succeed but not properly mount the files and workflows subsequently fail.
   check-docker-volume-mount:
-    # This test is to check Docker-in-Docker volume mounting. It's possible that the docker run command will succeed but not properly mount the files and workflows subsequently fail.
-    name: 'Verify Docker-in-Docker volume mounts on the self-hosted runner'
-    runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
+    runs-on: '${{ inputs.runs-on }}'
     steps:
       - name: 'Checkout Repository'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
@@ -97,61 +83,53 @@ jobs:
       runs-on: "\"${{ inputs.runs-on || 'self-hosted-autopush' }}\""
 
   run-lint-tests-pkg:
-    name: 'Run Lint Suite on abcxyz/pkg'
-    uses: './.github/workflows/integration/integration-test-lint.yml'
+    uses: './.github/workflows/runner-smoke-test-lint.yml'
     with:
       repo-to-lint: 'abcxyz/pkg'
       ref: 'main'
-      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
+      runs-on: "${{ inputs.runs-on }}"
 
   run-lint-tests-java-repo:
-    name: 'Run Lint Suite on abcxyz/lumberjack to test a repo with java'
-    uses: './.github/workflows/integration/integration-test-lint.yml'
+    uses: './.github/workflows/runner-smoke-test-lint.yml'
     with:
       repo-to-lint: 'abcxyz/lumberjack'
       ref: 'main'
-      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
+      runs-on: "${{ inputs.runs-on }}"
 
   test-buildx-buildkit-functionality:
-    name: 'Test buildx Buildkit functionality'
-    uses: './.github/workflows/integration/integration-test-buildx-buildkit.yml'
+    uses: './.github/workflows/runner-smoke-test-buildx-buildkit.yml'
     with:
-      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
+      runs-on: "${{ inputs.runs-on }}"
 
   test-create-pull-request-minty:
-    name: 'Test Create Pull Request flow with Minty'
     # WIF attribute means will only pass if running on main.
     if: "${{ github.ref == 'refs/heads/main' }}"
-    uses: './.github/workflows/integration/integration-test-minty.yml'
+    uses: './.github/workflows/runner-smoke-test-minty.yml'
     permissions:
       contents: 'read'
       id-token: 'write'
     with:
-      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
+      runs-on: "${{ inputs.runs-on }}"
 
   test-github-functionality:
-    name: 'Test GitHub functionality'
-    uses: './.github/workflows/integration/integration-test-gh.yaml'
+    uses: './.github/workflows/runner-smoke-test-gh.yaml'
     with:
-      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
+      runs-on: "${{ inputs.runs-on }}"
 
   test-gcp-functionality:
-    name: 'Test GCP functionality'
-    uses: './.github/workflows/integration/integration-test-gcp.yml'
+    uses: './.github/workflows/runner-smoke-test-gcp.yml'
     permissions:
       id-token: 'write'
     with:
-      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
+      runs-on: "${{ inputs.runs-on }}"
 
-  setup-actions:
-    name: 'Test setup actions'
-    uses: './.github/workflows/integration/integration-test-setup.yml'
+  test-setup-actions:
+    uses: './.github/workflows/runner-smoke-test-setup.yml'
     with:
-      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
+      runs-on: "${{ inputs.runs-on }}"
 
-  setup-binary:
-    name: 'Test setup-binary action'
-    runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
+  test-setup-binary:
+    runs-on: "${{ inputs.runs-on }}"
     steps:
       - name: 'Setup abc'
         uses: 'abcxyz/actions/.github/actions/setup-binary@f26869a425d0b0217b9c8ad7e3f6ab70547272c9' # ratchet:main
@@ -164,11 +142,50 @@ jobs:
       - name: 'Use abc'
         run: 'abc templates describe github.com/abcxyz/abc/t/rest_server@v0.10.0'
 
-  build-and-push-runner:
-    name: 'Build and Push Runner'
-    uses: './.github/workflows/build_runner.yml'
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-    with:
-      runs-on: "${{ inputs.runs-on || 'self-hosted-autopush' }}"
+  # test-build-push-delete-runner:
+  #   name: 'Build and Push Runner'
+  #   runs-on: 'ubuntu-latest'
+  #   env:
+  #     WIF_PROVIDER: 'projects/727875687543/locations/global/workloadIdentityPools/github-actions-on-gcp-p-a63b4c/providers/github-actions-on-gcp-p-a63b4c'
+  #     WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-on-gcp-p-a63b4c.iam.gserviceaccount.com'
+  #     GAR_LOCATION: 'us'
+  #     GAR_IMAGE_NAME: 'ghss-artifacts-p-25/docker-images/gha-runner'
+  #     GAR_IMAGE_TAG: 'runner-smoke-test-${{ github.run_id }}'
+  #   steps:
+  #     - name: 'Checkout'
+  #       uses: 'actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955' # ratchet:actions/checkout@v4
+
+  #     - id: 'auth'
+  #       name: 'Authenticate to Google Cloud'
+  #       uses: 'google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed' # ratchet:google-github-actions/auth@v2
+  #       with:
+  #         workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+  #         service_account: '${{ env.WIF_SERVICE_ACCOUNT }}'
+  #         token_format: 'access_token'
+
+  #     - name: 'Setup gcloud'
+  #       uses: 'google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f' # ratchet:google-github-actions/setup-gcloud@v2
+  #       with:
+  #         version: '529.0.0'
+
+  #     - uses: 'docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc' # ratchet:docker/login-action@v2
+  #       with:
+  #         username: 'oauth2accesstoken'
+  #         password: '${{ steps.auth.outputs.access_token }}'
+  #         registry: '${{ env.GAR_LOCATION }}-docker.pkg.dev'
+
+  #     - name: 'Build Docker image'
+  #       id: 'push'
+  #       uses: 'docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83' # ratchet:docker/build-push-action@v6
+  #       with:
+  #         context: './runner'
+  #         file: './runner/Dockerfile'
+  #         tags: |
+  #           ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.GAR_IMAGE_NAME }}:${{ env.GAR_IMAGE_TAG }}
+  #           ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.GAR_IMAGE_NAME }}:${{ github.sha }}
+  #         push: true
+
+  #     - name: 'Delete Docker image'
+  #       if: 'always()'
+  #       run: |
+  #         gcloud artifacts docker images delete ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.GAR_IMAGE_NAME }}:${{ env.GAR_IMAGE_TAG }} --quiet
