@@ -14,7 +14,7 @@
 
 locals {
   key_mount_path = "/etc/secrets/webhook/key"
-  key_name       = "webhook-secret-file"
+  key_name       = "webhook-key"
 }
 
 resource "google_project_service" "default" {
