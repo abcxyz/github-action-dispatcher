@@ -2,10 +2,15 @@ version: 'minty.abcxyz.dev/v2'
 
 rule:
   if: |-
-    assertion.iss == issuers.github &&
-    assertion.repository_owner_id == '93787867' &&
-    assertion.repository_id == '882980224' &&
-    assertion.ref == 'refs/heads/main'
+    (
+      assertion.iss == issuers.github &&
+      assertion.repository_owner_id == '93787867' &&
+      assertion.repository_id == '882980224' &&
+      assertion.ref == 'refs/heads/main'
+    ) || (
+      assertion.iss == issuers.google &&
+      assertion.email == "github-automation-bot@gha-gad-ci-a-832939.iam.gserviceaccount.com" // integration CI service account
+    )
 
 scope:
   make-pr:
