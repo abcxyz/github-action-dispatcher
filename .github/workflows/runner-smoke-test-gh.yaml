@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: 'GitHub Integration Tests'
+name: 'GitHub Runner Smoke Tests'
 
 on:
   workflow_call:
@@ -25,7 +25,6 @@ on:
 
 jobs:
   test-gh-cli:
-    name: 'Test gh CLI'
     runs-on: '${{ inputs.runs-on }}'
     permissions:
       contents: 'read'
@@ -38,7 +37,6 @@ jobs:
           gh repo list
 
   test-github-env-and-output:
-    name: 'Test GITHUB_OUTPUT and GITHUB_ENV'
     runs-on: '${{ inputs.runs-on }}'
     steps:
       - name: 'Set environment variables'
@@ -58,7 +56,6 @@ jobs:
           fi
 
   test-github-functions:
-    name: 'Test GitHub native functions'
     runs-on: '${{ inputs.runs-on }}'
     steps:
       - name: 'Test fromJSON'
@@ -70,7 +67,6 @@ jobs:
           fi
 
   complex-workflow-job-1:
-    name: 'Complex Workflow - Job 1'
     runs-on: '${{ inputs.runs-on }}'
     outputs:
       job1_output: '${{ steps.job1.outputs.test_output }}'
@@ -79,7 +75,6 @@ jobs:
         run: 'echo "test_output=job1_data" >> "${GITHUB_OUTPUT}"'
 
   complex-workflow-job-2:
-    name: 'Complex Workflow - Job 2'
     runs-on: '${{ inputs.runs-on }}'
     needs: ['complex-workflow-job-1']
     outputs:
@@ -94,8 +89,7 @@ jobs:
       - id: 'job2'
         run: 'echo "test_output=job2_data" >> "${GITHUB_OUTPUT}"'
 
-  complex-workflow-job-3:
-    name: 'Complex Workflow - Job 3 (Multiple Dependencies)'
+  complex-workflow-job-3-mult-deps:
     runs-on: '${{ inputs.runs-on }}'
     needs: ['complex-workflow-job-1', 'complex-workflow-job-2']
     steps:

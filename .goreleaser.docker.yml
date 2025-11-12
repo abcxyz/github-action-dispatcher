@@ -33,7 +33,7 @@ builds:
     ldflags:
       - '-s'
       - '-w'
-      - '-X={{ .ModulePath }}/pkg/version.Name=gha-on-gcp-webhook-server'
+      - '-X={{ .ModulePath }}/pkg/version.Name=github-action-dispatcher'
       - '-X={{ .ModulePath }}/pkg/version.Version={{ .Version }}'
       - '-X={{ .ModulePath }}/pkg/version.Commit={{ .Commit }}'
       - '-extldflags=-static'
@@ -49,22 +49,22 @@ dockers:
     goos: 'linux'
     goarch: 'amd64'
     image_templates:
-      - '{{ .Env.DOCKER_REPO }}/gha-webhook:{{ .Env.DOCKER_TAG }}-amd64'
+      - '{{ .Env.DOCKER_REPO }}/github-action-dispatcher:{{ .Env.DOCKER_TAG }}-amd64'
     build_flag_templates:
       - '--platform=linux/amd64'
       - '--pull'
       - '--label=org.opencontainers.image.created={{ .CommitTimestamp }}'
       - '--label=org.opencontainers.image.description=Handles webhooks from GitHub to dispatch GitHub Action Runners.'
       - '--label=org.opencontainers.image.licenses=Apache-2.0'
-      - '--label=org.opencontainers.image.name=gha-on-gcp-webhook-server'
+      - '--label=org.opencontainers.image.name=github-action-dispatcher'
       - '--label=org.opencontainers.image.revision={{ .FullCommit }}'
       - '--label=org.opencontainers.image.source={{ .GitURL }}'
-      - '--label=org.opencontainers.image.title=gha-on-gcp-webhook-server'
+      - '--label=org.opencontainers.image.title=github-action-dispatcher'
       - '--label=org.opencontainers.image.version={{ .Version }}'
 
 docker_manifests:
   - image_templates:
-      - '{{ .Env.DOCKER_REPO }}/gha-webhook:{{ .Env.DOCKER_TAG }}-amd64'
+      - '{{ .Env.DOCKER_REPO }}/github-action-dispatcher:{{ .Env.DOCKER_TAG }}-amd64'
 
 # Disable SCM release we only want docker release here.
 release:
