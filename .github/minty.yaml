@@ -19,14 +19,13 @@ scope:
     permissions:
       contents: 'write'
       pull_requests: 'write'
-  create-tag:
+
+  read-jit-runners:
     rule:
       if: |-
-        assertion.job_workflow_ref == 'abcxyz/actions/.github/workflows/create-tag.yml@refs/heads/main' &&
-        assertion.workflow_ref.startsWith('abcxyz/github-action-dispatcher/.github/workflows/create-tag.yml') &&
-        assertion.ref == 'refs/heads/main' &&
-        assertion.event_name == 'workflow_dispatch'
+        assertion.workflow_ref.startsWith("abcxyz/github-action-runner/.github/workflows/ci.yml")
     repositories:
       - 'github-action-dispatcher'
     permissions:
-      contents: 'write'
+      contents: 'read'
+      actions: 'read'
