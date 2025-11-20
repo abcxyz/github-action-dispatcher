@@ -23,7 +23,7 @@ scope:
   read-jit-runners:
     rule:
       if: |-
-        assertion.workflow_ref.startsWith("abcxyz/github-action-runner/.github/workflows/ci.yml")
+        assertion.workflow_ref.startsWith("abcxyz/github-action-dispatcher/.github/workflows/ci.yml")
     repositories:
       - 'github-action-dispatcher'
     permissions:
