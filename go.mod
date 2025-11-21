@@ -5,7 +5,6 @@ go 1.24
 require (
 	cloud.google.com/go/cloudbuild v1.22.0
 	cloud.google.com/go/kms v1.21.0
-	cloud.google.com/go/secretmanager v1.14.3
 	github.com/abcxyz/pkg v1.5.4
 	github.com/google/go-github/v69 v69.2.0
 	github.com/google/uuid v1.6.0

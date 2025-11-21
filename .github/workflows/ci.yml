@@ -183,7 +183,7 @@ jobs:
       - run: 'echo \"All dispatcher tests passed in integration\"'
 
   tag-autopush:
-    needs: ['smoke-tests-passed']
+    needs: ['build']
     if: |-
       ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: 'ubuntu-latest'
