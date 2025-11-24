@@ -7,18 +7,7 @@ rule:
     assertion.repository_id == '882980224'
 
 scope:
-  make-pr:
-    rule:
-      if: |-
-        (assertion.workflow_ref.startsWith("abcxyz/github-action-dispatcher/.github/workflows/integration-test.yml") ||
-         assertion.workflow_ref.startsWith("abcxyz/github-action-dispatcher/.github/workflows/integration-test-minty.yml")) &&
-        assertion.job_workflow_ref.startsWith("abcxyz/github-action-dispatcher/.github/workflows/integration-test-minty.yml")
-    repositories:
-      - 'github-action-dispatcher'
-    permissions:
-      contents: 'write'
-      pull_requests: 'write'
-
+  # Used by smoke-tests.yml which is called by ci.yml
   read-jit-runners:
     rule:
       if: |-
@@ -28,3 +17,15 @@ scope:
     permissions:
       contents: 'read'
       actions: 'read'
+
+  create-tag:
+    rule:
+      if: |-
+        assertion.job_workflow_ref == 'abcxyz/actions/.github/workflows/create-tag.yml@refs/heads/main' &&
+        assertion.workflow_ref.startsWith('abcxyz/github-action-dispatcher/.github/workflows/create-tag.yml') &&
+        assertion.ref == 'refs/heads/main' &&
+        assertion.event_name == 'workflow_dispatch'
+    repositories:
+      - 'github-action-dispatcher'
+    permissions:
+      contents: 'write'

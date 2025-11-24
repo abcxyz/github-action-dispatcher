@@ -31,6 +31,7 @@ env:
   INTEGRATION_SERVICE_ACCOUNT: 'gad-webhook-sa@github-action-dispatcher-i-e3.iam.gserviceaccount.com'
   INTEGRATION_WIF_PROVIDER: 'projects/643301186155/locations/global/workloadIdentityPools/github-automation/providers/gad-ci-i'
   INTEGRATION_WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-gad-ci-i-832939.iam.gserviceaccount.com'
+  INTEGRATION_WORKER_POOL_ID: 'projects/abcxyz-runner-i-4f/locations/us-central1/workerPools/abcxyz-e2-standard-2'
 
   AUTOPUSH_RUNNER_LABEL: 'github-action-dispatcher-autopush' # <repo-name>-<env>
   AUTOPUSH_RUNNER_LOCATION: 'us-central1'
@@ -44,6 +45,7 @@ env:
   AUTOPUSH_SERVICE_ACCOUNT: 'gad-webhook-sa@github-action-dispatcher-a-e3.iam.gserviceaccount.com'
   AUTOPUSH_WIF_PROVIDER: 'projects/549740326763/locations/global/workloadIdentityPools/github-automation/providers/gad-ci-a'
   AUTOPUSH_WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-gad-ci-a-832939.iam.gserviceaccount.com'
+  AUTOPUSH_WORKER_POOL_ID: 'projects/abcxyz-runner-a-4f/locations/us-central1/workerPools/abcxyz-e2-standard-2'
 
 jobs:
   go_test:
@@ -142,6 +144,8 @@ jobs:
           WEBHOOK_SECRET_VERSION="latest"
 
           cat > /tmp/env_vars <<EOF
+          ENABLE_SELF_HOSTED_LABEL: 'true'
+          EXTRA_RUNNER_COUNT: 0
           GITHUB_APP_ID: '${{ env.GITHUB_APP_ID }}'
           KMS_APP_PRIVATE_KEY_ID: '${{ env.KMS_APP_PRIVATE_KEY_ID }}'
           RUNNER_IMAGE_NAME: '${{ env.RUNNER_IMAGE_NAME }}'
@@ -151,6 +155,7 @@ jobs:
           RUNNER_PROJECT_ID: '${{ env.INTEGRATION_RUNNER_PROJECT_ID }}'
           RUNNER_REPOSITORY_ID: '${{ env.RUNNER_DOCKER_REPO }}'
           RUNNER_SERVICE_ACCOUNT: '${{ env.INTEGRATION_RUNNER_SERVICE_ACCOUNT }}'
+          RUNNER_WORKER_POOL_ID: '${{ env.INTEGRATION_WORKER_POOL_ID }}'
           WEBHOOK_KEY_MOUNT_PATH: '${WEBHOOK_SECRET_MOUNT_PATH}'
           WEBHOOK_KEY_NAME: '${WEBHOOK_SECRET_NAME}'
           EOF
@@ -268,6 +273,8 @@ jobs:
           WEBHOOK_SECRET_VERSION="latest"
 
           cat > /tmp/env_vars <<EOF
+          ENABLE_SELF_HOSTED_LABEL: 'true'
+          EXTRA_RUNNER_COUNT: 0
           GITHUB_APP_ID: '${{ env.GITHUB_APP_ID }}'
           KMS_APP_PRIVATE_KEY_ID: '${{ env.KMS_APP_PRIVATE_KEY_ID }}'
           RUNNER_IMAGE_NAME: '${{ env.RUNNER_IMAGE_NAME }}'
@@ -277,6 +284,7 @@ jobs:
           RUNNER_PROJECT_ID: '${{ env.AUTOPUSH_RUNNER_PROJECT_ID }}'
           RUNNER_REPOSITORY_ID: '${{ env.RUNNER_DOCKER_REPO }}'
           RUNNER_SERVICE_ACCOUNT: '${{ env.AUTOPUSH_RUNNER_SERVICE_ACCOUNT }}'
+          RUNNER_WORKER_POOL_ID: '${{ env.AUTOPUSH_WORKER_POOL_ID }}'
           WEBHOOK_KEY_MOUNT_PATH: '${WEBHOOK_SECRET_MOUNT_PATH}'
           WEBHOOK_KEY_NAME: '${WEBHOOK_SECRET_NAME}'
           EOF
