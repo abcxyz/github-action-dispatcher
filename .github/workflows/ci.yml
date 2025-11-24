@@ -113,9 +113,6 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
-    outputs:
-      service_url: '${{ steps.deploy.outputs.service_url }}'
-      webhook_secret_name: '${{ steps.deploy.outputs.webhook_secret_name }}'
     env:
       GITHUB_APP_ID: '2320897'
       KMS_APP_PRIVATE_KEY_ID: 'projects/github-action-dispatcher-i-e3/locations/us-central1/keyRings/gad-71-key-ring/cryptoKeys/gad-71-pk/cryptoKeyVersions/1'
@@ -145,7 +142,7 @@ jobs:
 
           cat > /tmp/env_vars <<EOF
           ENABLE_SELF_HOSTED_LABEL: 'true'
-          EXTRA_RUNNER_COUNT: 0
+          EXTRA_RUNNER_COUNT: '0'
           GITHUB_APP_ID: '${{ env.GITHUB_APP_ID }}'
           KMS_APP_PRIVATE_KEY_ID: '${{ env.KMS_APP_PRIVATE_KEY_ID }}'
           RUNNER_IMAGE_NAME: '${{ env.RUNNER_IMAGE_NAME }}'
@@ -180,12 +177,20 @@ jobs:
       runs-on: 'github-action-dispatcher-integration'
 
   smoke-tests-passed:
-    needs: ['smoke-tests']
+    needs: ['deploy', 'smoke-tests']
     if: |-
       ${{ github.event_name == 'merge_group' }}
     runs-on: 'ubuntu-latest'
     steps:
-      - run: 'echo \"All dispatcher tests passed in integration\"'
+      - name: 'Check Deployment and Tests Status'
+        if: |-
+          ${{ needs.deploy.result != 'success' || needs.smoke-tests.result != 'success' }}
+        run: |
+          echo "::error::Deployment failed or was skipped. Failing status check to block merge."
+          exit 1
+
+      - name: 'Confirm smoke tests passed'
+        run: 'echo \"All dispatcher tests passed in integration\"'
 
   tag-autopush:
     needs: ['build']
@@ -242,9 +247,6 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
-    outputs:
-      service_url: '${{ steps.deploy.outputs.service_url }}'
-      webhook_secret_name: '${{ steps.deploy.outputs.webhook_secret_name }}'
     env:
       GITHUB_APP_ID: '2320888'
       KMS_APP_PRIVATE_KEY_ID: 'projects/github-action-dispatcher-a-e3/locations/us-central1/keyRings/gad-e8-key-ring/cryptoKeys/gad-e8-pk/cryptoKeyVersions/1'
@@ -274,7 +276,7 @@ jobs:
 
           cat > /tmp/env_vars <<EOF
           ENABLE_SELF_HOSTED_LABEL: 'true'
-          EXTRA_RUNNER_COUNT: 0
+          EXTRA_RUNNER_COUNT: '0'
           GITHUB_APP_ID: '${{ env.GITHUB_APP_ID }}'
           KMS_APP_PRIVATE_KEY_ID: '${{ env.KMS_APP_PRIVATE_KEY_ID }}'
           RUNNER_IMAGE_NAME: '${{ env.RUNNER_IMAGE_NAME }}'
@@ -305,3 +307,19 @@ jobs:
     uses: './.github/workflows/smoke-tests.yml'
     with:
       runs-on: 'github-action-dispatcher-autopush'
+
+  smoke-tests-passed-autopush:
+    needs: ['deploy-autopush', 'smoke-tests-autopush']
+    if: |-
+      ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Check Deployment and Tests Status'
+        if: |-
+          ${{ needs.deploy-autopush.result != 'success' || needs.smoke-tests-autopush.result != 'success' }}
+        run: |
+          echo "::error::Autopush deployment or smoke tests failed/skipped. Failing status check."
+          exit 1
+
+      - name: 'Confirm smoke tests passed'
+        run: 'echo \"All dispatcher tests passed in autopush\"'
