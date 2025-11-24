@@ -19,7 +19,7 @@ on:
     tags:
       - 'v*'
 env:
-  SOURCE_DOCKER_IMAGE: 'us-central1-docker.pkg.dev/gad-i-e3/ci-images/github-action-dispatcher:${{ github.sha }}'
+  SOURCE_DOCKER_IMAGE: 'us-central1-docker.pkg.dev/github-action-dispatcher-i-e3/ci-images/github-action-dispatcher:${{ github.sha }}'
   TARGET_DOCKER_IMAGE: 'us-docker.pkg.dev/abcxyz-artifacts/docker-images/github-action-dispatcher:${{ github.ref_name }}'
 
 # Don't cancel in progress since we don't want to have half-baked releases.
@@ -54,4 +54,3 @@ jobs:
       - name: 'Copy images to Release registry'
         run: |-
           gcloud container images add-tag --quiet ${{ env.SOURCE_DOCKER_IMAGE }}-amd64 ${{ env.TARGET_DOCKER_IMAGE }}-amd64
-          gcloud container images add-tag --quiet ${{ env.SOURCE_DOCKER_IMAGE }}-arm64 ${{ env.TARGET_DOCKER_IMAGE }}-arm64
