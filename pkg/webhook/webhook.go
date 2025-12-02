@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -329,6 +330,7 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 				Name: "$_REPOSITORY_ID/$_IMAGE_NAME:$_IMAGE_TAG",
 				Env: []string{
 					"ENCODED_JIT_CONFIG=${_ENCODED_JIT_CONFIG}",
+					"IDLE_TIMEOUT_SECONDS=${_IDLE_TIMEOUT_SECONDS}",
 				},
 			},
 		},
@@ -336,10 +338,11 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 			Logging: cloudbuildpb.BuildOptions_CLOUD_LOGGING_ONLY,
 		},
 		Substitutions: map[string]string{
-			"_ENCODED_JIT_CONFIG": compressedJIT,
-			"_REPOSITORY_ID":      s.runnerRepositoryID,
-			"_IMAGE_NAME":         s.runnerImageName,
-			"_IMAGE_TAG":          imageTag,
+			"_ENCODED_JIT_CONFIG":   compressedJIT,
+			"_IDLE_TIMEOUT_SECONDS": strconv.Itoa(s.runnerTimeoutSeconds),
+			"_REPOSITORY_ID":        s.runnerRepositoryID,
+			"_IMAGE_NAME":           s.runnerImageName,
+			"_IMAGE_TAG":            imageTag,
 		},
 	}
 

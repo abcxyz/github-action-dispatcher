@@ -138,6 +138,7 @@ func TestWebhookServerCommand(t *testing.T) {
 				"RUNNER_REPOSITORY_ID":     "runner-repo-id",
 				"RUNNER_SERVICE_ACCOUNT":   "runner-service-account",
 				"ENABLE_SELF_HOSTED_LABEL": "true",
+				"RUNNER_TIMEOUT_SECONDS":   "300",
 			},
 			fileMock: &webhook.MockFileReader{
 				ReadFileMock: &webhook.ReadFileResErr{
