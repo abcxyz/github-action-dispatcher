@@ -26,6 +26,11 @@ import (
 	"github.com/abcxyz/pkg/cli"
 )
 
+const (
+	minRunnerTimeoutSeconds = 5 * 60       // 5 minutes
+	maxRunnerTimeoutSeconds = 24 * 60 * 60 // 24 hours
+)
+
 // Config defines the set of environment variables required
 // for running the webhook service.
 type Config struct {
@@ -42,6 +47,7 @@ type Config struct {
 	RunnerProjectID           string `env:"RUNNER_PROJECT_ID,required"`
 	RunnerRepositoryID        string `env:"RUNNER_REPOSITORY_ID,required"`
 	RunnerServiceAccount      string `env:"RUNNER_SERVICE_ACCOUNT,required"`
+	RunnerTimeoutSeconds      string `env:"RUNNER_TIMEOUT_SECONDS,default=300"`
 	ExtraRunnerCount          string `env:"EXTRA_RUNNER_COUNT,default=0"`
 	RunnerWorkerPoolID        string `env:"RUNNER_WORKER_POOL_ID"`
 	E2ETestRunID              string `env:"E2E_TEST_RUN_ID"`
@@ -87,6 +93,10 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("RUNNER_SERVICE_ACCOUNT is required")
 	}
 
+	if _, err := validateRunnerTimeout(cfg.RunnerTimeoutSeconds); err != nil {
+		return err
+	}
+
 	if _, err := validateExtraRunnerCount(cfg.ExtraRunnerCount); err != nil {
 		return err
 	}
@@ -101,6 +111,19 @@ func (cfg *Config) Validate() error {
 // NewConfig creates a new Config from environment variables.
 func NewConfig(ctx context.Context) (*Config, error) {
 	return newConfig(ctx, envconfig.OsLookuper())
+}
+
+func validateRunnerTimeout(value string) (int, error) {
+	num, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("RUNNER_TIMEOUT_SECONDS must be an integer: %w", err)
+	}
+
+	if num < minRunnerTimeoutSeconds || num > maxRunnerTimeoutSeconds {
+		return 0, fmt.Errorf("RUNNER_TIMEOUT_SECONDS must be between %d (5 minutes) and %d (24 hours) seconds, got %d", minRunnerTimeoutSeconds, maxRunnerTimeoutSeconds, num)
+	}
+
+	return num, nil
 }
 
 func validateExtraRunnerCount(value string) (int, error) {
@@ -248,6 +271,14 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		EnvVar:  "RUNNER_LABEL",
 		Default: "self-hosted",
 		Usage:   `The single, exact label that the webhook will process for self-hosted runners.`,
+	})
+
+	f.StringVar(&cli.StringVar{
+		Name:    "runner-timeout-seconds",
+		Target:  &cfg.RunnerTimeoutSeconds,
+		EnvVar:  "RUNNER_TIMEOUT_SECONDS",
+		Default: "300",
+		Usage:   `The timeout for the runner in seconds. Must be between 300 (5 minutes) and 86400 (24 hours).`,
 	})
 
 	f.BoolVar(&cli.BoolVar{

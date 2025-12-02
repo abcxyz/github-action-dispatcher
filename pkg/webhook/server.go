@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/googleapis/gax-go/v2"
@@ -47,6 +48,7 @@ type Server struct {
 	runnerRepositoryID    string
 	runnerServiceAccount  string
 	extraRunnerCount      int
+	runnerTimeoutSeconds  int
 	runnerWorkerPoolID    string
 	webhookSecret         []byte
 	e2eTestRunID          string
@@ -126,14 +128,9 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 		cbc = cb
 	}
 
-	var extraRunnerCount int
-	// This should be validated at config level already.
-
-	num, err := validateExtraRunnerCount(cfg.ExtraRunnerCount)
-	if err != nil {
-		return nil, err
-	}
-	extraRunnerCount = num
+	// cfg.Validate() is called before NewServer, safe to convert
+	extraRunnerCount, _ := strconv.Atoi(cfg.ExtraRunnerCount)
+	runnerTimeoutSeconds, _ := strconv.Atoi(cfg.RunnerTimeoutSeconds)
 
 	return &Server{
 		appClient:             appClient,
@@ -149,6 +146,7 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 		runnerRepositoryID:    cfg.RunnerRepositoryID,
 		runnerServiceAccount:  cfg.RunnerServiceAccount,
 		extraRunnerCount:      extraRunnerCount,
+		runnerTimeoutSeconds:  runnerTimeoutSeconds,
 		runnerWorkerPoolID:    cfg.RunnerWorkerPoolID,
 		webhookSecret:         webhookSecret,
 		e2eTestRunID:          cfg.E2ETestRunID,

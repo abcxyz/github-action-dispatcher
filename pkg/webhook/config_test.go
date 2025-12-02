@@ -33,6 +33,7 @@ func generateValidConfig() *Config {
 		RunnerServiceAccount:      "test-sa",
 		RunnerLabel:               "self-hosted",
 		ExtraRunnerCount:          "0",
+		RunnerTimeoutSeconds:      "300",
 	}
 }
 
@@ -103,6 +104,34 @@ func TestConfig_Validate(t *testing.T) {
 			mutator: func(c *Config) { c.ExtraRunnerCount = "abc" },
 			expErr:  "EXTRA_RUNNER_COUNT must be an integer",
 		},
+		{
+			name:    "invalid_runner_timeout_seconds_not_int",
+			mutator: func(c *Config) { c.RunnerTimeoutSeconds = "abc" },
+			expErr:  "RUNNER_TIMEOUT_SECONDS must be an integer",
+		},
+		{
+			name:    "invalid_runner_timeout_seconds_too_low",
+			mutator: func(c *Config) { c.RunnerTimeoutSeconds = "299" },
+			expErr:  "RUNNER_TIMEOUT_SECONDS must be between 300 (5 minutes) and 86400 (24 hours) seconds, got 299",
+		},
+		{
+			name:    "invalid_runner_timeout_seconds_too_high",
+			mutator: func(c *Config) { c.RunnerTimeoutSeconds = "86401" },
+			expErr:  "RUNNER_TIMEOUT_SECONDS must be between 300 (5 minutes) and 86400 (24 hours) seconds, got 86401",
+		},
+		{
+			name:    "invalid_runner_timeout_seconds_negative",
+			mutator: func(c *Config) { c.RunnerTimeoutSeconds = "-1" },
+			expErr:  "RUNNER_TIMEOUT_SECONDS must be between 300 (5 minutes) and 86400 (24 hours) seconds, got -1",
+		},
+		{
+			name:    "valid_runner_timeout_seconds_min",
+			mutator: func(c *Config) { c.RunnerTimeoutSeconds = "300" },
+		},
+		{
+			name:    "valid_runner_timeout_seconds_max",
+			mutator: func(c *Config) { c.RunnerTimeoutSeconds = "86400" },
+		},
 	}
 
 	for _, tc := range cases {
@@ -117,6 +146,74 @@ func TestConfig_Validate(t *testing.T) {
 			err := cfg.Validate()
 			if diff := testutil.DiffErrString(err, tc.expErr); diff != "" {
 				t.Fatal(diff)
+			}
+		})
+	}
+}
+
+func TestValidateRunnerTimeout(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		value  string
+		exp    int
+		expErr string
+	}{
+		{
+			name:   "valid_min",
+			value:  "300",
+			exp:    300,
+			expErr: "",
+		},
+		{
+			name:   "valid_max",
+			value:  "86400",
+			exp:    86400,
+			expErr: "",
+		},
+		{
+			name:   "valid_mid_range",
+			value:  "1800", // 30 minutes
+			exp:    1800,
+			expErr: "",
+		},
+		{
+			name:   "invalid_not_an_integer",
+			value:  "abc",
+			exp:    0,
+			expErr: "RUNNER_TIMEOUT_SECONDS must be an integer",
+		},
+		{
+			name:   "invalid_too_low",
+			value:  "299",
+			exp:    0,
+			expErr: "RUNNER_TIMEOUT_SECONDS must be between 300 (5 minutes) and 86400 (24 hours) seconds, got 299",
+		},
+		{
+			name:   "invalid_too_high",
+			value:  "86401",
+			exp:    0,
+			expErr: "RUNNER_TIMEOUT_SECONDS must be between 300 (5 minutes) and 86400 (24 hours) seconds, got 86401",
+		},
+		{
+			name:   "invalid_negative_number",
+			value:  "-1",
+			exp:    0,
+			expErr: "RUNNER_TIMEOUT_SECONDS must be between 300 (5 minutes) and 86400 (24 hours) seconds, got -1",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := validateRunnerTimeout(tc.value)
+			if diff := testutil.DiffErrString(err, tc.expErr); diff != "" {
+				t.Errorf("validateRunnerTimeout(%q) got unexpected error diff: %v", tc.value, diff)
+			}
+			if got != tc.exp {
+				t.Errorf("validateRunnerTimeout(%q) got %d, want %d", tc.value, got, tc.exp)
 			}
 		})
 	}
