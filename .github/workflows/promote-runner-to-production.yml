@@ -1,8 +1,6 @@
 name: 'Promote Runner to Production'
 
 on:
-  schedule:
-    - cron: '0 12 * * 5' # Run every Friday at 12:00 PM UTC
   workflow_dispatch:
     inputs:
       manual_cur_tag:
