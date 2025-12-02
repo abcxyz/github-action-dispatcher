@@ -179,7 +179,7 @@ jobs:
   smoke-tests-passed:
     needs: ['deploy', 'smoke-tests']
     if: |-
-      ${{ github.event_name == 'merge_group' }}
+      ${{ always() && github.event_name == 'merge_group' }}
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Check Deployment and Tests Status'
