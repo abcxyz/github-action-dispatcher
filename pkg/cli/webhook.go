@@ -50,13 +50,13 @@ type WebhookServerCommand struct {
 }
 
 func (c *WebhookServerCommand) Desc() string {
-	return `Start a webhook server for github-actions-on-gcp`
+	return `Start a webhook server for github-action-dispatcher`
 }
 
 func (c *WebhookServerCommand) Help() string {
 	return `
 Usage: {{ COMMAND }} [options]
-  Start a webhook server for github-actions-on-gcp.
+  Start a webhook server for github-action-dispatcher.
 `
 }
 
@@ -104,7 +104,7 @@ func (c *WebhookServerCommand) RunUnstarted(ctx context.Context, args []string) 
 	}
 	logger.DebugContext(ctx, "loaded configuration", "config", c.cfg)
 
-	agent := fmt.Sprintf("google:github-actions-on-gcp/%s", version.Version)
+	agent := fmt.Sprintf("google:github-action-dispatcher/%s", version.Version)
 	opts := []option.ClientOption{option.WithUserAgent(agent)}
 	webhookClientOptions := &webhook.WebhookClientOptions{
 		KeyManagementClientOpts: opts,

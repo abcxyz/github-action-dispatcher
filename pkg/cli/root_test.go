@@ -23,7 +23,7 @@ func TestRootCommand_Help(t *testing.T) {
 	t.Parallel()
 
 	exp := `
-Usage: github-actions-on-gcp COMMAND
+Usage: github-action-dispatcher COMMAND
 
   webhook    Perform webhook operations
 `

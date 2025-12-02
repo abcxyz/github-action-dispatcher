@@ -24,7 +24,7 @@ before:
 
 builds:
   - id: 'server'
-    main: './cmd/github-actions-on-gcp'
+    main: './cmd/github-action-dispatcher'
     binary: 'webhook'
     mod_timestamp: '{{ .CommitTimestamp }}'
     flags:
