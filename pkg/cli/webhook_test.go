@@ -129,18 +129,19 @@ func TestWebhookServerCommand(t *testing.T) {
 		{
 			name: "happy_path",
 			env: map[string]string{
-				"RUNNER_LOCATION":          "runner-location",
-				"GITHUB_APP_ID":            "github-app-id",
-				"WEBHOOK_KEY_MOUNT_PATH":   "github-webhook-key-mount-path",
-				"WEBHOOK_KEY_NAME":         "key-name",
-				"KMS_APP_PRIVATE_KEY_ID":   "kms-app-private-key-id",
-				"RUNNER_PROJECT_ID":        "runner-project-id",
-				"RUNNER_REPOSITORY_ID":     "runner-repo-id",
-				"RUNNER_SERVICE_ACCOUNT":   "runner-service-account",
-				"ENABLE_SELF_HOSTED_LABEL": "true",
-				"RUNNER_TIMEOUT_SECONDS":   "300",
-			},
-			fileMock: &webhook.MockFileReader{
+				"BUILD_TIMEOUT_SECONDS":            "3600",
+				"GITHUB_APP_ID":                    "github-app-id",
+				"WEBHOOK_KEY_MOUNT_PATH":           "github-webhook-key-mount-path",
+				"WEBHOOK_KEY_NAME":                 "key-name",
+				"KMS_APP_PRIVATE_KEY_ID":           "kms-app-private-key-id",
+				"RUNNER_EXECUTION_TIMEOUT_SECONDS": "3600",
+				"RUNNER_IDLE_TIMEOUT_SECONDS":      "300",
+				"RUNNER_LOCATION":                  "runner-location",
+				"RUNNER_PROJECT_ID":                "runner-project-id",
+				"RUNNER_REPOSITORY_ID":             "runner-repo-id",
+				"RUNNER_SERVICE_ACCOUNT":           "runner-service-account",
+				"ENABLE_SELF_HOSTED_LABEL":         "true",
+			}, fileMock: &webhook.MockFileReader{
 				ReadFileMock: &webhook.ReadFileResErr{
 					Res: []byte("secret-value"),
 				},
