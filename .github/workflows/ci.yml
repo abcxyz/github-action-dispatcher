@@ -15,8 +15,8 @@ env:
   DOCKER_TAG: '${{ github.sha }}'
   IMAGE_NAME: 'github-action-dispatcher'
 
-  RUNNER_DOCKER_REPO: 'us-central1-docker.pkg.dev/github-action-runner-i-02/ci-images'
-  RUNNER_IMAGE_TAG: 'autopush' # TODO replace this with the stable prod image
+  RUNNER_DOCKER_REPO: 'us-docker.pkg.dev/abcxyz-artifacts/docker-images'
+  RUNNER_IMAGE_TAG: 'v0.0.0-ubuntu-24-04-amd64'
   RUNNER_IMAGE_NAME: 'github-action-runner'
 
   INTEGRATION_RUNNER_LABEL: 'github-action-dispatcher-integration' # <repo-name>-<env>
