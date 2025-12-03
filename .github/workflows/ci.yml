@@ -114,9 +114,6 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
-    env:
-      GITHUB_APP_ID: '2320897'
-      KMS_APP_PRIVATE_KEY_ID: 'projects/github-action-dispatcher-i-e3/locations/us-central1/keyRings/gad-71-key-ring/cryptoKeys/gad-71-pk/cryptoKeyVersions/1'
     steps:
       - name: 'Checkout'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
@@ -144,7 +141,6 @@ jobs:
           fi
           echo "Using suffix: $SUFFIX"
 
-          # Find the latest tag with that suffix using the modern 'artifacts' command
           LATEST_TAG_FULL_PATH=$(gcloud artifacts docker tags list \
             "${{ env.RUNNER_DOCKER_REPO }}/${{ env.RUNNER_IMAGE_NAME }}" \
             --format="get(tag)" | \
@@ -160,8 +156,6 @@ jobs:
           LATEST_TAG=$(echo "$LATEST_TAG_FULL_PATH" | sed -E 's#^.*/tags/##')
           echo "Latest tag found (parsed): $LATEST_TAG"
 
-          echo "Latest tag found: $LATEST_TAG"
-
           # Get the digest for the tag in the workflow file
           CURRENT_DIGEST=$(gcloud artifacts docker images describe \
             "${{ env.RUNNER_DOCKER_REPO }}/${{ env.RUNNER_IMAGE_NAME }}:${{ env.RUNNER_IMAGE_TAG }}" \
@@ -176,7 +170,7 @@ jobs:
             echo "::error::The image for RUNNER_IMAGE_TAG (${{ env.RUNNER_IMAGE_TAG }}) is outdated. The latest tag is $LATEST_TAG. Please update ci.yml."
             exit 1
           else
-            echo "RUNNER_IMAGE_TAG (${{ env.RUNNER_IMAGE_TAG }}) points to the latest image digest."
+            echo "Confirmed RUNNER_IMAGE_TAG (${{ env.RUNNER_IMAGE_TAG }}) points to the latest release."
           fi
 
   deploy:
