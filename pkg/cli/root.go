@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cli implements the commands for the github-actions-on-gcp CLI.
+// Package cli implements the commands for the github-action-dispatcher CLI.
 package cli
 
 import (
@@ -24,7 +24,7 @@ import (
 
 var rootCmd = func() cli.Command {
 	return &cli.RootCommand{
-		Name:    "github-actions-on-gcp",
+		Name:    "github-action-dispatcher",
 		Version: version.HumanVersion,
 		Commands: map[string]cli.CommandFactory{
 			"webhook": func() cli.Command {
