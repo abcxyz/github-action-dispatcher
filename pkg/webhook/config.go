@@ -27,32 +27,36 @@ import (
 )
 
 const (
-	minRunnerTimeoutSeconds = 5 * 60       // 5 minutes
-	maxRunnerTimeoutSeconds = 24 * 60 * 60 // 24 hours
+	minRunnerIdleTimeoutSeconds = 5 * 60       // 5 minutes
+	maxRunnerIdleTimeoutSeconds = 24 * 60 * 60 // 24 hours
+
+	minRunnerExecutionTimeoutSeconds = 1 * 60 * 60  // 1 hour
+	maxRunnerExecutionTimeoutSeconds = 24 * 60 * 60 // 24 hours
 )
 
 // Config defines the set of environment variables required
 // for running the webhook service.
 type Config struct {
-	Environment               string `env:"ENVIRONMENT,default=production"`
-	GitHubAPIBaseURL          string `env:"GITHUB_API_BASE_URL,default=https://api.github.com"`
-	GitHubAppID               string `env:"GITHUB_APP_ID,required"`
-	GitHubWebhookKeyMountPath string `env:"WEBHOOK_KEY_MOUNT_PATH,required"`
-	GitHubWebhookKeyName      string `env:"WEBHOOK_KEY_NAME,required"`
-	KMSAppPrivateKeyID        string `env:"KMS_APP_PRIVATE_KEY_ID,required"`
-	Port                      string `env:"PORT,default=8080"`
-	RunnerImageName           string `env:"RUNNER_IMAGE_NAME,default=default-runner"`
-	RunnerImageTag            string `env:"RUNNER_IMAGE_TAG,default=latest"`
-	RunnerLocation            string `env:"RUNNER_LOCATION,required"`
-	RunnerProjectID           string `env:"RUNNER_PROJECT_ID,required"`
-	RunnerRepositoryID        string `env:"RUNNER_REPOSITORY_ID,required"`
-	RunnerServiceAccount      string `env:"RUNNER_SERVICE_ACCOUNT,required"`
-	RunnerTimeoutSeconds      string `env:"RUNNER_TIMEOUT_SECONDS,default=300"`
-	ExtraRunnerCount          string `env:"EXTRA_RUNNER_COUNT,default=0"`
-	RunnerWorkerPoolID        string `env:"RUNNER_WORKER_POOL_ID"`
-	E2ETestRunID              string `env:"E2E_TEST_RUN_ID"`
-	RunnerLabel               string `env:"RUNNER_LABEL,default=self-hosted"`
-	EnableSelfHostedLabel     bool   `env:"ENABLE_SELF_HOSTED_LABEL,default=false"`
+	Environment                   string `env:"ENVIRONMENT,default=production"`
+	GitHubAPIBaseURL              string `env:"GITHUB_API_BASE_URL,default=https://api.github.com"`
+	GitHubAppID                   string `env:"GITHUB_APP_ID,required"`
+	GitHubWebhookKeyMountPath     string `env:"WEBHOOK_KEY_MOUNT_PATH,required"`
+	GitHubWebhookKeyName          string `env:"WEBHOOK_KEY_NAME,required"`
+	KMSAppPrivateKeyID            string `env:"KMS_APP_PRIVATE_KEY_ID,required"`
+	Port                          string `env:"PORT,default=8080"`
+	RunnerExecutionTimeoutSeconds string `env:"RUNNER_EXECUTION_TIMEOUT_SECONDS,default=3600"`
+	RunnerIdleTimeoutSeconds      string `env:"RUNNER_IDLE_TIMEOUT_SECONDS,default=300"`
+	RunnerImageName               string `env:"RUNNER_IMAGE_NAME,default=default-runner"`
+	RunnerImageTag                string `env:"RUNNER_IMAGE_TAG,default=latest"`
+	RunnerLocation                string `env:"RUNNER_LOCATION,required"`
+	RunnerProjectID               string `env:"RUNNER_PROJECT_ID,required"`
+	RunnerRepositoryID            string `env:"RUNNER_REPOSITORY_ID,required"`
+	RunnerServiceAccount          string `env:"RUNNER_SERVICE_ACCOUNT,required"`
+	ExtraRunnerCount              string `env:"EXTRA_RUNNER_COUNT,default=0"`
+	RunnerWorkerPoolID            string `env:"RUNNER_WORKER_POOL_ID"`
+	E2ETestRunID                  string `env:"E2ETestRunID"`
+	RunnerLabel                   string `env:"RUNNER_LABEL,default=self-hosted"`
+	EnableSelfHostedLabel         bool   `env:"ENABLE_SELF_HOSTED_LABEL,default=false"`
 }
 
 // Validate validates the webhook config after load.
@@ -93,7 +97,11 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("RUNNER_SERVICE_ACCOUNT is required")
 	}
 
-	if _, err := validateRunnerTimeout(cfg.RunnerTimeoutSeconds); err != nil {
+	if _, err := validateRunnerIdleTimeout(cfg.RunnerIdleTimeoutSeconds); err != nil {
+		return err
+	}
+
+	if _, err := validateRunnerExecutionTimeout(cfg.RunnerExecutionTimeoutSeconds); err != nil {
 		return err
 	}
 
@@ -113,14 +121,27 @@ func NewConfig(ctx context.Context) (*Config, error) {
 	return newConfig(ctx, envconfig.OsLookuper())
 }
 
-func validateRunnerTimeout(value string) (int, error) {
+func validateRunnerIdleTimeout(value string) (int, error) {
 	num, err := strconv.Atoi(value)
 	if err != nil {
-		return 0, fmt.Errorf("RUNNER_TIMEOUT_SECONDS must be an integer: %w", err)
+		return 0, fmt.Errorf("RUNNER_IDLE_TIMEOUT_SECONDS must be an integer: %w", err)
 	}
 
-	if num < minRunnerTimeoutSeconds || num > maxRunnerTimeoutSeconds {
-		return 0, fmt.Errorf("RUNNER_TIMEOUT_SECONDS must be between %d (5 minutes) and %d (24 hours) seconds, got %d", minRunnerTimeoutSeconds, maxRunnerTimeoutSeconds, num)
+	if num < minRunnerIdleTimeoutSeconds || num > maxRunnerIdleTimeoutSeconds {
+		return 0, fmt.Errorf("RUNNER_IDLE_TIMEOUT_SECONDS must be between %d (5 minutes) and %d (24 hours) seconds, got %d", minRunnerIdleTimeoutSeconds, maxRunnerIdleTimeoutSeconds, num)
+	}
+
+	return num, nil
+}
+
+func validateRunnerExecutionTimeout(value string) (int, error) {
+	num, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("RUNNER_EXECUTION_TIMEOUT_SECONDS must be an integer: %w", err)
+	}
+
+	if num < minRunnerExecutionTimeoutSeconds || num > maxRunnerExecutionTimeoutSeconds {
+		return 0, fmt.Errorf("RUNNER_EXECUTION_TIMEOUT_SECONDS must be between %d (1 hour) and %d (24 hours) seconds, got %d", minRunnerExecutionTimeoutSeconds, maxRunnerExecutionTimeoutSeconds, num)
 	}
 
 	return num, nil
@@ -274,11 +295,19 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 	})
 
 	f.StringVar(&cli.StringVar{
-		Name:    "runner-timeout-seconds",
-		Target:  &cfg.RunnerTimeoutSeconds,
-		EnvVar:  "RUNNER_TIMEOUT_SECONDS",
+		Name:    "runner-idle-timeout-seconds",
+		Target:  &cfg.RunnerIdleTimeoutSeconds,
+		EnvVar:  "RUNNER_IDLE_TIMEOUT_SECONDS",
 		Default: "300",
 		Usage:   `The timeout for the runner in seconds. Must be between 300 (5 minutes) and 86400 (24 hours).`,
+	})
+
+	f.StringVar(&cli.StringVar{
+		Name:    "runner-execution-timeout-seconds",
+		Target:  &cfg.RunnerExecutionTimeoutSeconds,
+		EnvVar:  "RUNNER_EXECUTION_TIMEOUT_SECONDS",
+		Default: "3600",
+		Usage:   `The timeout for the entire build in seconds. Must be between 3600 (1 hour) and 86400 (24 hours).`,
 	})
 
 	f.BoolVar(&cli.BoolVar{

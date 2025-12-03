@@ -59,40 +59,42 @@ func TestHandleWebhook(t *testing.T) {
 	payloadType := "workflow_job"
 
 	cases := []struct {
-		name                        string
-		payloadType                 string
-		action                      string
-		runnerLabels                []string
-		payloadWebhookSecret        string
-		serverRunnerLabel           string
-		serverEnableSelfHostedLabel bool
-		extraSpawnNumber            int
-		contentType                 string
-		createdAt                   *github.Timestamp
-		startedAt                   *github.Timestamp
-		completedAt                 *github.Timestamp
-		runID                       *int64
-		jobID                       *int64
-		jobName                     *string
-		expStatusCode               int
-		expRespBody                 string // This is now only for plain text responses.
-		expectBuildCount            int
+		name                          string
+		payloadType                   string
+		action                        string
+		runnerExecutionTimeoutSeconds int
+		runnerLabels                  []string
+		payloadWebhookSecret          string
+		serverRunnerLabel             string
+		serverEnableSelfHostedLabel   bool
+		extraSpawnNumber              int
+		contentType                   string
+		createdAt                     *github.Timestamp
+		startedAt                     *github.Timestamp
+		completedAt                   *github.Timestamp
+		runID                         *int64
+		jobID                         *int64
+		jobName                       *string
+		expStatusCode                 int
+		expRespBody                   string // This is now only for plain text responses.
+		expectBuildCount              int
 	}{
 		{
-			name:                 "Workflow Job Queued - Default Label",
-			payloadType:          payloadType,
-			action:               queuedAction,
-			runnerLabels:         []string{deprecatedSelfHostedRunnerLabel},
-			payloadWebhookSecret: serverGitHubWebhookSecret,
-			serverRunnerLabel:    "self-hosted",
-			contentType:          contentType,
-			createdAt:            &queuedTime,
-			startedAt:            nil,
-			completedAt:          nil,
-			runID:                &runID,
-			jobID:                &jobID,
-			jobName:              &jobName,
-			expStatusCode:        200,
+			name:                          "Workflow Job Queued - Default Label",
+			payloadType:                   payloadType,
+			action:                        queuedAction,
+			runnerExecutionTimeoutSeconds: 7200,
+			runnerLabels:                  []string{deprecatedSelfHostedRunnerLabel},
+			payloadWebhookSecret:          serverGitHubWebhookSecret,
+			serverRunnerLabel:             "self-hosted",
+			contentType:                   contentType,
+			createdAt:                     &queuedTime,
+			startedAt:                     nil,
+			completedAt:                   nil,
+			runID:                         &runID,
+			jobID:                         &jobID,
+			jobName:                       &jobName,
+			expStatusCode:                 200,
 			// This now expects a JSON response, so we clear expRespBody.
 			// The test logic will parse the JSON instead of doing a string compare.
 			expRespBody:      "",
@@ -258,6 +260,12 @@ func TestHandleWebhook(t *testing.T) {
 				testEnv = "production"
 			}
 
+			buildTimeoutForTest := tc.runnerExecutionTimeoutSeconds
+			if buildTimeoutForTest == 0 {
+				buildTimeoutForTest = 3600 // Default value
+			}
+			expectedBuildTimeout := time.Duration(buildTimeoutForTest) * time.Second
+
 			orgLogin := "google"
 			repoName := "webhook"
 			installationID := int64(123)
@@ -338,15 +346,16 @@ func TestHandleWebhook(t *testing.T) {
 			mockCloudBuildClient := &MockCloudBuildClient{}
 
 			srv := &Server{
-				webhookSecret:         []byte(tc.payloadWebhookSecret),
-				appClient:             app,
-				cbc:                   mockCloudBuildClient,
-				ghAPIBaseURL:          fakeGitHub.URL,
-				runnerImageTag:        "latest",
-				extraRunnerCount:      tc.extraSpawnNumber,
-				environment:           testEnv,
-				runnerLabel:           tc.serverRunnerLabel,
-				enableSelfHostedLabel: tc.serverEnableSelfHostedLabel,
+				webhookSecret:                 []byte(tc.payloadWebhookSecret),
+				appClient:                     app,
+				cbc:                           mockCloudBuildClient,
+				enableSelfHostedLabel:         tc.serverEnableSelfHostedLabel,
+				environment:                   testEnv,
+				extraRunnerCount:              tc.extraSpawnNumber,
+				ghAPIBaseURL:                  fakeGitHub.URL,
+				runnerExecutionTimeoutSeconds: buildTimeoutForTest,
+				runnerImageTag:                "latest",
+				runnerLabel:                   tc.serverRunnerLabel,
 			}
 			srv.handleWebhook().ServeHTTP(resp, req)
 
@@ -380,6 +389,9 @@ func TestHandleWebhook(t *testing.T) {
 				for _, buildReq := range mockCloudBuildClient.CreateBuildReqs {
 					if got, want := buildReq.GetBuild().GetSubstitutions()["_IMAGE_TAG"], "latest"; got != want {
 						t.Errorf("expected image tag %q to be %q", got, want)
+					}
+					if got, want := buildReq.GetBuild().GetTimeout().AsDuration(), expectedBuildTimeout; got != want {
+						t.Errorf("expected build timeout %v to be %v", got, want)
 					}
 				}
 			} else {

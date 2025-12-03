@@ -31,6 +31,7 @@ import (
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/google/go-github/v69/github"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	"github.com/abcxyz/pkg/logging"
 )
@@ -324,6 +325,7 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 
 	build := &cloudbuildpb.Build{
 		ServiceAccount: s.runnerServiceAccount,
+		Timeout:        durationpb.New(time.Duration(s.runnerExecutionTimeoutSeconds) * time.Second),
 		Steps: []*cloudbuildpb.BuildStep{
 			{
 				Id:   "run",
@@ -339,7 +341,7 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 		},
 		Substitutions: map[string]string{
 			"_ENCODED_JIT_CONFIG":   compressedJIT,
-			"_IDLE_TIMEOUT_SECONDS": strconv.Itoa(s.runnerTimeoutSeconds),
+			"_IDLE_TIMEOUT_SECONDS": strconv.Itoa(s.runnerIdleTimeoutSeconds),
 			"_REPOSITORY_ID":        s.runnerRepositoryID,
 			"_IMAGE_NAME":           s.runnerImageName,
 			"_IMAGE_TAG":            imageTag,

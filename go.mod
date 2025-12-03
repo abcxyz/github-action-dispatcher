@@ -14,6 +14,7 @@ require (
 	github.com/sethvargo/go-gcpkms v0.3.0
 	golang.org/x/oauth2 v0.27.0
 	google.golang.org/api v0.222.0
+	google.golang.org/protobuf v1.36.5
 )
 
 require (
@@ -58,6 +59,5 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20250219182151-9fdb1cabc7b2 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250212204824-5a70512c5d8b // indirect
 	google.golang.org/grpc v1.70.0 // indirect
-	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
