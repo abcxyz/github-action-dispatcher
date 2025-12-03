@@ -105,8 +105,82 @@ jobs:
           echo "Tagging ${SOURCE_IMAGE} as ${TARGET_IMAGE}..."
           gcloud container images add-tag "${SOURCE_IMAGE_TAG}" "${DEST_IMAGE_TAG}" --quiet
 
-  deploy:
+  # Verifies the latest image release of github-action-runner
+  verify-latest-runner-image:
     needs: ['build']
+    if: |-
+      ${{ github.event_name == 'merge_group' }}
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    env:
+      GITHUB_APP_ID: '2320897'
+      KMS_APP_PRIVATE_KEY_ID: 'projects/github-action-dispatcher-i-e3/locations/us-central1/keyRings/gad-71-key-ring/cryptoKeys/gad-71-pk/cryptoKeyVersions/1'
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.INTEGRATION_WIF_PROVIDER }}'
+          service_account: '${{ env.INTEGRATION_WIF_SERVICE_ACCOUNT }}'
+          token_format: 'access_token'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - name: 'Verify testing against the latest github-action-runner release for ubuntu-24-04-amd64'
+        run: |-
+          # Extract the suffix from the RUNNER_IMAGE_TAG (e.g. -ubuntu-24-04-amd64)
+          SUFFIX=$(echo "${{ env.RUNNER_IMAGE_TAG }}" | grep -o -E -- '-[a-z]+.*')
+          if [[ -z "$SUFFIX" ]]; then
+            echo "::error::Could not extract suffix from RUNNER_IMAGE_TAG: ${{ env.RUNNER_IMAGE_TAG }}"
+            exit 1
+          fi
+          echo "Using suffix: $SUFFIX"
+
+          # Find the latest tag with that suffix using the modern 'artifacts' command
+          LATEST_TAG_FULL_PATH=$(gcloud artifacts docker tags list \
+            "${{ env.RUNNER_DOCKER_REPO }}/${{ env.RUNNER_IMAGE_NAME }}" \
+            --format="get(tag)" | \
+            grep -- "$SUFFIX$" | \
+            sort -V | \
+            tail -n 1)
+
+          if [[ -z "$LATEST_TAG_FULL_PATH" ]]; then
+            echo "::error::Could not determine the latest tag for suffix '$SUFFIX'."
+            exit 1
+          fi
+
+          LATEST_TAG=$(echo "$LATEST_TAG_FULL_PATH" | sed -E 's#^.*/tags/##')
+          echo "Latest tag found (parsed): $LATEST_TAG"
+
+          echo "Latest tag found: $LATEST_TAG"
+
+          # Get the digest for the tag in the workflow file
+          CURRENT_DIGEST=$(gcloud artifacts docker images describe \
+            "${{ env.RUNNER_DOCKER_REPO }}/${{ env.RUNNER_IMAGE_NAME }}:${{ env.RUNNER_IMAGE_TAG }}" \
+            --format="get(image_summary.digest)")
+
+          # Get the digest for the latest discovered tag
+          LATEST_DIGEST=$(gcloud artifacts docker images describe \
+            "${{ env.RUNNER_DOCKER_REPO }}/${{ env.RUNNER_IMAGE_NAME }}:${LATEST_TAG}" \
+            --format="get(image_summary.digest)")
+
+          if [[ "$CURRENT_DIGEST" != "$LATEST_DIGEST" ]]; then
+            echo "::error::The image for RUNNER_IMAGE_TAG (${{ env.RUNNER_IMAGE_TAG }}) is outdated. The latest tag is $LATEST_TAG. Please update ci.yml."
+            exit 1
+          else
+            echo "RUNNER_IMAGE_TAG (${{ env.RUNNER_IMAGE_TAG }}) points to the latest image digest."
+          fi
+
+  deploy:
+    needs: ['build', 'verify-latest-runner-image']
     if: |-
       ${{ github.event_name == 'merge_group' }}
     runs-on: 'ubuntu-latest'
