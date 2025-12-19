@@ -25,16 +25,15 @@ func generateValidConfig() *Config {
 		Environment:                   "production",
 		ExtraRunnerCount:              "0",
 		GitHubAppID:                   "test-app-id",
+		GitHubAppInstallationID:       "123",
 		GitHubWebhookKeyMountPath:     "/tmp",
 		GitHubWebhookKeyName:          "test-key",
 		KMSAppPrivateKeyID:            "test-kms-key",
 		RunnerExecutionTimeoutSeconds: "3600",
 		RunnerIdleTimeoutSeconds:      "300",
 		RunnerLabel:                   "self-hosted",
-		RunnerLocation:                "test-location",
-		RunnerProjectID:               "test-project",
-		RunnerRepositoryID:            "test-repo",
-		RunnerServiceAccount:          "test-sa",
+		ExternalRunnerEndpoint:        "https://example.com/create",
+		IAPServiceAudience:            "audience",
 	}
 }
 
@@ -66,6 +65,11 @@ func TestConfig_Validate(t *testing.T) {
 			expErr:  "GITHUB_APP_ID is required",
 		},
 		{
+			name:    "missing_github_app_installation_id",
+			mutator: func(c *Config) { c.GitHubAppInstallationID = "" },
+			expErr:  "GITHUB_APP_INSTALLATION_ID is required",
+		},
+		{
 			name:    "missing_webhook_key_mount_path",
 			mutator: func(c *Config) { c.GitHubWebhookKeyMountPath = "" },
 			expErr:  "WEBHOOK_KEY_MOUNT_PATH is required",
@@ -81,24 +85,19 @@ func TestConfig_Validate(t *testing.T) {
 			expErr:  "KMS_APP_PRIVATE_KEY_ID is required",
 		},
 		{
-			name:    "missing_runner_location",
-			mutator: func(c *Config) { c.RunnerLocation = "" },
-			expErr:  "RUNNER_LOCATION is required",
+			name:    "missing_external_runner_endpoint",
+			mutator: func(c *Config) { c.ExternalRunnerEndpoint = "" },
+			expErr:  "EXTERNAL_RUNNER_ENDPOINT is required",
 		},
 		{
-			name:    "missing_runner_project_id",
-			mutator: func(c *Config) { c.RunnerProjectID = "" },
-			expErr:  "RUNNER_PROJECT_ID is required",
+			name:    "missing_iap_service_audience",
+			mutator: func(c *Config) { c.IAPServiceAudience = "" },
+			expErr:  "IAP_SERVICE_AUDIENCE is required",
 		},
 		{
-			name:    "missing_runner_repository_id",
-			mutator: func(c *Config) { c.RunnerRepositoryID = "" },
-			expErr:  "RUNNER_REPOSITORY_ID is required",
-		},
-		{
-			name:    "missing_runner_service_account",
-			mutator: func(c *Config) { c.RunnerServiceAccount = "" },
-			expErr:  "RUNNER_SERVICE_ACCOUNT is required",
+			name:    "invalid_external_runner_endpoint_url",
+			mutator: func(c *Config) { c.ExternalRunnerEndpoint = "invalid-url" },
+			expErr:  "EXTERNAL_RUNNER_ENDPOINT must be a valid URL",
 		},
 		{
 			name:    "invalid_extra_runner_count",

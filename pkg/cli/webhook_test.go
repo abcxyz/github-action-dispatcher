@@ -54,93 +54,81 @@ func TestWebhookServerCommand(t *testing.T) {
 			expErr: `GITHUB_APP_ID is required`,
 		},
 		{
+			name: "invalid_config_github_app_installation_id",
+			env: map[string]string{
+				"GITHUB_APP_ID": "github-app-id",
+			},
+			expErr: `GITHUB_APP_INSTALLATION_ID is required`,
+		},
+		{
 			name: "invalid_config_webhook_key_mount_path",
 			env: map[string]string{
-				"RUNNER_LOCATION": "runner-location",
-				"GITHUB_APP_ID":   "github-app-id",
+				"EXTERNAL_RUNNER_ENDPOINT": "https://example.com/create",
+				"IAP_SERVICE_AUDIENCE":     "audience",
+				"GITHUB_APP_ID":            "github-app-id",
+				"GITHUB_APP_INSTALLATION_ID": "123",
 			},
 			expErr: `WEBHOOK_KEY_MOUNT_PATH is required`,
 		},
 		{
 			name: "invalid_config_webhook_key_name",
 			env: map[string]string{
-				"RUNNER_LOCATION":        "runner-location",
-				"GITHUB_APP_ID":          "github-app-id",
-				"WEBHOOK_KEY_MOUNT_PATH": "github-webhook-key-mount-path",
+				"EXTERNAL_RUNNER_ENDPOINT": "https://example.com/create",
+				"IAP_SERVICE_AUDIENCE":     "audience",
+				"GITHUB_APP_ID":            "github-app-id",
+				"GITHUB_APP_INSTALLATION_ID": "123",
+				"WEBHOOK_KEY_MOUNT_PATH":   "github-webhook-key-mount-path",
 			},
 			expErr: `WEBHOOK_KEY_NAME is required`,
 		},
 		{
 			name: "invalid_config_kms_app_private_key_id",
 			env: map[string]string{
-				"RUNNER_LOCATION":        "runner-location",
-				"GITHUB_APP_ID":          "github-app-id",
-				"WEBHOOK_KEY_MOUNT_PATH": "github-webhook-key-mount-path",
-				"WEBHOOK_KEY_NAME":       "key-name",
+				"EXTERNAL_RUNNER_ENDPOINT": "https://example.com/create",
+				"IAP_SERVICE_AUDIENCE":     "audience",
+				"GITHUB_APP_ID":            "github-app-id",
+				"WEBHOOK_KEY_MOUNT_PATH":   "github-webhook-key-mount-path",
+				"WEBHOOK_KEY_NAME":         "key-name",
+				"GITHUB_APP_INSTALLATION_ID": "123",
 			},
 			expErr: `KMS_APP_PRIVATE_KEY_ID is required`,
 		},
 		{
-			name: "invalid_config_runner_location",
+			name: "invalid_config_external_runner_endpoint",
 			env: map[string]string{
 				"GITHUB_APP_ID":          "github-app-id",
 				"WEBHOOK_KEY_MOUNT_PATH": "github-webhook-key-mount-path",
 				"WEBHOOK_KEY_NAME":       "key-name",
 				"KMS_APP_PRIVATE_KEY_ID": "kms-app-private-key-id",
+				"GITHUB_APP_INSTALLATION_ID": "123",
 			},
-			expErr: `RUNNER_LOCATION is required`,
+			expErr: `EXTERNAL_RUNNER_ENDPOINT is required`,
 		},
 		{
-			name: "invalid_config_runner_project_id",
+			name: "invalid_config_iap_service_audience",
 			env: map[string]string{
-				"RUNNER_LOCATION":        "runner-location",
-				"GITHUB_APP_ID":          "github-app-id",
-				"WEBHOOK_KEY_MOUNT_PATH": "github-webhook-key-mount-path",
-				"WEBHOOK_KEY_NAME":       "key-name",
-				"KMS_APP_PRIVATE_KEY_ID": "kms-app-private-key-id",
+				"EXTERNAL_RUNNER_ENDPOINT": "https://example.com/create",
+				"GITHUB_APP_ID":            "github-app-id",
+				"WEBHOOK_KEY_MOUNT_PATH":   "github-webhook-key-mount-path",
+				"WEBHOOK_KEY_NAME":         "key-name",
+				"KMS_APP_PRIVATE_KEY_ID":   "kms-app-private-key-id",
+				"GITHUB_APP_INSTALLATION_ID": "123",
 			},
-			expErr: `RUNNER_PROJECT_ID is required`,
-		},
-		{
-			name: "invalid_runner_repository_id",
-			env: map[string]string{
-				"RUNNER_LOCATION":        "runner-location",
-				"GITHUB_APP_ID":          "github-app-id",
-				"WEBHOOK_KEY_MOUNT_PATH": "github-webhook-key-mount-path",
-				"WEBHOOK_KEY_NAME":       "key-name",
-				"KMS_APP_PRIVATE_KEY_ID": "kms-app-private-key-id",
-				"RUNNER_PROJECT_ID":      "project-id",
-			},
-			expErr: `RUNNER_REPOSITORY_ID is required`,
-		},
-		{
-			name: "invalid_config_runner_service_account",
-			env: map[string]string{
-				"RUNNER_LOCATION":        "runner-location",
-				"GITHUB_APP_ID":          "github-app-id",
-				"WEBHOOK_KEY_MOUNT_PATH": "github-webhook-key-mount-path",
-				"WEBHOOK_KEY_NAME":       "key-name",
-				"KMS_APP_PRIVATE_KEY_ID": "kms-app-private-key-id",
-				"RUNNER_PROJECT_ID":      "runner-project-id",
-				"RUNNER_REPOSITORY_ID":   "runner-repo-id",
-			},
-			expErr: `RUNNER_SERVICE_ACCOUNT is required`,
+			expErr: `IAP_SERVICE_AUDIENCE is required`,
 		},
 		{
 			name: "happy_path",
 			env: map[string]string{
-				"BUILD_TIMEOUT_SECONDS":            "3600",
 				"GITHUB_APP_ID":                    "github-app-id",
 				"WEBHOOK_KEY_MOUNT_PATH":           "github-webhook-key-mount-path",
 				"WEBHOOK_KEY_NAME":                 "key-name",
 				"KMS_APP_PRIVATE_KEY_ID":           "kms-app-private-key-id",
 				"RUNNER_EXECUTION_TIMEOUT_SECONDS": "3600",
 				"RUNNER_IDLE_TIMEOUT_SECONDS":      "300",
-				"RUNNER_LOCATION":                  "runner-location",
-				"RUNNER_PROJECT_ID":                "runner-project-id",
-				"RUNNER_REPOSITORY_ID":             "runner-repo-id",
-				"RUNNER_SERVICE_ACCOUNT":           "runner-service-account",
+				"EXTERNAL_RUNNER_ENDPOINT":         "https://example.com/create",
+				"IAP_SERVICE_AUDIENCE":             "audience",
 				"ENABLE_SELF_HOSTED_LABEL":         "true",
+				"GITHUB_APP_INSTALLATION_ID":       "123",
 			}, fileMock: &webhook.MockFileReader{
 				ReadFileMock: &webhook.ReadFileResErr{
 					Res: []byte("secret-value"),
@@ -167,7 +155,6 @@ func TestWebhookServerCommand(t *testing.T) {
 
 			// Provide mock implementation of dependencies
 			cmd.testOSFileReaderOverride = tc.fileMock
-			cmd.testCloudBuildClientOverride = &webhook.CloudBuild{}
 			cmd.testKMSClientOverride = &webhook.MockKMSClient{}
 
 			_, _, _ = cmd.Pipe()

@@ -40,13 +40,13 @@ type WebhookServerCommand struct {
 	testFlagSetOpts []cli.Option
 
 	// only used for testing
-	testCloudBuildClientOverride webhook.CloudBuildClient
-
-	// only used for testing
 	testKMSClientOverride webhook.KeyManagementClient
 
 	// only used for testing
 	testOSFileReaderOverride webhook.FileReader
+
+	// only used for testing
+	testHTTPClientOverride *http.Client
 }
 
 func (c *WebhookServerCommand) Desc() string {
@@ -116,13 +116,13 @@ func (c *WebhookServerCommand) RunUnstarted(ctx context.Context, args []string) 
 	}
 
 	// expect tests to pass overide
-	if c.testCloudBuildClientOverride != nil {
-		webhookClientOptions.CloudBuildClientOverride = c.testCloudBuildClientOverride
+	if c.testOSFileReaderOverride != nil {
+		webhookClientOptions.OSFileReaderOverride = c.testOSFileReaderOverride
 	}
 
 	// expect tests to pass overide
-	if c.testOSFileReaderOverride != nil {
-		webhookClientOptions.OSFileReaderOverride = c.testOSFileReaderOverride
+	if c.testHTTPClientOverride != nil {
+		webhookClientOptions.HTTPClientOverride = c.testHTTPClientOverride
 	}
 
 	webhookServer, err := webhook.NewServer(ctx, h, c.cfg, webhookClientOptions)

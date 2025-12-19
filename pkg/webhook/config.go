@@ -17,6 +17,7 @@ package webhook
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -40,20 +41,17 @@ type Config struct {
 	Environment                   string `env:"ENVIRONMENT,default=production"`
 	GitHubAPIBaseURL              string `env:"GITHUB_API_BASE_URL,default=https://api.github.com"`
 	GitHubAppID                   string `env:"GITHUB_APP_ID,required"`
+	GitHubAppInstallationID       string `env:"GITHUB_APP_INSTALLATION_ID,required"`
 	GitHubWebhookKeyMountPath     string `env:"WEBHOOK_KEY_MOUNT_PATH,required"`
 	GitHubWebhookKeyName          string `env:"WEBHOOK_KEY_NAME,required"`
 	KMSAppPrivateKeyID            string `env:"KMS_APP_PRIVATE_KEY_ID,required"`
 	Port                          string `env:"PORT,default=8080"`
 	RunnerExecutionTimeoutSeconds string `env:"RUNNER_EXECUTION_TIMEOUT_SECONDS,default=3600"`
 	RunnerIdleTimeoutSeconds      string `env:"RUNNER_IDLE_TIMEOUT_SECONDS,default=300"`
-	RunnerImageName               string `env:"RUNNER_IMAGE_NAME,default=default-runner"`
-	RunnerImageTag                string `env:"RUNNER_IMAGE_TAG,default=latest"`
-	RunnerLocation                string `env:"RUNNER_LOCATION,required"`
-	RunnerProjectID               string `env:"RUNNER_PROJECT_ID,required"`
-	RunnerRepositoryID            string `env:"RUNNER_REPOSITORY_ID,required"`
-	RunnerServiceAccount          string `env:"RUNNER_SERVICE_ACCOUNT,required"`
+	ExternalRunnerEndpoint        string `env:"EXTERNAL_RUNNER_ENDPOINT,required"`
+	IAPServiceAudience            string `env:"IAP_SERVICE_AUDIENCE,required"`
+	JITConfigAllowlist            string `env:"JIT_CONFIG_ALLOWLIST"` // JSON string
 	ExtraRunnerCount              string `env:"EXTRA_RUNNER_COUNT,default=0"`
-	RunnerWorkerPoolID            string `env:"RUNNER_WORKER_POOL_ID"`
 	E2ETestRunID                  string `env:"E2ETestRunID"`
 	RunnerLabel                   string `env:"RUNNER_LABEL,default=self-hosted"`
 	EnableSelfHostedLabel         bool   `env:"ENABLE_SELF_HOSTED_LABEL,default=false"`
@@ -69,6 +67,10 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("GITHUB_APP_ID is required")
 	}
 
+	if cfg.GitHubAppInstallationID == "" {
+		return fmt.Errorf("GITHUB_APP_INSTALLATION_ID is required")
+	}
+
 	if cfg.GitHubWebhookKeyMountPath == "" {
 		return fmt.Errorf("WEBHOOK_KEY_MOUNT_PATH is required")
 	}
@@ -81,20 +83,15 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("KMS_APP_PRIVATE_KEY_ID is required")
 	}
 
-	if cfg.RunnerLocation == "" {
-		return fmt.Errorf("RUNNER_LOCATION is required")
+	if cfg.ExternalRunnerEndpoint == "" {
+		return fmt.Errorf("EXTERNAL_RUNNER_ENDPOINT is required")
+	}
+	if _, err := url.ParseRequestURI(cfg.ExternalRunnerEndpoint); err != nil {
+		return fmt.Errorf("EXTERNAL_RUNNER_ENDPOINT must be a valid URL: %w", err)
 	}
 
-	if cfg.RunnerProjectID == "" {
-		return fmt.Errorf("RUNNER_PROJECT_ID is required")
-	}
-
-	if cfg.RunnerRepositoryID == "" {
-		return fmt.Errorf("RUNNER_REPOSITORY_ID is required")
-	}
-
-	if cfg.RunnerServiceAccount == "" {
-		return fmt.Errorf("RUNNER_SERVICE_ACCOUNT is required")
+	if cfg.IAPServiceAudience == "" {
+		return fmt.Errorf("IAP_SERVICE_AUDIENCE is required")
 	}
 
 	if _, err := validateRunnerIdleTimeout(cfg.RunnerIdleTimeoutSeconds); err != nil {
@@ -193,10 +190,24 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 	})
 
 	f.StringVar(&cli.StringVar{
-		Name:   "runner-location",
-		Target: &cfg.RunnerLocation,
-		EnvVar: "RUNNER_LOCATION",
-		Usage:  `The location used for the Cloud Build build.`,
+		Name:   "external-runner-endpoint",
+		Target: &cfg.ExternalRunnerEndpoint,
+		EnvVar: "EXTERNAL_RUNNER_ENDPOINT",
+		Usage:  `The HTTP endpoint to send runner creation requests to.`,
+	})
+
+	f.StringVar(&cli.StringVar{
+		Name:   "iap-service-audience",
+		Target: &cfg.IAPServiceAudience,
+		EnvVar: "IAP_SERVICE_AUDIENCE",
+		Usage:  `The expected audience for IAP JWT validation.`,
+	})
+
+	f.StringVar(&cli.StringVar{
+		Name:   "jit-config-allowlist",
+		Target: &cfg.JITConfigAllowlist,
+		EnvVar: "JIT_CONFIG_ALLOWLIST",
+		Usage:  `JSON string defining allowed owner/repo/labels for JIT config.`,
 	})
 
 	f.StringVar(&cli.StringVar{
@@ -215,17 +226,17 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 	})
 
 	f.StringVar(&cli.StringVar{
+		Name:   "github-app-installation-id",
+		Target: &cfg.GitHubAppInstallationID,
+		EnvVar: "GITHUB_APP_INSTALLATION_ID",
+		Usage:  `The installation ID of the GitHub App.`,
+	})
+
+	f.StringVar(&cli.StringVar{
 		Name:   "kms-app-private-key-id",
 		Target: &cfg.KMSAppPrivateKeyID,
 		EnvVar: "KMS_APP_PRIVATE_KEY_ID",
 		Usage:  `The KMS private key path in the form "projects/<project_id>/locations/<location>/keyRings/<key_ring_name>/cryptoKeys/<key_name>/cryptoKeyVersions/<version>".`,
-	})
-
-	f.StringVar(&cli.StringVar{
-		Name:   "runner-project-id",
-		Target: &cfg.RunnerProjectID,
-		EnvVar: "RUNNER_PROJECT_ID",
-		Usage:  `Google Cloud project ID where the runner will execute.`,
 	})
 
 	f.StringVar(&cli.StringVar{
@@ -248,42 +259,6 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Target: &cfg.GitHubWebhookKeyName,
 		EnvVar: "WEBHOOK_KEY_NAME",
 		Usage:  `GitHub webhook key name.`,
-	})
-
-	f.StringVar(&cli.StringVar{
-		Name:    "runner-image-name",
-		Target:  &cfg.RunnerImageName,
-		EnvVar:  "RUNNER_IMAGE_NAME",
-		Default: "default-runner",
-		Usage:   `The runner image name.`,
-	})
-
-	f.StringVar(&cli.StringVar{
-		Name:   "runner-image-tag",
-		Target: &cfg.RunnerImageTag,
-		EnvVar: "RUNNER_IMAGE_TAG",
-		Usage:  `The runner image tag to pull`,
-	})
-
-	f.StringVar(&cli.StringVar{
-		Name:   "runner-repository-id",
-		Target: &cfg.RunnerRepositoryID,
-		EnvVar: "RUNNER_REPOSITORY_ID",
-		Usage:  `The GAR repository that holds the runner image`,
-	})
-
-	f.StringVar(&cli.StringVar{
-		Name:   "runner-service-account",
-		Target: &cfg.RunnerServiceAccount,
-		EnvVar: "RUNNER_SERVICE_ACCOUNT",
-		Usage:  `The service account the runner should execute as`,
-	})
-
-	f.StringVar(&cli.StringVar{
-		Name:   "runner-worker-pool-id",
-		Target: &cfg.RunnerWorkerPoolID,
-		EnvVar: "RUNNER_WORKER_POOL_ID",
-		Usage:  `The private runner worker pool ID`,
 	})
 
 	f.StringVar(&cli.StringVar{

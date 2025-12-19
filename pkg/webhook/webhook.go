@@ -16,22 +16,19 @@ package webhook
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
-	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/google/go-github/v69/github"
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/api/idtoken"
 
 	"github.com/abcxyz/pkg/logging"
 )
@@ -57,6 +54,20 @@ type runnersResponse struct {
 	RunnerNames []string `json:"runnerNames"`
 }
 
+type runnerRequest struct {
+	JITConfig string `json:"jitConfig"`
+	Label     string `json:"label"`
+	RunnerID  string `json:"runnerId"`
+	Owner     string `json:"owner"`
+	Repo      string `json:"repo"`
+}
+
+type jitConfigPayload struct {
+	Owner  string   `json:"owner"`
+	Repo   string   `json:"repo"`
+	Labels []string `json:"labels"`
+}
+
 func (s *Server) handleWebhook() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -79,6 +90,128 @@ func (s *Server) handleWebhook() http.Handler {
 
 		fmt.Fprint(w, resp.Message)
 	})
+}
+
+func (s *Server) handleJITConfig() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		logger := logging.FromContext(ctx)
+
+		resp := s.processJITConfigRequest(r)
+		if resp.Error != nil {
+			logger.ErrorContext(ctx, "error processing jit config request",
+				"error", resp.Error,
+				"code", resp.Code,
+				"body", resp.Message)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		w.WriteHeader(resp.Code)
+
+		fmt.Fprint(w, resp.Message)
+	})
+}
+
+var validateIAPToken = func(ctx context.Context, token, audience string) error {
+	if token == "" {
+		return fmt.Errorf("missing IAP token")
+	}
+	payload, err := idtoken.Validate(ctx, token, audience)
+	if err != nil {
+		return fmt.Errorf("failed to validate IAP token: %w", err)
+	}
+	if payload.Audience != audience {
+		return fmt.Errorf("audit mismatch: got %q, want %q", payload.Audience, audience)
+	}
+	return nil
+}
+
+func (s *Server) processJITConfigRequest(r *http.Request) *apiResponse {
+	ctx := r.Context()
+	logger := logging.FromContext(ctx)
+
+	iapToken := r.Header.Get("x-goog-iap-jwt-assertion")
+	if err := validateIAPToken(ctx, iapToken, s.iapServiceAudience); err != nil {
+		return &apiResponse{http.StatusForbidden, "invalid IAP token", err}
+	}
+
+	var payload jitConfigPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		return &apiResponse{http.StatusBadRequest, "invalid request body", err}
+	}
+
+	if payload.Owner == "" || payload.Repo == "" || len(payload.Labels) == 0 {
+		return &apiResponse{http.StatusBadRequest, "owner, repo, and labels are required", fmt.Errorf("missing required fields")}
+	}
+
+	if !s.isAllowed(payload.Owner, payload.Repo, payload.Labels) {
+		logger.WarnContext(ctx, "jit config request denied by allowlist",
+			"owner", payload.Owner,
+			"repo", payload.Repo,
+			"labels", payload.Labels,
+		)
+		return &apiResponse{http.StatusForbidden, "request denied by allowlist", fmt.Errorf("denied by allowlist")}
+	}
+
+	// 4. Generate JIT Config
+	installationID := s.installationID
+
+	runnerName := uuid.New().String()
+	jitConfig, err := s.GenerateRepoJITConfig(ctx, installationID, payload.Owner, payload.Repo, runnerName, payload.Labels)
+	if err != nil {
+		return &apiResponse{http.StatusInternalServerError, "failed to generate JIT config", err}
+	}
+
+	responseBytes, err := json.Marshal(jitConfig)
+	if err != nil {
+		return &apiResponse{http.StatusInternalServerError, "failed to marshal response", err}
+	}
+
+	return &apiResponse{http.StatusOK, string(responseBytes), nil}
+}
+
+func (s *Server) isAllowed(owner, repo string, labels []string) bool {
+	// If allowlist is empty/nil, DENY ALL (default secure).
+	if len(s.jitConfigAllowlist) == 0 {
+		return false
+	}
+
+	// Check Owner
+	repoMap, ok := s.jitConfigAllowlist[owner]
+	if !ok {
+		// Check for wildcard owner "*"
+		repoMap, ok = s.jitConfigAllowlist["*"]
+		if !ok {
+			return false
+		}
+	}
+
+	// Check Repo
+	allowedLabels, ok := repoMap[repo]
+	if !ok {
+		// Check for wildcard repo "*"
+		allowedLabels, ok = repoMap["*"]
+		if !ok {
+			return false
+		}
+	}
+
+	// Check Labels
+	for _, reqLabel := range labels {
+		allowed := false
+		for _, allowLabel := range allowedLabels {
+			if allowLabel == "*" || allowLabel == reqLabel {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (s *Server) processRequest(r *http.Request) *apiResponse {
@@ -171,7 +304,7 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 
 		runnerCtx := logging.WithLogger(ctx, runnerLogger)
 
-		responseText, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, s.runnerImageTag, label)
+		responseText, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, label)
 		if err != nil {
 			// If one fails, return the error and the list of any that succeeded before it.
 			return startedRunnerNames, fmt.Errorf("failed on runner %s: %w. response: %s", runnerID, err, responseText)
@@ -289,25 +422,8 @@ func extractCompletedLogAttributes(event *github.WorkflowJobEvent) []any {
 	return completedAttributes
 }
 
-func compressAndBase64EncodeString(input string) (string, error) {
-	var compressedJIT bytes.Buffer
-	gzipWriter, err := gzip.NewWriterLevel(&compressedJIT, gzip.BestCompression)
-	if err != nil {
-		return "", fmt.Errorf("failed to create gzip writer: %w", err)
-	}
-	_, err = gzipWriter.Write([]byte(input))
-	if err != nil {
-		return "", fmt.Errorf("failed to write to gzip writer: %w", err)
-	}
-	err = gzipWriter.Close()
-	if err != nil {
-		return "", fmt.Errorf("failed to close gzip writer: %w", err)
-	}
-	return base64.StdEncoding.EncodeToString(compressedJIT.Bytes()), nil
-}
-
-func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageTag, runnerLabel string) (string, error) {
-	jitConfig, err := s.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID, runnerLabel)
+func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, runnerLabel string) (string, error) {
+	jitConfig, err := s.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID, []string{runnerLabel})
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to generate JIT config",
 			"error", err.Error(),
@@ -315,62 +431,42 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 		return "error generating jitconfig", err
 	}
 
-	// Sometimes JITConfig has exceeded the 4,000-character limit for
-	// substitutions. It has nested base64 encoded data, so it is very
-	// compressible.
-	compressedJIT, err := compressAndBase64EncodeString(*jitConfig.EncodedJITConfig)
+	jitEncoded := *jitConfig.EncodedJITConfig
+
+	reqBody := &runnerRequest{
+		JITConfig: jitEncoded,
+		Label:     runnerLabel,
+		RunnerID:  runnerID,
+		Owner:     *event.Org.Login,
+		Repo:      *event.Repo.Name,
+	}
+	reqBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		return "failed to compress JIT config", err
+		return "", fmt.Errorf("failed to marshal runner request: %w", err)
 	}
 
-	build := &cloudbuildpb.Build{
-		ServiceAccount: s.runnerServiceAccount,
-		Timeout:        durationpb.New(time.Duration(s.runnerExecutionTimeoutSeconds) * time.Second),
-		Steps: []*cloudbuildpb.BuildStep{
-			{
-				Id:   "run",
-				Name: "$_REPOSITORY_ID/$_IMAGE_NAME:$_IMAGE_TAG",
-				Env: []string{
-					"ENCODED_JIT_CONFIG=${_ENCODED_JIT_CONFIG}",
-					"IDLE_TIMEOUT_SECONDS=${_IDLE_TIMEOUT_SECONDS}",
-				},
-			},
-		},
-		Options: &cloudbuildpb.BuildOptions{
-			Logging: cloudbuildpb.BuildOptions_CLOUD_LOGGING_ONLY,
-		},
-		Substitutions: map[string]string{
-			"_ENCODED_JIT_CONFIG":   compressedJIT,
-			"_IDLE_TIMEOUT_SECONDS": strconv.Itoa(s.runnerIdleTimeoutSeconds),
-			"_REPOSITORY_ID":        s.runnerRepositoryID,
-			"_IMAGE_NAME":           s.runnerImageName,
-			"_IMAGE_TAG":            imageTag,
-		},
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.externalRunnerEndpoint, bytes.NewReader(reqBytes))
+	if err != nil {
+		return "", fmt.Errorf("failed to create http request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// We might need auth for the external endpoint, but not specified in requirements yet.
+	// Assuming it's an internal or protected endpoint, or we should add auth?
+	// User only mentioned payload. I'll stick to basic post for now.
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send runner creation request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("external endpoint returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Check if this is an E2E test run and add appropriate tags.
-	if s.e2eTestRunID != "" {
-		build.Tags = []string{"e2e-test", fmt.Sprintf("e2e-run-id-%s", s.e2eTestRunID)}
-	}
-
-	if s.runnerWorkerPoolID != "" {
-		build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{
-			Name: s.runnerWorkerPoolID,
-		}
-	}
-
-	buildReq := &cloudbuildpb.CreateBuildRequest{
-		Parent:    fmt.Sprintf("projects/%s/locations/%s", s.runnerProjectID, s.runnerLocation),
-		ProjectId: s.runnerProjectID,
-		Build:     build,
-	}
-
-	if err := s.cbc.CreateBuild(ctx, buildReq); err != nil {
-		err = fmt.Errorf("failed to create cloud run build: %w", err)
-		logger.ErrorContext(ctx, "cloud run build failed", "error", err)
-		return "failed to create build", err
-	}
-	return "", nil
+	return "success", nil
 }
 
 // getTimeString is a helper function to format a *github.Timestamp pointer into an ISO 8601 string.

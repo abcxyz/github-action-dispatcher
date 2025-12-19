@@ -17,44 +17,40 @@ package webhook
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
-
-	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
-	"github.com/googleapis/gax-go/v2"
-	"github.com/sethvargo/go-gcpkms/pkg/gcpkms"
-	"google.golang.org/api/option"
+	"time"
 
 	"github.com/abcxyz/github-action-dispatcher/pkg/version"
 	"github.com/abcxyz/pkg/githubauth"
 	"github.com/abcxyz/pkg/healthcheck"
 	"github.com/abcxyz/pkg/logging"
 	"github.com/abcxyz/pkg/renderer"
+	"github.com/sethvargo/go-gcpkms/pkg/gcpkms"
+	"google.golang.org/api/option"
 )
 
 // Server provides the server implementation.
 type Server struct {
 	appClient                     *githubauth.App
-	cbc                           CloudBuildClient
 	environment                   string
 	ghAPIBaseURL                  string
 	h                             *renderer.Renderer
 	kmc                           KeyManagementClient
 	runnerExecutionTimeoutSeconds int
 	runnerIdleTimeoutSeconds      int
-	runnerLocation                string
-	runnerProjectID               string
-	runnerImageName               string
-	runnerImageTag                string
-	runnerRepositoryID            string
-	runnerServiceAccount          string
+	externalRunnerEndpoint        string
+	iapServiceAudience            string
+	installationID                int64
+	jitConfigAllowlist            map[string]map[string][]string // owner -> repo -> labels
 	extraRunnerCount              int
-	runnerWorkerPoolID            string
 	webhookSecret                 []byte
 	e2eTestRunID                  string
 	runnerLabel                   string
 	enableSelfHostedLabel         bool
+	httpClient                    *http.Client
 }
 
 // FileReader can read a file and return the content.
@@ -68,20 +64,13 @@ type KeyManagementClient interface {
 	CreateSigner(ctx context.Context, kmsAppPrivateKeyID string) (*gcpkms.Signer, error)
 }
 
-// CloudBuildClient adheres to the interaction the webhook service has with a subset of Cloud Build APIs.
-type CloudBuildClient interface {
-	Close() error
-	CreateBuild(ctx context.Context, req *cloudbuildpb.CreateBuildRequest, opts ...gax.CallOption) error
-}
-
 // WebhookClientOptions encapsulate client config options as well as dependency implementation overrides.
 type WebhookClientOptions struct {
-	CloudBuildClientOpts    []option.ClientOption
 	KeyManagementClientOpts []option.ClientOption
 
 	OSFileReaderOverride        FileReader
-	CloudBuildClientOverride    CloudBuildClient
 	KeyManagementClientOverride KeyManagementClient
+	HTTPClientOverride          *http.Client
 }
 
 // NewServer creates a new HTTP server implementation that will handle
@@ -120,24 +109,33 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 		return nil, fmt.Errorf("failed to setup app client: %w", err)
 	}
 
-	cbc := wco.CloudBuildClientOverride
-	if cbc == nil {
-		cb, err := NewCloudBuild(ctx, wco.CloudBuildClientOpts...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create cloudbuild client: %w", err)
-		}
-		cbc = cb
-	}
-
 	// cfg.Validate() is called before NewServer, safe to convert
 	extraRunnerCount, _ := strconv.Atoi(cfg.ExtraRunnerCount)
 	runnerIdleTimeoutSeconds, _ := strconv.Atoi(cfg.RunnerIdleTimeoutSeconds)
 	runnerExecutionTimeoutSeconds, _ := strconv.Atoi(cfg.RunnerExecutionTimeoutSeconds)
 
+	httpClient := wco.HTTPClientOverride
+	if httpClient == nil {
+		httpClient = &http.Client{
+			Timeout: 30 * time.Second,
+		}
+	}
+
+	jitConfigAllowlist := make(map[string]map[string][]string)
+	if cfg.JITConfigAllowlist != "" {
+		if err := json.Unmarshal([]byte(cfg.JITConfigAllowlist), &jitConfigAllowlist); err != nil {
+			return nil, fmt.Errorf("failed to parse JIT_CONFIG_ALLOWLIST: %w", err)
+		}
+	}
+
+	installationID, err := strconv.ParseInt(cfg.GitHubAppInstallationID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse GITHUB_APP_INSTALLATION_ID: %w", err)
+	}
+
 	return &Server{
 		appClient:                     appClient,
 		extraRunnerCount:              extraRunnerCount,
-		cbc:                           cbc,
 		environment:                   cfg.Environment,
 		ghAPIBaseURL:                  cfg.GitHubAPIBaseURL,
 		h:                             h,
@@ -145,16 +143,14 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 		runnerExecutionTimeoutSeconds: runnerExecutionTimeoutSeconds,
 		runnerIdleTimeoutSeconds:      runnerIdleTimeoutSeconds,
 		runnerLabel:                   cfg.RunnerLabel,
-		runnerLocation:                cfg.RunnerLocation,
-		runnerImageName:               cfg.RunnerImageName,
-		runnerImageTag:                cfg.RunnerImageTag,
-		runnerProjectID:               cfg.RunnerProjectID,
-		runnerRepositoryID:            cfg.RunnerRepositoryID,
-		runnerServiceAccount:          cfg.RunnerServiceAccount,
-		runnerWorkerPoolID:            cfg.RunnerWorkerPoolID,
+		externalRunnerEndpoint:        cfg.ExternalRunnerEndpoint,
+		iapServiceAudience:            cfg.IAPServiceAudience,
+		installationID:                installationID,
+		jitConfigAllowlist:            jitConfigAllowlist,
 		webhookSecret:                 webhookSecret,
 		e2eTestRunID:                  cfg.E2ETestRunID,
 		enableSelfHostedLabel:         cfg.EnableSelfHostedLabel,
+		httpClient:                    httpClient,
 	}, nil
 }
 
@@ -163,12 +159,13 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 func (s *Server) Routes(ctx context.Context) http.Handler {
 	logger := logging.FromContext(ctx)
 	mux := http.NewServeMux()
-	mux.Handle("/healthz", healthcheck.HandleHTTPHealthCheck())
-	mux.Handle("/webhook", s.handleWebhook())
-	mux.Handle("/version", s.handleVersion())
+	mux.Handle("GET /healthz", healthcheck.HandleHTTPHealthCheck())
+	mux.Handle("POST /webhook", s.handleWebhook())
+	mux.Handle("POST /jit-config", s.handleJITConfig())
+	mux.Handle("GET /version", s.handleVersion())
 
 	// Middleware
-	root := logging.HTTPInterceptor(logger, s.runnerProjectID)(mux)
+	root := logging.HTTPInterceptor(logger, "")(mux)
 
 	return root
 }
@@ -194,8 +191,5 @@ func (s *Server) Close() error {
 		return fmt.Errorf("failed to shutdown kms client connection: %w", err)
 	}
 
-	if err := s.cbc.Close(); err != nil {
-		return fmt.Errorf("failed to shutdown cloud build client connection: %w", err)
-	}
 	return nil
 }

@@ -24,15 +24,15 @@ import (
 	"golang.org/x/oauth2"
 )
 
-func (s *Server) GenerateRepoJITConfig(ctx context.Context, installationID int64, org, repo, runnerName, runnerLabel string) (*github.JITRunnerConfig, error) {
-	return s.generateJITConfig(ctx, installationID, org, &repo, runnerName, runnerLabel)
+func (s *Server) GenerateRepoJITConfig(ctx context.Context, installationID int64, org, repo, runnerName string, runnerLabels []string) (*github.JITRunnerConfig, error) {
+	return s.generateJITConfig(ctx, installationID, org, &repo, runnerName, runnerLabels)
 }
 
-func (s *Server) GenerateOrgJITConfig(ctx context.Context, installationID int64, org, runnerName, runnerLabel string) (*github.JITRunnerConfig, error) {
-	return s.generateJITConfig(ctx, installationID, org, nil, runnerName, runnerLabel)
+func (s *Server) GenerateOrgJITConfig(ctx context.Context, installationID int64, org, runnerName string, runnerLabels []string) (*github.JITRunnerConfig, error) {
+	return s.generateJITConfig(ctx, installationID, org, nil, runnerName, runnerLabels)
 }
 
-func (s *Server) generateJITConfig(ctx context.Context, installationID int64, org string, repo *string, runnerName, runnerLabel string) (*github.JITRunnerConfig, error) {
+func (s *Server) generateJITConfig(ctx context.Context, installationID int64, org string, repo *string, runnerName string, runnerLabels []string) (*github.JITRunnerConfig, error) {
 	installation, err := s.appClient.InstallationForID(ctx, strconv.FormatInt(installationID, 10))
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup installation client: %w", err)
@@ -57,7 +57,7 @@ func (s *Server) generateJITConfig(ctx context.Context, installationID int64, or
 	jitRequest := &github.GenerateJITConfigRequest{
 		Name:          runnerName,
 		RunnerGroupID: 1,
-		Labels:        []string{runnerLabel},
+		Labels:        runnerLabels,
 	}
 
 	var jitConfig *github.JITRunnerConfig

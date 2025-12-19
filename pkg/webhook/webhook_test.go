@@ -16,6 +16,7 @@ package webhook
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
@@ -23,6 +24,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -66,7 +68,7 @@ func TestHandleWebhook(t *testing.T) {
 		runnerLabels                  []string
 		payloadWebhookSecret          string
 		serverRunnerLabel             string
-		serverEnableSelfHostedLabel   bool
+		ServerEnableSelfHostedLabel   bool
 		extraSpawnNumber              int
 		contentType                   string
 		createdAt                     *github.Timestamp
@@ -95,10 +97,8 @@ func TestHandleWebhook(t *testing.T) {
 			jobID:                         &jobID,
 			jobName:                       &jobName,
 			expStatusCode:                 200,
-			// This now expects a JSON response, so we clear expRespBody.
-			// The test logic will parse the JSON instead of doing a string compare.
-			expRespBody:      "",
-			expectBuildCount: 1,
+			expRespBody:                   "",
+			expectBuildCount:              1,
 		},
 		{
 			name:                 "Workflow Job Queued - Custom Label",
@@ -115,7 +115,7 @@ func TestHandleWebhook(t *testing.T) {
 			jobID:                &jobID,
 			jobName:              &jobName,
 			expStatusCode:        200,
-			expRespBody:          "", // Expects JSON
+			expRespBody:          "",
 			expectBuildCount:     1,
 		},
 		{
@@ -125,7 +125,7 @@ func TestHandleWebhook(t *testing.T) {
 			runnerLabels:                []string{"self-hosted"},
 			payloadWebhookSecret:        serverGitHubWebhookSecret,
 			serverRunnerLabel:           "custom-label",
-			serverEnableSelfHostedLabel: true,
+			ServerEnableSelfHostedLabel: true,
 			contentType:                 contentType,
 			createdAt:                   &queuedTime,
 			startedAt:                   nil,
@@ -134,7 +134,7 @@ func TestHandleWebhook(t *testing.T) {
 			jobID:                       &jobID,
 			jobName:                     &jobName,
 			expStatusCode:               200,
-			expRespBody:                 "", // Expects JSON
+			expRespBody:                 "",
 			expectBuildCount:            1,
 		},
 		{
@@ -153,7 +153,7 @@ func TestHandleWebhook(t *testing.T) {
 			jobID:                &jobID,
 			jobName:              &jobName,
 			expStatusCode:        200,
-			expRespBody:          "", // Expects JSON
+			expRespBody:          "",
 			expectBuildCount:     3,
 		},
 		{
@@ -163,7 +163,7 @@ func TestHandleWebhook(t *testing.T) {
 			runnerLabels:                []string{"self-hosted", "custom-label"},
 			payloadWebhookSecret:        serverGitHubWebhookSecret,
 			serverRunnerLabel:           "custom-label",
-			serverEnableSelfHostedLabel: true,
+			ServerEnableSelfHostedLabel: true,
 			contentType:                 contentType,
 			createdAt:                   &queuedTime,
 			startedAt:                   nil,
@@ -228,43 +228,29 @@ func TestHandleWebhook(t *testing.T) {
 			expRespBody:          "workflow job completed event logged",
 			expectBuildCount:     0,
 		},
-		{
-			name:                 "Workflow Job Queued - Self Hosted Ubuntu Latest",
-			payloadType:          payloadType,
-			action:               queuedAction,
-			runnerLabels:         []string{selfHostedUbuntuLatestRunnerLabel},
-			payloadWebhookSecret: serverGitHubWebhookSecret,
-			serverRunnerLabel:    "sh-ubuntu-latest",
-			contentType:          contentType,
-			createdAt:            &queuedTime,
-			startedAt:            nil,
-			completedAt:          nil,
-			runID:                &runID,
-			jobID:                &jobID,
-			jobName:              &jobName,
-			expStatusCode:        200,
-			expRespBody:          "",
-			expectBuildCount:     1,
-		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Determine environment for the test case
-			var testEnv string
-			if strings.Contains(tc.name, "Autopush") {
-				testEnv = "autopush"
-			} else {
-				testEnv = "production"
-			}
-
-			buildTimeoutForTest := tc.runnerExecutionTimeoutSeconds
-			if buildTimeoutForTest == 0 {
-				buildTimeoutForTest = 3600 // Default value
-			}
-			expectedBuildTimeout := time.Duration(buildTimeoutForTest) * time.Second
+			// Mock External Runner Endpoint
+			var runnerRequests []*runnerRequest
+			externalEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost {
+					w.WriteHeader(http.StatusMethodNotAllowed)
+					return
+				}
+				var req runnerRequest
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				runnerRequests = append(runnerRequests, &req)
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, "OK")
+			}))
+			defer externalEndpoint.Close()
 
 			orgLogin := "google"
 			repoName := "webhook"
@@ -343,19 +329,18 @@ func TestHandleWebhook(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			mockCloudBuildClient := &MockCloudBuildClient{}
-
 			srv := &Server{
 				webhookSecret:                 []byte(tc.payloadWebhookSecret),
 				appClient:                     app,
-				cbc:                           mockCloudBuildClient,
-				enableSelfHostedLabel:         tc.serverEnableSelfHostedLabel,
-				environment:                   testEnv,
+				enableSelfHostedLabel:         tc.ServerEnableSelfHostedLabel,
+				environment:                   "test",
 				extraRunnerCount:              tc.extraSpawnNumber,
 				ghAPIBaseURL:                  fakeGitHub.URL,
-				runnerExecutionTimeoutSeconds: buildTimeoutForTest,
-				runnerImageTag:                "latest",
+				runnerExecutionTimeoutSeconds: tc.runnerExecutionTimeoutSeconds,
 				runnerLabel:                   tc.serverRunnerLabel,
+				externalRunnerEndpoint:        externalEndpoint.URL,
+				httpClient:                    http.DefaultClient,
+				installationID:                123,
 			}
 			srv.handleWebhook().ServeHTTP(resp, req)
 
@@ -378,34 +363,165 @@ func TestHandleWebhook(t *testing.T) {
 					t.Errorf("expected %d runner names in response, but got %d", want, got)
 				}
 			} else {
-				// For all other cases (e.g., "in_progress", "completed", or errors),
-				// we still expect a plain text response.
 				if got, want := strings.TrimSpace(resp.Body.String()), tc.expRespBody; got != want {
 					t.Errorf("expected %q to be %q", got, want)
 				}
 			}
 
-			if tc.expectBuildCount == len(mockCloudBuildClient.CreateBuildReqs) {
-				for _, buildReq := range mockCloudBuildClient.CreateBuildReqs {
-					if got, want := buildReq.GetBuild().GetSubstitutions()["_IMAGE_TAG"], "latest"; got != want {
-						t.Errorf("expected image tag %q to be %q", got, want)
-					}
-					if got, want := buildReq.GetBuild().GetTimeout().AsDuration(), expectedBuildTimeout; got != want {
-						t.Errorf("expected build timeout %v to be %v", got, want)
-					}
+			if got, want := len(runnerRequests), tc.expectBuildCount; got != want {
+				t.Errorf("expected %d runner request(s) to be sent, but got %d", want, got)
+			}
+			// check labels of requests
+			for _, r := range runnerRequests {
+				if r.Label == "" {
+					t.Error("expected runner request to have a label")
 				}
-			} else {
-				t.Errorf("expected %d build(s) to be created, but %d build(s) were created with requests: %v",
-					tc.expectBuildCount,
-					len(mockCloudBuildClient.CreateBuildReqs),
-					mockCloudBuildClient.CreateBuildReqs,
-				)
 			}
 		})
 	}
 }
 
-// createSignature creates a HMAC 256 signature for the test request payload.
+func TestHandleJITConfig(t *testing.T) {
+	// Not safe to run parallel because we modify global validateIAPToken
+	// t.Parallel()
+
+	// Backup and Restore validateIAPToken
+	originalValidator := validateIAPToken
+	t.Cleanup(func() {
+		validateIAPToken = originalValidator
+	})
+
+	validToken := "valid-token"
+	validAudience := "valid-audience"
+
+	validateIAPToken = func(ctx context.Context, token, audience string) error {
+		if token == "" {
+			return fmt.Errorf("missing IAP token")
+		}
+		if token == validToken && audience == validAudience {
+			return nil
+		}
+		return fmt.Errorf("invalid token")
+	}
+
+	cases := []struct {
+		name          string
+		token         string
+		audience      string
+		allowlist     map[string]map[string][]string
+		payload       jitConfigPayload
+		mockGitHubJIT bool // Should we mock GitHub JIT config generation?
+		expStatusCode int
+		expRespBody   string
+	}{
+		{
+			name:          "Missing IAP Token",
+			token:         "",
+			audience:      validAudience,
+			allowlist:     map[string]map[string][]string{"owner": {"repo": {"label"}}},
+			payload:       jitConfigPayload{Owner: "owner", Repo: "repo", Labels: []string{"label"}},
+			expStatusCode: http.StatusForbidden,
+			expRespBody:   "invalid IAP token",
+		},
+		{
+			name:          "Invalid IAP Token",
+			token:         "invalid",
+			audience:      validAudience,
+			allowlist:     map[string]map[string][]string{"owner": {"repo": {"label"}}},
+			payload:       jitConfigPayload{Owner: "owner", Repo: "repo", Labels: []string{"label"}},
+			expStatusCode: http.StatusForbidden,
+			expRespBody:   "invalid IAP token",
+		},
+		{
+			name:          "Denied by Allowlist",
+			token:         validToken,
+			audience:      validAudience,
+			allowlist:     map[string]map[string][]string{"owner": {"repo": {"other-label"}}},
+			payload:       jitConfigPayload{Owner: "owner", Repo: "repo", Labels: []string{"label"}},
+			expStatusCode: http.StatusForbidden,
+			expRespBody:   "request denied by allowlist",
+		},
+		{
+			name:          "Success",
+			token:         validToken,
+			audience:      validAudience,
+			allowlist:     map[string]map[string][]string{"owner": {"repo": {"label"}}},
+			payload:       jitConfigPayload{Owner: "owner", Repo: "repo", Labels: []string{"label"}},
+			mockGitHubJIT: true,
+			expStatusCode: http.StatusOK,
+			expRespBody:   "", // check JSON
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeGitHub := func() *httptest.Server {
+				mux := http.NewServeMux()
+				mux.Handle("GET /repos/owner/repo/installation", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(200)
+					fmt.Fprintf(w, `{"id": 123}`)
+				}))
+				mux.Handle("GET /app/installations/123", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					fmt.Fprintf(w, `{"access_tokens_url": "http://%s/app/installations/123/access_tokens"}`, r.Host)
+				}))
+				mux.Handle("POST /app/installations/123/access_tokens", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(201)
+					fmt.Fprintf(w, `{"token": "this-is-the-token-from-github"}`)
+				}))
+				mux.Handle("POST /repos/owner/repo/actions/runners/generate-jitconfig", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if !tc.mockGitHubJIT {
+						w.WriteHeader(500)
+						return
+					}
+					// check payload labels?
+					encoded := "jit"
+					resp := github.JITRunnerConfig{EncodedJITConfig: &encoded}
+					json.NewEncoder(w).Encode(resp)
+				}))
+				return httptest.NewServer(mux)
+			}()
+			defer fakeGitHub.Close()
+
+			rsaPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+			if err != nil {
+				t.Fatal(err)
+			}
+			app, err := githubauth.NewApp("app-id", rsaPrivateKey, githubauth.WithBaseURL(fakeGitHub.URL))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			srv := &Server{
+				iapServiceAudience: validAudience,
+				jitConfigAllowlist: tc.allowlist,
+				appClient:          app,
+				ghAPIBaseURL:       fakeGitHub.URL,
+				installationID:     123,
+			}
+
+			payloadBytes, _ := json.Marshal(tc.payload)
+			req := httptest.NewRequest(http.MethodPost, "/jit-config", bytes.NewReader(payloadBytes))
+			if tc.token != "" {
+				req.Header.Set("x-goog-iap-jwt-assertion", tc.token)
+			}
+
+			resp := httptest.NewRecorder()
+			srv.handleJITConfig().ServeHTTP(resp, req)
+
+			if got, want := resp.Code, tc.expStatusCode; got != want {
+				body, _ := io.ReadAll(resp.Body)
+				t.Errorf("expected status code %d, got %d. Body: %s", want, got, string(body))
+			}
+
+			if tc.expRespBody != "" {
+				if !strings.Contains(resp.Body.String(), tc.expRespBody) {
+					t.Errorf("expected response to contain %q, got %q", tc.expRespBody, resp.Body.String())
+				}
+			}
+		})
+	}
+}
+
 func createSignature(key, payload []byte) string {
 	mac := hmac.New(sha256.New, key)
 	mac.Write(payload)

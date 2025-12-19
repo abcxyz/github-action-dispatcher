@@ -82,7 +82,28 @@ continuing.
 
 ### Setup GCP Infrastructure
 
-TODO
+#### Configuration
+
+The following environment variables are required for the webhook service:
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `GITHUB_APP_ID` | The App ID of your GitHub App. | Yes | - |
+| `WEBHOOK_KEY_MOUNT_PATH` | Path to the mounted webhook key. | Yes | - |
+| `WEBHOOK_KEY_NAME` | Name of the verified webhook key. | Yes | - |
+| `KMS_APP_PRIVATE_KEY_ID` | Resource ID of the Cloud KMS private key for the GitHub App. | Yes | - |
+| `EXTERNAL_RUNNER_ENDPOINT` | HTTP endpoint to trigger runner creation (replaces Cloud Build). | Yes | - |
+| `IAP_SERVICE_AUDIENCE` | Expected audience for IAP JWT validation on `/jit-config`. | Yes | - |
+| `JIT_CONFIG_ALLOWLIST` | JSON string enabling on-demand JIT config for specific repos (e.g. `{"owner":{"repo": ["label"]}}`). | No | - |
+| `RUNNER_LABEL` | The label to listen for in `workflow_job` events. | No | `self-hosted` |
+
+### Architecture Changes
+
+The dispatcher now uses an **external runner creation service** instead of directly triggering Cloud Build. It also exposes a `/jit-config` endpoint protected by IAP to allow authorized services to request JIT runner configurations on demand.
+
+### Migration Status
+
+Only `pkg/`, `cmd/` and `runner/` directories have been updated to support the external runner creation service. To complete the `runner/cloudbuild` removal, the `.github/workflows` and `terraform` directories will also need to be updated.
 
 ## Deployment
 
@@ -97,14 +118,6 @@ The webhook is a containerized application that receives `workflow_job` events f
 - **Autopush Environment**: After a successful build on the `main` branch, the `autopush_webhook_container` workflow automatically deploys the newly built container image to an "autopush" environment. This provides a way to test changes in a live environment before a production deployment.
 
 - **Production Deployment**: Production deployments are manual and triggered via the `Promote to Production` workflow. This workflow requires an `image_tag` (the commit SHA of the version to be deployed) as input. It then updates the production Cloud Run service to use the specified image.
-
-### Runner
-
-The runner is a containerized application that executes the GitHub Actions jobs.
-
-- **Continuous Integration & Build**: The `build_runner_container` workflow builds the runner Docker image and pushes it to Google Artifact Registry with the `latest` tag. This workflow is triggered on pushes to the `main` branch that include changes in the `runner/` directory.
-
-- **Deployment**: There is no separate deployment process for the runner. The webhook is configured to dynamically pull and use the `latest` tag of the runner image from the Artifact Registry at runtime. This means that once a new runner image is pushed, newly created runners will automatically use the updated version without any manual intervention.
 
 ## CI/CD Testing Setup
 
