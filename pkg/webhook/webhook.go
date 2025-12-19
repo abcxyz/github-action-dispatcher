@@ -343,6 +343,7 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 				Env: []string{
 					"ENCODED_JIT_CONFIG=${_ENCODED_JIT_CONFIG}",
 					"IDLE_TIMEOUT_SECONDS=${_IDLE_TIMEOUT_SECONDS}",
+					"CREATE_BUILD_REQUEST_TIME_UTC=${_CREATE_BUILD_REQUEST_TIME_UTC}",
 				},
 			},
 		},
@@ -350,11 +351,11 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 			Logging: cloudbuildpb.BuildOptions_CLOUD_LOGGING_ONLY,
 		},
 		Substitutions: map[string]string{
-			"_ENCODED_JIT_CONFIG":        compressedJIT,
-			"_IDLE_TIMEOUT_SECONDS":      strconv.Itoa(s.runnerIdleTimeoutSeconds),
-			"_REPOSITORY_ID":             s.runnerRepositoryID,
-			"_IMAGE_NAME":                s.runnerImageName,
-			"_IMAGE_TAG":                 imageTag,
+			"_ENCODED_JIT_CONFIG":            compressedJIT,
+			"_IDLE_TIMEOUT_SECONDS":          strconv.Itoa(s.runnerIdleTimeoutSeconds),
+			"_REPOSITORY_ID":                 s.runnerRepositoryID,
+			"_IMAGE_NAME":                    s.runnerImageName,
+			"_IMAGE_TAG":                     imageTag,
 			"_CREATE_BUILD_REQUEST_TIME_UTC": time.Now().UTC().Format(time.RFC3339),
 		},
 	}
