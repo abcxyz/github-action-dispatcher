@@ -16,7 +16,7 @@ env:
   IMAGE_NAME: 'github-action-dispatcher'
 
   RUNNER_DOCKER_REPO: 'us-docker.pkg.dev/abcxyz-artifacts/docker-images'
-  RUNNER_IMAGE_TAG: 'v0.0.0-ubuntu-24-04-amd64'
+  RUNNER_IMAGE_TAG: 'v0.0.1-ubuntu-24-04-amd64'
   RUNNER_IMAGE_NAME: 'github-action-runner'
 
   INTEGRATION_RUNNER_LABEL: 'github-action-dispatcher-integration' # <repo-name>-<env>
