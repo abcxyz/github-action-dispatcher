@@ -38,6 +38,17 @@ var rootCmd = func() cli.Command {
 					},
 				}
 			},
+			"job": func() cli.Command {
+				return &cli.RootCommand{
+					Name:        "job",
+					Description: "Execute a Cloud Run job",
+					Commands: map[string]cli.CommandFactory{
+						"runner-discovery": func() cli.Command {
+							return &RunnerDiscoveryCommand{}
+						},
+					},
+				}
+			},
 		},
 	}
 }

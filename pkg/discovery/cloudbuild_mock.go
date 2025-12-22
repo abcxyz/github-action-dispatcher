@@ -12,25 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cli
+package discovery
 
 import (
-	"strings"
-	"testing"
+	"context"
+
+	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 )
 
-func TestRootCommand_Help(t *testing.T) {
-	t.Parallel()
+type mockCloudBuildClient struct {
+	workerPools        []*cloudbuildpb.WorkerPool
+	listWorkerPoolsErr error
+}
 
-	exp := `
-Usage: github-action-dispatcher COMMAND
-
-  job        Execute a Cloud Run job
-  webhook    Perform webhook operations
-`
-
-	cmd := rootCmd()
-	if got, want := strings.TrimSpace(cmd.Help()), strings.TrimSpace(exp); got != want {
-		t.Errorf("expected\n\n%s\n\nto be\n\n%s\n\n", got, want)
+func (m *mockCloudBuildClient) ListWorkerPools(ctx context.Context, projectID, location string) ([]*cloudbuildpb.WorkerPool, error) {
+	if m.listWorkerPoolsErr != nil {
+		return nil, m.listWorkerPoolsErr
 	}
+	return m.workerPools, nil
 }
