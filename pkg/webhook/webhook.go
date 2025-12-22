@@ -90,6 +90,9 @@ func (s *Server) processRequest(r *http.Request) *apiResponse {
 		logger.ErrorContext(ctx, "failed to validate github payload", "error", err)
 		return &apiResponse{http.StatusBadRequest, "failed to validate github payload", err}
 	}
+	if event == nil {
+		return &apiResponse{http.StatusOK, "ignored event", nil}
+	}
 
 	jobID, attributes := extractLoggedAttributes(event)
 	logger = logger.With(attributes...)
@@ -133,7 +136,14 @@ func validateGitHubPayload(r *http.Request, webhookSecret []byte) (*github.Workf
 
 	event, ok := rawEvent.(*github.WorkflowJobEvent)
 	if !ok {
-		return nil, fmt.Errorf("unexpected event type dispatched from webhook, event type: %T", rawEvent)
+		switch rawEvent.(type) {
+		case *github.InstallationRepositoriesEvent, *github.InstallationEvent:
+			// These are specific event types (like installation events) that are expected but do not require further processing, so we log and ignore them.
+			slog.InfoContext(r.Context(), "received event", "type", github.WebHookType(r))
+			return nil, nil
+		default:
+			return nil, fmt.Errorf("unexpected event type dispatched from webhook, event type: %T", rawEvent)
+		}
 	}
 
 	// Validate event object
