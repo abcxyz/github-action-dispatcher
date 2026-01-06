@@ -12,7 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+resource "google_project_service" "runner_discovery" {
+  for_each = toset([
+    "run.googleapis.com",
+    "cloudscheduler.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
+    "cloudbuild.googleapis.com",
+  ])
 
+  project = var.project_id
+
+  service            = each.key
+  disable_on_destroy = false
+}
 
 resource "google_cloud_run_v2_job" "runner_discovery_job" {
   project = var.project_id
@@ -32,11 +44,15 @@ resource "google_cloud_run_v2_job" "runner_discovery_job" {
         }
         env {
           name  = "GCP_ORGANIZATION_ID"
-          value = var.gcp_organization_id
+          value = var.runner_discovery.envvars.GCP_ORGANIZATION_ID
         }
       }
     }
   }
+
+  depends_on = [
+    google_project_service.runner_discovery,
+  ]
 }
 
 resource "google_service_account" "runner_discovery_job_sa" {
@@ -51,6 +67,10 @@ resource "google_project_iam_member" "runner_discovery_job_cloudbuild_viewer" {
 
   role   = "roles/cloudbuild.viewer"
   member = "serviceAccount:${google_service_account.runner_discovery_job_sa.email}"
+
+  depends_on = [
+    google_project_service.runner_discovery["cloudbuild.googleapis.com"],
+  ]
 }
 
 resource "google_project_iam_member" "runner_discovery_job_project_viewer" {
@@ -58,6 +78,10 @@ resource "google_project_iam_member" "runner_discovery_job_project_viewer" {
 
   role   = "roles/cloudresourcemanager.projectViewer"
   member = "serviceAccount:${google_service_account.runner_discovery_job_sa.email}"
+
+  depends_on = [
+    google_project_service.runner_discovery["cloudresourcemanager.googleapis.com"],
+  ]
 }
 
 resource "google_cloud_scheduler_job" "runner_discovery_scheduler" {
@@ -80,6 +104,10 @@ resource "google_cloud_scheduler_job" "runner_discovery_scheduler" {
   retry_config {
     retry_count = var.runner_discovery.scheduler_retry_limit
   }
+
+  depends_on = [
+    google_project_service.runner_discovery["cloudscheduler.googleapis.com"],
+  ]
 }
 
 resource "google_service_account" "runner_discovery_scheduler_sa" {
