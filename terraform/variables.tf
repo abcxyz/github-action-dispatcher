@@ -99,7 +99,8 @@ variable "runner_discovery" {
   description = "Configuration for the runner-discovery Cloud Run job."
   type = object({
     envvars = object({
-      LABEL_QUERY = list(string)
+      LABEL_QUERY         = list(string)
+      GCP_ORGANIZATION_ID = string
     })
     job_iam = object({
       admins     = list(string)
@@ -115,7 +116,8 @@ variable "runner_discovery" {
   })
   default = {
     envvars = {
-      LABEL_QUERY = []
+      LABEL_QUERY         = []
+      GCP_ORGANIZATION_ID = ""
     }
     job_iam = {
       admins     = []
