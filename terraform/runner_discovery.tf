@@ -15,6 +15,8 @@
 
 
 resource "google_cloud_run_v2_job" "runner_discovery_job" {
+  project = var.project_id
+
   name     = var.runner_discovery.runner_discovery_job_name
   location = var.runner_discovery.location
 
@@ -38,6 +40,8 @@ resource "google_cloud_run_v2_job" "runner_discovery_job" {
 }
 
 resource "google_service_account" "runner_discovery_job_sa" {
+  project = var.project_id
+
   account_id   = "${var.runner_discovery.runner_discovery_job_name}-job-sa"
   display_name = "Service Account for ${var.runner_discovery.runner_discovery_job_name} Cloud Run job"
 }
@@ -57,6 +61,8 @@ resource "google_project_iam_member" "runner_discovery_job_project_viewer" {
 }
 
 resource "google_cloud_scheduler_job" "runner_discovery_scheduler" {
+  project = var.project_id
+
   name             = "${var.runner_discovery.runner_discovery_job_name}-scheduler"
   schedule         = var.runner_discovery.scheduler_cron
   time_zone        = var.runner_discovery.time_zone
@@ -77,6 +83,8 @@ resource "google_cloud_scheduler_job" "runner_discovery_scheduler" {
 }
 
 resource "google_service_account" "runner_discovery_scheduler_sa" {
+  project = var.project_id
+
   account_id   = "${var.runner_discovery.runner_discovery_job_name}-sch-sa"
   display_name = "Service Account for ${var.runner_discovery.runner_discovery_job_name} scheduler"
 }
