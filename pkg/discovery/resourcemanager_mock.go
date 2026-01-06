@@ -12,25 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cli
+package discovery
 
 import (
-	"strings"
-	"testing"
+	"context"
+
+	"google.golang.org/api/cloudresourcemanager/v3"
 )
 
-func TestRootCommand_Help(t *testing.T) {
-	t.Parallel()
+type mockResourceManagerClient struct {
+	projects    []*cloudresourcemanager.Project
+	projectsErr error
+}
 
-	exp := `
-Usage: github-action-dispatcher COMMAND
-
-  job        Execute a Cloud Run job
-  webhook    Perform webhook operations
-`
-
-	cmd := rootCmd()
-	if got, want := strings.TrimSpace(cmd.Help()), strings.TrimSpace(exp); got != want {
-		t.Errorf("expected\n\n%s\n\nto be\n\n%s\n\n", got, want)
+func (m *mockResourceManagerClient) Projects(ctx context.Context, gcpOrganizationID string, labelQuery []string) ([]string, error) {
+	if m.projectsErr != nil {
+		return nil, m.projectsErr
 	}
+	ids := make([]string, 0, len(m.projects))
+	for _, p := range m.projects {
+		ids = append(ids, p.ProjectId)
+	}
+	return ids, nil
 }

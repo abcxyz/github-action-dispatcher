@@ -17,6 +17,12 @@ variable "project_id" {
   type        = string
 }
 
+variable "gcp_organization_id" {
+  description = "The GCP organization ID."
+  type        = string
+  default     = ""
+}
+
 variable "name" {
   description = "The name of this component."
   type        = string
@@ -89,6 +95,42 @@ variable "envvars" {
   description = "Environment variables for the Cloud Run service (plain text)."
 }
 
+variable "runner_discovery" {
+  description = "Configuration for the runner-discovery Cloud Run job."
+  type = object({
+    envvars = object({
+      LABEL_QUERY = list(string)
+    })
+    job_iam = object({
+      admins     = list(string)
+      developers = list(string)
+      invokers   = list(string)
+    })
+    location                  = string
+    scheduler_cron            = string
+    time_zone                 = string
+    attempt_deadline          = string
+    scheduler_retry_limit     = number
+    runner_discovery_job_name = string
+  })
+  default = {
+    envvars = {
+      LABEL_QUERY = []
+    }
+    job_iam = {
+      admins     = []
+      developers = []
+      invokers   = []
+    }
+    location                  = "us-central1"
+    scheduler_cron            = "*/5 * * * *" // every 5m
+    time_zone                 = "Etc/UTC"
+    attempt_deadline          = ""
+    scheduler_retry_limit     = 0
+    runner_discovery_job_name = "runner-discovery"
+  }
+}
+
 variable "runner_project_ids" {
   description = "The project IDs to be used as a runner."
   type        = list(string)
@@ -99,6 +141,7 @@ variable "region" {
   description = "The region to deploy resources in."
   type        = string
 }
+
 variable "gad_prefix" {
   description = "A prefix to use when naming resources"
   type        = string
