@@ -133,12 +133,6 @@ variable "runner_discovery" {
   }
 }
 
-variable "runner_project_ids" {
-  description = "The project IDs to be used as a runner."
-  type        = list(string)
-  default     = []
-}
-
 variable "region" {
   description = "The region to deploy resources in."
   type        = string
