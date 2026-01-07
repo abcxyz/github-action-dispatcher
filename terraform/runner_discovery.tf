@@ -48,16 +48,17 @@ resource "google_cloud_run_v2_job" "runner_discovery_job" {
   template {
     template {
       service_account = google_service_account.runner_discovery_job_sa.email
+      timeout         = "${var.runner_discovery.timeout_seconds}s"
+
       containers {
         image = var.image
         args  = ["job", var.runner_discovery.runner_discovery_job_name]
-        env {
-          name  = "LABEL_QUERY"
-          value = join(",", var.runner_discovery.envvars.LABEL_QUERY)
-        }
-        env {
-          name  = "GCP_ORGANIZATION_ID"
-          value = var.runner_discovery.envvars.GCP_ORGANIZATION_ID
+        dynamic "env" {
+          for_each = var.runner_discovery.envvars
+          content {
+            name  = env.key
+            value = env.value
+          }
         }
       }
     }
@@ -66,6 +67,12 @@ resource "google_cloud_run_v2_job" "runner_discovery_job" {
   depends_on = [
     google_project_service.runner_discovery,
   ]
+
+  lifecycle {
+    ignore_changes = [
+      template[0].template[0].containers[0].image,
+    ]
+  }
 }
 
 resource "google_service_account" "runner_discovery_job_sa" {
