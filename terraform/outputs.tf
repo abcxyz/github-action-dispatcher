@@ -51,3 +51,18 @@ output "run_service_account_name" {
   description = "Cloud Run service account name."
   value       = google_service_account.run_service_account.name
 }
+
+output "runner_discovery_job_service_account_email" {
+  description = "Runner Discovery Job service account email."
+  value       = google_service_account.runner_discovery_job_sa.email
+}
+
+output "runner_discovery_job_service_account_member" {
+  description = "Runner Discovery Job service account email IAM member string."
+  value       = google_service_account.runner_discovery_job_sa.member
+}
+
+output "runner_discovery_job_service_account_name" {
+  description = "Runner Discovery Job service account name."
+  value       = google_service_account.runner_discovery_job_sa.name
+}
