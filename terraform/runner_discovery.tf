@@ -14,10 +14,10 @@
 
 resource "google_project_service" "runner_discovery" {
   for_each = toset([
-    "run.googleapis.com",
-    "cloudscheduler.googleapis.com",
-    "cloudresourcemanager.googleapis.com",
+    "cloudasset.googleapis.com",
     "cloudbuild.googleapis.com",
+    "cloudscheduler.googleapis.com",
+    "run.googleapis.com",
   ])
 
   project = var.project_id
@@ -32,10 +32,10 @@ resource "google_project_iam_custom_role" "runner_discovery_project_viewer" {
   role_id     = "runnerDiscoveryProjectViewer"
   title       = "Runner Discovery Project Viewer"
   description = "A custom role for the runner discovery job to view projects."
-  permissions = ["resourcemanager.projects.get"]
+  permissions = ["cloudasset.assets.searchAllResources"]
 
   depends_on = [
-    google_project_service.runner_discovery["cloudresourcemanager.googleapis.com"],
+    google_project_service.runner_discovery["cloudasset.googleapis.com"],
   ]
 }
 

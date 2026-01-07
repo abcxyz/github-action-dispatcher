@@ -33,6 +33,9 @@ env:
   INTEGRATION_WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-gad-ci-i-832939.iam.gserviceaccount.com'
   INTEGRATION_WORKER_POOL_ID: 'projects/abcxyz-runner-i-4f/locations/us-central1/workerPools/abcxyz-e2-standard-2'
 
+  INTEGRATION_RUNNER_DISCOVERY_JOB_NAME: 'runner-discovery'
+  INTEGRATION_RUNNER_DISCOVERY_JOB_SA: 'runner-discovery-job-sa@github-action-dispatcher-i-e3.iam.gserviceaccount.com'
+
   AUTOPUSH_RUNNER_LABEL: 'github-action-dispatcher-autopush' # <repo-name>-<env>
   AUTOPUSH_RUNNER_LOCATION: 'us-central1'
   AUTOPUSH_RUNNER_PROJECT_ID: 'abcxyz-runner-a-4f'
@@ -172,6 +175,41 @@ jobs:
           else
             echo "Confirmed RUNNER_IMAGE_TAG (${{ env.RUNNER_IMAGE_TAG }}) points to the latest release."
           fi
+
+  deploy-runner-discovery-job:
+    needs: ['verify-latest-runner-image']
+    if: |-
+      ${{ github.event_name == 'merge_group' }}
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.INTEGRATION_WIF_PROVIDER }}'
+          service_account: '${{ env.INTEGRATION_WIF_SERVICE_ACCOUNT }}'
+          token_format: 'access_token'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - name: 'Deploy to Cloud Run Job'
+        id: 'deploy-job'
+        run: |-
+          gcloud run jobs update "${{ env.INTEGRATION_RUNNER_DISCOVERY_JOB_NAME }}" \
+            --project="${{ env.INTEGRATION_PROJECT_ID }}" \
+            --region="${{ env.INTEGRATION_REGION }}" \
+            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.DOCKER_TAG }}-amd64"
 
   deploy:
     needs: ['build', 'verify-latest-runner-image']

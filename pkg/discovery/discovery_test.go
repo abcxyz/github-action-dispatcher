@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
-	"google.golang.org/api/cloudresourcemanager/v3"
 
 	"github.com/abcxyz/pkg/logging"
 	"github.com/abcxyz/pkg/testutil"
@@ -30,11 +29,11 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name                string
-		config              *Config
-		cloudbuildMock      *mockCloudBuildClient
-		resourceManagerMock *mockResourceManagerClient
-		expErr              string
+		name               string
+		config             *Config
+		cloudbuildMock     *mockCloudBuildClient
+		assetInventoryMock *mockAssetInventoryClient
+		expErr             string
 	}{
 		{
 			name: "success",
@@ -47,10 +46,8 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 					{Name: "pool1"},
 				},
 			},
-			resourceManagerMock: &mockResourceManagerClient{
-				projects: []*cloudresourcemanager.Project{
-					{ProjectId: "labeled-project"},
-				},
+			assetInventoryMock: &mockAssetInventoryClient{
+				projects: []string{"labeled-project"},
 			},
 		},
 		{
@@ -60,7 +57,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 				GCPOrganizationID: "12345",
 			},
 			cloudbuildMock: &mockCloudBuildClient{},
-			resourceManagerMock: &mockResourceManagerClient{
+			assetInventoryMock: &mockAssetInventoryClient{
 				projectsErr: fmt.Errorf("failed to get projects"),
 			},
 			expErr: `failed to get projects: failed to get projects`,
@@ -74,10 +71,8 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 			cloudbuildMock: &mockCloudBuildClient{
 				listWorkerPoolsErr: fmt.Errorf("failed to list worker pools"),
 			},
-			resourceManagerMock: &mockResourceManagerClient{
-				projects: []*cloudresourcemanager.Project{
-					{ProjectId: "my-project"},
-				},
+			assetInventoryMock: &mockAssetInventoryClient{
+				projects: []string{"my-project"},
 			},
 		},
 	}
@@ -90,7 +85,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 
 			rd := &RunnerDiscovery{
 				cbc:    tc.cloudbuildMock,
-				crmc:   tc.resourceManagerMock,
+				aic:    tc.assetInventoryMock,
 				config: tc.config,
 			}
 

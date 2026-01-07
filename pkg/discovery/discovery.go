@@ -24,7 +24,7 @@ import (
 // RunnerDiscovery is the main struct for the runner-discovery job.
 type RunnerDiscovery struct {
 	cbc    cloudBuildClient
-	crmc   resourceManagerClient
+	aic    assetInventoryClient
 	config *Config
 }
 
@@ -35,14 +35,14 @@ func NewRunnerDiscovery(ctx context.Context, config *Config) (*RunnerDiscovery, 
 		return nil, fmt.Errorf("failed to create cloud build client: %w", err)
 	}
 
-	crmc, err := newResourceManagerClient(ctx)
+	aic, err := newAssetInventoryClient(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create cloud resource manager client: %w", err)
+		return nil, fmt.Errorf("failed to create cloud asset inventory client: %w", err)
 	}
 
 	return &RunnerDiscovery{
 		cbc:    cbc,
-		crmc:   crmc,
+		aic:    aic,
 		config: config,
 	}, nil
 }
@@ -51,10 +51,14 @@ func NewRunnerDiscovery(ctx context.Context, config *Config) (*RunnerDiscovery, 
 func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 	logger := logging.FromContext(ctx)
 
-	projects, err := rd.crmc.Projects(ctx, rd.config.GCPOrganizationID, rd.config.LabelQuery)
+	logger.InfoContext(ctx, "Calling Run method")
+
+	projects, err := rd.aic.Projects(ctx, rd.config.GCPOrganizationID, rd.config.LabelQuery)
 	if err != nil {
 		return fmt.Errorf("failed to get projects: %w", err)
 	}
+
+	logger.InfoContext(ctx, "Discovered projects", "projects", projects)
 
 	for _, project := range projects {
 		logger.InfoContext(ctx,
