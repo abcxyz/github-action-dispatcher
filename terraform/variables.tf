@@ -98,10 +98,7 @@ variable "envvars" {
 variable "runner_discovery" {
   description = "Configuration for the runner-discovery Cloud Run job."
   type = object({
-    envvars = object({
-      LABEL_QUERY         = list(string)
-      GCP_ORGANIZATION_ID = string
-    })
+    envvars = map(string)
     job_iam = object({
       admins     = list(string)
       developers = list(string)
@@ -113,10 +110,11 @@ variable "runner_discovery" {
     attempt_deadline          = string
     scheduler_retry_limit     = number
     runner_discovery_job_name = string
+    timeout_seconds           = number
   })
   default = {
     envvars = {
-      LABEL_QUERY         = []
+      LABEL_QUERY         = ""
       GCP_ORGANIZATION_ID = ""
     }
     job_iam = {
@@ -130,6 +128,7 @@ variable "runner_discovery" {
     attempt_deadline          = ""
     scheduler_retry_limit     = 0
     runner_discovery_job_name = "runner-discovery"
+    timeout_seconds           = 3600
   }
 }
 
