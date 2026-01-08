@@ -16,22 +16,16 @@ package discovery
 
 import (
 	"context"
-
-	"google.golang.org/api/cloudresourcemanager/v3"
 )
 
-type mockResourceManagerClient struct {
-	projects    []*cloudresourcemanager.Project
+type mockAssetInventoryClient struct {
+	projects    []string
 	projectsErr error
 }
 
-func (m *mockResourceManagerClient) Projects(ctx context.Context, gcpOrganizationID string, labelQuery []string) ([]string, error) {
+func (m *mockAssetInventoryClient) Projects(ctx context.Context, gcpOrganizationID string, labelQuery []string) ([]string, error) {
 	if m.projectsErr != nil {
 		return nil, m.projectsErr
 	}
-	ids := make([]string, 0, len(m.projects))
-	for _, p := range m.projects {
-		ids = append(ids, p.ProjectId)
-	}
-	return ids, nil
+	return m.projects, nil
 }
