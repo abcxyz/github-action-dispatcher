@@ -41,14 +41,14 @@ func newAssetInventoryClient(ctx context.Context) (assetInventoryClient, error) 
 	return &assetInventoryClientImpl{client: client}, nil
 }
 
-func (c *assetInventoryClientImpl) Projects(ctx context.Context, gcpOrganizationID string, labelQuery []string) ([]string, error) {
-	query := fmt.Sprintf("ancestors:organizations/%s AND resource_type:cloudresourcemanager.googleapis.com/Project", gcpOrganizationID)
+func (c *assetInventoryClientImpl) Projects(ctx context.Context, gcpFolderID string, labelQuery []string) ([]string, error) {
+	query := fmt.Sprintf("ancestors:folders/%s AND resource_type:cloudresourcemanager.googleapis.com/Project", gcpFolderID)
 	if len(labelQuery) > 0 {
 		query = fmt.Sprintf("%s AND %s", query, strings.Join(labelQuery, " AND "))
 	}
 
 	req := &assetpb.SearchAllResourcesRequest{
-		Scope: fmt.Sprintf("organizations/%s", gcpOrganizationID),
+		Scope: fmt.Sprintf("folders/%s", gcpFolderID),
 		Query: query,
 	}
 

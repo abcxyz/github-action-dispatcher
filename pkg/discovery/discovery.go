@@ -53,7 +53,7 @@ func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 
 	logger.InfoContext(ctx, "Calling Run method")
 
-	projects, err := rd.aic.Projects(ctx, rd.config.GCPOrganizationID, rd.config.LabelQuery)
+	projects, err := rd.aic.Projects(ctx, rd.config.GCPFolderID, rd.config.LabelQuery)
 	if err != nil {
 		return fmt.Errorf("failed to get projects: %w", err)
 	}

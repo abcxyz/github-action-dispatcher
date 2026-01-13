@@ -17,8 +17,8 @@ variable "project_id" {
   type        = string
 }
 
-variable "gcp_organization_id" {
-  description = "The GCP organization ID."
+variable "gcp_folder_id" {
+  description = "The GCP folder ID."
   type        = string
   default     = ""
 }
@@ -114,8 +114,8 @@ variable "runner_discovery" {
   })
   default = {
     envvars = {
-      LABEL_QUERY         = ""
-      GCP_ORGANIZATION_ID = ""
+      LABEL_QUERY   = ""
+      GCP_FOLDER_ID = ""
     }
     job_iam = {
       admins     = []

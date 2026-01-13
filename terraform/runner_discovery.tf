@@ -93,8 +93,8 @@ resource "google_project_iam_member" "runner_discovery_job_cloudbuild_viewer" {
   ]
 }
 
-resource "google_project_iam_member" "runner_discovery_job_project_viewer" {
-  project = var.project_id
+resource "google_folder_iam_member" "runner_discovery_job_project_viewer" {
+  folder = var.gcp_folder_id
 
   role   = google_project_iam_custom_role.runner_discovery_project_viewer.id
   member = "serviceAccount:${google_service_account.runner_discovery_job_sa.email}"
