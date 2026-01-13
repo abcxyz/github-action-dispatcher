@@ -26,8 +26,6 @@ resource "google_project_service" "runner_discovery" {
   disable_on_destroy = false
 }
 
-
-
 resource "google_cloud_run_v2_job" "runner_discovery_job" {
   project = var.project_id
 

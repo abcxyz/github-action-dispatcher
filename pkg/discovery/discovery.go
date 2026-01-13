@@ -21,6 +21,11 @@ import (
 	"github.com/abcxyz/pkg/logging"
 )
 
+const (
+	locationLabel    = "runner-location"
+	fallbackLocation = "us-central1"
+)
+
 // RunnerDiscovery is the main struct for the runner-discovery job.
 type RunnerDiscovery struct {
 	cbc    cloudBuildClient
@@ -29,6 +34,8 @@ type RunnerDiscovery struct {
 }
 
 // NewRunnerDiscovery creates a new RunnerDiscovery instance.
+// It initializes the necessary Cloud Build and Asset Inventory clients based on the provided configuration.
+// Returns a pointer to the initialized RunnerDiscovery instance or an error if client creation fails.
 func NewRunnerDiscovery(ctx context.Context, config *Config) (*RunnerDiscovery, error) {
 	cbc, err := newCloudBuildClient(ctx)
 	if err != nil {
@@ -48,6 +55,8 @@ func NewRunnerDiscovery(ctx context.Context, config *Config) (*RunnerDiscovery, 
 }
 
 // Run is the main entrypoint for the runner-discovery job.
+// It discovers projects based on configured criteria, lists worker pools within those projects,
+// and logs relevant information. Returns an error if any part of the discovery process fails.
 func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 	logger := logging.FromContext(ctx)
 
@@ -62,21 +71,29 @@ func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 
 	for _, project := range projects {
 		logger.InfoContext(ctx,
-			"checking project for worker pools",
-			"project", project)
-		wps, err := rd.cbc.ListWorkerPools(ctx, project, "-")
+			"Checking project for worker pools",
+			"project_id", project.ID,
+			"project_number", project.Number,
+			"project_labels", project.Labels)
+
+		location, ok := project.Labels[locationLabel]
+		if !ok {
+			location = fallbackLocation
+		}
+
+		wps, err := rd.cbc.ListWorkerPools(ctx, project.ID, location)
 		if err != nil {
 			logger.ErrorContext(ctx,
 				"failed to list worker pools",
-				"project", project,
+				"project_id", project.ID,
+				"project_number", project.Number,
 				"error", err)
 			continue
 		}
 
 		for _, wp := range wps {
 			logger.InfoContext(ctx,
-				"found worker pool",
-				"project", project,
+				"Found worker pool",
 				"worker_pool", wp.GetName(),
 				"state", wp.GetState(),
 				"config", wp.GetConfig())
