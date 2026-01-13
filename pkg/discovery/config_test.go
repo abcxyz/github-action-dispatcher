@@ -22,8 +22,8 @@ import (
 
 func generateValidConfig() *Config {
 	return &Config{
-		LabelQuery:        []string{"env=test"},
-		GCPOrganizationID: "1234567890",
+		LabelQuery:  []string{"env=test"},
+		GCPFolderID: "1234567890",
 	}
 }
 
@@ -47,11 +47,11 @@ func TestConfig_Validate(t *testing.T) {
 			expErr: "LABEL_QUERY must be provided",
 		},
 		{
-			name: "missing_gcp_organization_id",
+			name: "missing_gcp_folder_id",
 			mutator: func(c *Config) {
-				c.GCPOrganizationID = ""
+				c.GCPFolderID = ""
 			},
-			expErr: "GCP_ORGANIZATION_ID must be provided",
+			expErr: "GCP_FOLDER_ID must be provided",
 		},
 	}
 

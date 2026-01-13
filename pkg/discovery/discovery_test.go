@@ -38,8 +38,8 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		{
 			name: "success",
 			config: &Config{
-				LabelQuery:        []string{"env=test"},
-				GCPOrganizationID: "12345",
+				LabelQuery:  []string{"env=test"},
+				GCPFolderID: "12345",
 			},
 			cloudbuildMock: &mockCloudBuildClient{
 				workerPools: []*cloudbuildpb.WorkerPool{
@@ -53,8 +53,8 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		{
 			name: "projects_error",
 			config: &Config{
-				LabelQuery:        []string{"env=test"},
-				GCPOrganizationID: "12345",
+				LabelQuery:  []string{"env=test"},
+				GCPFolderID: "12345",
 			},
 			cloudbuildMock: &mockCloudBuildClient{},
 			assetInventoryMock: &mockAssetInventoryClient{
@@ -65,8 +65,8 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		{
 			name: "list_worker_pools_error",
 			config: &Config{
-				LabelQuery:        []string{"env=test"},
-				GCPOrganizationID: "12345",
+				LabelQuery:  []string{"env=test"},
+				GCPFolderID: "12345",
 			},
 			cloudbuildMock: &mockCloudBuildClient{
 				listWorkerPoolsErr: fmt.Errorf("failed to list worker pools"),

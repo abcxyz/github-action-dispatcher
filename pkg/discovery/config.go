@@ -26,14 +26,14 @@ import (
 // Config defines the set of environment variables required
 // for running the runner-discovery job.
 type Config struct {
-	GCPOrganizationID string   `env:"GCP_ORGANIZATION_ID"`
-	LabelQuery        []string `env:"LABEL_QUERY"`
+	GCPFolderID string   `env:"GCP_FOLDER_ID"`
+	LabelQuery  []string `env:"LABEL_QUERY"`
 }
 
 // Validate validates the runner-discovery config after load.
 func (cfg *Config) Validate() error {
-	if cfg.GCPOrganizationID == "" {
-		return fmt.Errorf("GCP_ORGANIZATION_ID must be provided")
+	if cfg.GCPFolderID == "" {
+		return fmt.Errorf("GCP_FOLDER_ID must be provided")
 	}
 	if len(cfg.LabelQuery) == 0 {
 		return fmt.Errorf("LABEL_QUERY must be provided")
