@@ -18,9 +18,13 @@ variable "project_id" {
 }
 
 variable "gcp_folder_id" {
-  description = "The GCP folder ID."
+  description = "The GCP folder ID where runners live used by the runner discovery service account to retrieve runners."
   type        = string
-  default     = ""
+}
+
+variable "runner_discovery_custom_role_id" {
+  description = "The ID of the custom role for runner discovery (e.g., organizations/ORG_ID/roles/ROLE_ID)."
+  type        = string
 }
 
 variable "name" {

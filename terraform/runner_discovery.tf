@@ -26,18 +26,7 @@ resource "google_project_service" "runner_discovery" {
   disable_on_destroy = false
 }
 
-resource "google_project_iam_custom_role" "runner_discovery_project_viewer" {
-  project = var.project_id
 
-  role_id     = "runnerDiscoveryProjectViewer"
-  title       = "Runner Discovery Project Viewer"
-  description = "A custom role for the runner discovery job to view projects."
-  permissions = ["cloudasset.assets.searchAllResources"]
-
-  depends_on = [
-    google_project_service.runner_discovery["cloudasset.googleapis.com"],
-  ]
-}
 
 resource "google_cloud_run_v2_job" "runner_discovery_job" {
   project = var.project_id
@@ -96,12 +85,8 @@ resource "google_project_iam_member" "runner_discovery_job_cloudbuild_viewer" {
 resource "google_folder_iam_member" "runner_discovery_job_project_viewer" {
   folder = var.gcp_folder_id
 
-  role   = google_project_iam_custom_role.runner_discovery_project_viewer.id
+  role   = var.runner_discovery_custom_role_id
   member = "serviceAccount:${google_service_account.runner_discovery_job_sa.email}"
-
-  depends_on = [
-    google_project_iam_custom_role.runner_discovery_project_viewer,
-  ]
 }
 
 resource "google_cloud_scheduler_job" "runner_discovery_scheduler" {
