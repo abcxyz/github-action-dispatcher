@@ -47,7 +47,26 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 				},
 			},
 			assetInventoryMock: &mockAssetInventoryClient{
-				projects: []string{"labeled-project"},
+				projects: []*ProjectInfo{
+					{ID: "labeled-project", Number: "labeled-project", Labels: map[string]string{}},
+				},
+			},
+		},
+		{
+			name: "success_with_location_label",
+			config: &Config{
+				LabelQuery:  []string{"env=test"},
+				GCPFolderID: "12345",
+			},
+			cloudbuildMock: &mockCloudBuildClient{
+				workerPools: []*cloudbuildpb.WorkerPool{
+					{Name: "pool1"},
+				},
+			},
+			assetInventoryMock: &mockAssetInventoryClient{
+				projects: []*ProjectInfo{
+					{ID: "labeled-project", Number: "labeled-project", Labels: map[string]string{"runner-location": "us-west1"}},
+				},
 			},
 		},
 		{
@@ -72,7 +91,9 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 				listWorkerPoolsErr: fmt.Errorf("failed to list worker pools"),
 			},
 			assetInventoryMock: &mockAssetInventoryClient{
-				projects: []string{"my-project"},
+				projects: []*ProjectInfo{
+					{ID: "my-project", Number: "my-project", Labels: map[string]string{}},
+				},
 			},
 		},
 	}

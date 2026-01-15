@@ -25,8 +25,17 @@ import (
 	"google.golang.org/api/iterator"
 )
 
+const assetTypeProject = "cloudresourcemanager.googleapis.com/Project"
+
+// ProjectInfo holds information about a discovered project.
+type ProjectInfo struct {
+	ID     string
+	Number string
+	Labels map[string]string
+}
+
 type assetInventoryClient interface {
-	Projects(context.Context, string, []string) ([]string, error)
+	Projects(ctx context.Context, gcpFolderID string, labelQuery []string) ([]*ProjectInfo, error)
 }
 
 type assetInventoryClientImpl struct {
@@ -41,19 +50,27 @@ func newAssetInventoryClient(ctx context.Context) (assetInventoryClient, error) 
 	return &assetInventoryClientImpl{client: client}, nil
 }
 
-func (c *assetInventoryClientImpl) Projects(ctx context.Context, gcpFolderID string, labelQuery []string) ([]string, error) {
-	query := fmt.Sprintf("ancestors:folders/%s AND resource_type:cloudresourcemanager.googleapis.com/Project", gcpFolderID)
-	if len(labelQuery) > 0 {
-		query = fmt.Sprintf("%s AND %s", query, strings.Join(labelQuery, " AND "))
+// Projects searches the Cloud Asset Inventory for projects within the given GCP folder
+// ID that match the provided label query. It returns a slice of ProjectInfo
+// containing the project ID, project number, and project labels.
+func (c *assetInventoryClientImpl) Projects(ctx context.Context, gcpFolderID string, labelQuery []string) ([]*ProjectInfo, error) {
+	var query strings.Builder
+	for i, l := range labelQuery {
+		if i > 0 {
+			query.WriteString(" AND ")
+		}
+		query.WriteString("labels.")
+		query.WriteString(l)
 	}
 
 	req := &assetpb.SearchAllResourcesRequest{
-		Scope: fmt.Sprintf("folders/%s", gcpFolderID),
-		Query: query,
+		Scope:      fmt.Sprintf("folders/%s", gcpFolderID),
+		Query:      query.String(),
+		AssetTypes: []string{assetTypeProject},
 	}
 
 	it := c.client.SearchAllResources(ctx, req)
-	projects := make([]string, 0)
+	var projects []*ProjectInfo
 	for {
 		resource, err := it.Next()
 		if errors.Is(err, iterator.Done) {
@@ -62,11 +79,20 @@ func (c *assetInventoryClientImpl) Projects(ctx context.Context, gcpFolderID str
 		if err != nil {
 			return nil, fmt.Errorf("failed to get next resource: %w", err)
 		}
-		// The project ID is in the format "projects/12345", we want to extract the number.
-		// It can also be in the format "//cloudresourcemanager.googleapis.com/projects/project-id-string"
-		parts := strings.Split(resource.GetProject(), "/")
-		projectID := parts[len(parts)-1]
-		projects = append(projects, projectID)
+
+		// e.g., //cloudresourcemanager.googleapis.com/projects/project-id
+		nameParts := strings.Split(resource.GetName(), "/")
+		projectID := nameParts[len(nameParts)-1]
+
+		// e.g., projects/123456789
+		projectParts := strings.Split(resource.GetProject(), "/")
+		projectNumber := projectParts[len(projectParts)-1]
+
+		projects = append(projects, &ProjectInfo{
+			ID:     projectID,
+			Number: projectNumber,
+			Labels: resource.GetLabels(),
+		})
 	}
 
 	return projects, nil

@@ -19,11 +19,11 @@ import (
 )
 
 type mockAssetInventoryClient struct {
-	projects    []string
+	projects    []*ProjectInfo
 	projectsErr error
 }
 
-func (m *mockAssetInventoryClient) Projects(ctx context.Context, gcpOrganizationID string, labelQuery []string) ([]string, error) {
+func (m *mockAssetInventoryClient) Projects(ctx context.Context, gcpFolderID string, labelQuery []string) ([]*ProjectInfo, error) {
 	if m.projectsErr != nil {
 		return nil, m.projectsErr
 	}
