@@ -31,7 +31,7 @@ env:
   INTEGRATION_SERVICE_ACCOUNT: 'gad-webhook-sa@github-action-dispatcher-i-e3.iam.gserviceaccount.com'
   INTEGRATION_WIF_PROVIDER: 'projects/643301186155/locations/global/workloadIdentityPools/github-automation/providers/gad-ci-i'
   INTEGRATION_WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-gad-ci-i-832939.iam.gserviceaccount.com'
-  INTEGRATION_WORKER_POOL_ID: 'projects/abcxyz-runner-i-4f/locations/us-central1/workerPools/abcxyz-e2-standard-2'
+  INTEGRATION_WORKER_POOL_ID: 'projects/abcxyz-runner-i-4f/locations/us-central1/workerPools/abcxyz-n2d-standard-2'
 
   INTEGRATION_RUNNER_DISCOVERY_JOB_NAME: 'runner-discovery'
   INTEGRATION_RUNNER_DISCOVERY_JOB_SA: 'runner-discovery-job-sa@github-action-dispatcher-i-e3.iam.gserviceaccount.com'
@@ -48,7 +48,7 @@ env:
   AUTOPUSH_SERVICE_ACCOUNT: 'gad-webhook-sa@github-action-dispatcher-a-e3.iam.gserviceaccount.com'
   AUTOPUSH_WIF_PROVIDER: 'projects/549740326763/locations/global/workloadIdentityPools/github-automation/providers/gad-ci-a'
   AUTOPUSH_WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-gad-ci-a-832939.iam.gserviceaccount.com'
-  AUTOPUSH_WORKER_POOL_ID: 'projects/abcxyz-runner-a-4f/locations/us-central1/workerPools/abcxyz-e2-standard-2'
+  AUTOPUSH_WORKER_POOL_ID: 'projects/abcxyz-runner-a-4f/locations/us-central1/workerPools/abcxyz-n2d-standard-2'
 
 jobs:
   go_test:
