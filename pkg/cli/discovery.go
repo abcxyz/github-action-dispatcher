@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/abcxyz/github-action-dispatcher/pkg/discovery"
+	"github.com/abcxyz/github-action-dispatcher/pkg/redis"
 	"github.com/abcxyz/pkg/cli"
 	"github.com/abcxyz/pkg/logging"
 )
@@ -51,9 +52,23 @@ func (c *RunnerDiscoveryCommand) Run(ctx context.Context, args []string) error {
 		return fmt.Errorf("failed to create config: %w", err)
 	}
 
-	logger.DebugContext(ctx, "loaded configuration", "config", cfg)
+	logger.DebugContext(ctx, "loaded discovery configuration", "config", cfg)
 
-	rd, err := discovery.NewRunnerDiscovery(ctx, cfg)
+	redisCfg, err := redis.NewConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create redis config: %w", err)
+	}
+
+	logger.DebugContext(ctx, "loaded redis configuration", "config", redisCfg)
+
+	redisClient, err := redis.NewClient(ctx, redisCfg)
+	if err != nil {
+		// Non-fatal, just log the error.
+		// The application can still function without Redis.
+		logger.ErrorContext(ctx, "failed to create redis client, caching will be disabled", "error", err)
+	}
+
+	rd, err := discovery.NewRunnerDiscovery(ctx, cfg, redisClient)
 	if err != nil {
 		return fmt.Errorf("failed to create runner discovery: %w", err)
 	}

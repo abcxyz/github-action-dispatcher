@@ -66,3 +66,13 @@ output "runner_discovery_job_service_account_name" {
   description = "Runner Discovery Job service account name."
   value       = google_service_account.runner_discovery_job_sa.name
 }
+
+output "redis_host" {
+  description = "The host of the Memorystore for Redis instance."
+  value       = google_redis_instance.primary.host
+}
+
+output "redis_port" {
+  description = "The port of the Memorystore for Redis instance."
+  value       = google_redis_instance.primary.port
+}

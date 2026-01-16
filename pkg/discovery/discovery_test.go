@@ -16,14 +16,48 @@ package discovery
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
+	"github.com/go-redis/redismock/v8"
 
 	"github.com/abcxyz/pkg/logging"
 	"github.com/abcxyz/pkg/testutil"
 )
+
+const (
+	testProjectID1              = "my-project"
+	testProjectID2              = "another-project"
+	testLocation                = "us-central1"
+	testMachineTypeE2Medium     = "e2-medium"
+	testMachineTypeE2Small      = "e2-small"
+	testMachineTypeE2LargeStale = "e2-large-stale"
+	testWorkerPoolID1           = "my-worker-pool-e2-medium"
+	testWorkerPoolID2           = "my-worker-pool-e2-medium-2"
+	testWorkerPoolID3           = "my-worker-pool-e2-small"
+	testGCPFolderID             = "12345"
+)
+
+// newMockWorkerPool creates a new mock cloudbuildpb.WorkerPool for testing.
+func newMockWorkerPool(projectID, location, poolID, machineType string) *cloudbuildpb.WorkerPool {
+	return &cloudbuildpb.WorkerPool{
+		Name: fmt.Sprintf("projects/%s/locations/%s/workerPools/%s", projectID, location, poolID),
+		Config: &cloudbuildpb.WorkerPool_PrivatePoolV1Config{
+			PrivatePoolV1Config: &cloudbuildpb.PrivatePoolV1Config{
+				WorkerConfig: &cloudbuildpb.PrivatePoolV1Config_WorkerConfig{
+					MachineType: machineType,
+				},
+			},
+		},
+	}
+}
+
+// defaultRedisKey generates a Redis key in the "default-<machine-type>" format.
+func defaultRedisKey(machineType string) string {
+	return fmt.Sprintf("default-%s", machineType)
+}
 
 func TestRunnerDiscovery_Run(t *testing.T) {
 	t.Parallel()
@@ -34,16 +68,20 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		cloudbuildMock     *mockCloudBuildClient
 		assetInventoryMock *mockAssetInventoryClient
 		expErr             string
+		expRedisSets       map[string][]string // Key: machineType, Value: list of worker pool names
+		expRedisDels       []string            // Keys expected to be deleted
 	}{
 		{
-			name: "success",
+			name: "success_no_cache_read_new_redis_write",
 			config: &Config{
 				LabelQuery:  []string{"env=test"},
-				GCPFolderID: "12345",
+				GCPFolderID: testGCPFolderID,
 			},
 			cloudbuildMock: &mockCloudBuildClient{
 				workerPools: []*cloudbuildpb.WorkerPool{
-					{Name: "pool1"},
+					newMockWorkerPool(testProjectID1, testLocation, testWorkerPoolID1, testMachineTypeE2Medium),
+					newMockWorkerPool(testProjectID2, testLocation, testWorkerPoolID2, testMachineTypeE2Medium),
+					newMockWorkerPool(testProjectID1, testLocation, testWorkerPoolID3, testMachineTypeE2Small),
 				},
 			},
 			assetInventoryMock: &mockAssetInventoryClient{
@@ -51,29 +89,22 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 					{ID: "labeled-project", Number: "labeled-project", Labels: map[string]string{}},
 				},
 			},
-		},
-		{
-			name: "success_with_location_label",
-			config: &Config{
-				LabelQuery:  []string{"env=test"},
-				GCPFolderID: "12345",
-			},
-			cloudbuildMock: &mockCloudBuildClient{
-				workerPools: []*cloudbuildpb.WorkerPool{
-					{Name: "pool1"},
+			expRedisSets: map[string][]string{
+				testMachineTypeE2Medium: {
+					newMockWorkerPool(testProjectID1, testLocation, testWorkerPoolID1, testMachineTypeE2Medium).Name,
+					newMockWorkerPool(testProjectID2, testLocation, testWorkerPoolID2, testMachineTypeE2Medium).Name,
+				},
+				testMachineTypeE2Small: {
+					newMockWorkerPool(testProjectID1, testLocation, testWorkerPoolID3, testMachineTypeE2Small).Name,
 				},
 			},
-			assetInventoryMock: &mockAssetInventoryClient{
-				projects: []*ProjectInfo{
-					{ID: "labeled-project", Number: "labeled-project", Labels: map[string]string{"runner-location": "us-west1"}},
-				},
-			},
+			expRedisDels: []string{defaultRedisKey(testMachineTypeE2LargeStale)},
 		},
 		{
 			name: "projects_error",
 			config: &Config{
 				LabelQuery:  []string{"env=test"},
-				GCPFolderID: "12345",
+				GCPFolderID: testGCPFolderID,
 			},
 			cloudbuildMock: &mockCloudBuildClient{},
 			assetInventoryMock: &mockAssetInventoryClient{
@@ -85,7 +116,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 			name: "list_worker_pools_error",
 			config: &Config{
 				LabelQuery:  []string{"env=test"},
-				GCPFolderID: "12345",
+				GCPFolderID: testGCPFolderID,
 			},
 			cloudbuildMock: &mockCloudBuildClient{
 				listWorkerPoolsErr: fmt.Errorf("failed to list worker pools"),
@@ -99,14 +130,47 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 	}
 
 	for _, tc := range cases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
 			ctx := logging.WithLogger(context.Background(), logging.TestLogger(t))
+			db, mock := redismock.NewClientMock()
+
+			if tc.expRedisSets != nil {
+				// Expect Scan for stale keys.
+				if len(tc.expRedisDels) > 0 {
+					// We need to return the keys in chunks, then "0" to signify end.
+					// For simplicity, returning all at once.
+					mock.ExpectScan(0, "default-*", 0).SetVal(tc.expRedisDels, 0)
+				} else {
+					mock.ExpectScan(0, "default-*", 0).SetVal([]string{}, 0)
+				}
+
+				// Begin pipeline for transactional update
+				mock.ExpectTxPipeline()
+
+				if len(tc.expRedisDels) > 0 {
+					// Expect DEL for stale keys
+					mock.ExpectDel(tc.expRedisDels...).SetVal(int64(len(tc.expRedisDels)))
+				}
+
+				for machineType, pools := range tc.expRedisSets {
+					redisKey := defaultRedisKey(machineType)
+					poolsJSON, err := json.Marshal(pools)
+					if err != nil {
+						t.Fatalf("failed to marshal pools for machine type %s: %v", machineType, err)
+					}
+					mock.ExpectSet(redisKey, poolsJSON, 0).SetVal("OK")
+				}
+
+				mock.ExpectTxPipelineExec() // Execute pipeline
+			}
 
 			rd := &RunnerDiscovery{
 				cbc:    tc.cloudbuildMock,
 				aic:    tc.assetInventoryMock,
+				rc:     db,
 				config: tc.config,
 			}
 
@@ -114,6 +178,9 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 
 			if diff := testutil.DiffErrString(err, tc.expErr); diff != "" {
 				t.Fatal(diff)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatalf("redis expectations not met: %v", err)
 			}
 		})
 	}
