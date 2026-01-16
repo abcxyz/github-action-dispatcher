@@ -151,3 +151,25 @@ variable "kms_private_key_version_number" {
   type        = number
   default     = 1
 }
+
+variable "redis" {
+  description = "Configuration for the Memorystore for Redis instance."
+  type = object({
+    authorized_network     = string
+    connect_mode           = string
+    instance_name          = string
+    memory_size_gb         = number
+    region                 = string
+    reserved_ip_range_name = string
+    tier                   = string
+  })
+  default = {
+    authorized_network     = ""
+    connect_mode           = "PRIVATE_SERVICE_ACCESS"
+    instance_name          = "runner-registry"
+    memory_size_gb         = 1
+    region                 = "us-central1"
+    reserved_ip_range_name = ""
+    tier                   = "BASIC"
+  }
+}
