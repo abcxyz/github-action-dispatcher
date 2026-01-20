@@ -151,3 +151,13 @@ variable "kms_private_key_version_number" {
   type        = number
   default     = 1
 }
+
+variable "vpc_network_name" {
+  description = "The name of the VPC network to connect to."
+  type        = string
+}
+
+variable "vpc_subnet_name" {
+  description = "The name of the VPC subnet to connect to."
+  type        = string
+}
