@@ -37,6 +37,14 @@ resource "google_cloud_run_v2_job" "runner_discovery_job" {
       service_account = google_service_account.runner_discovery_job_sa.email
       timeout         = "${var.runner_discovery.timeout_seconds}s"
 
+      vpc_access {
+        network_interfaces {
+          network    = var.vpc_network_name
+          subnetwork = var.vpc_subnet_name
+        }
+        egress = "PRIVATE_RANGES_ONLY"
+      }
+
       containers {
         image = var.image
         args  = ["job", var.runner_discovery.runner_discovery_job_name]
