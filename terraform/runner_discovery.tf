@@ -49,7 +49,10 @@ resource "google_cloud_run_v2_job" "runner_discovery_job" {
         image = var.image
         args  = ["job", var.runner_discovery.runner_discovery_job_name]
         dynamic "env" {
-          for_each = var.runner_discovery.envvars
+          for_each = merge(var.runner_discovery.envvars, {
+            "REDIS_HOST" = google_redis_instance.primary.host,
+            "REDIS_PORT" = google_redis_instance.primary.port,
+          })
           content {
             name  = env.key
             value = env.value
