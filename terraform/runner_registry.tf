@@ -27,13 +27,13 @@ resource "google_project_service" "runner_registry" {
 resource "google_redis_instance" "primary" {
   project = var.project_id
 
-  authorized_network_id = var.runner_registry.authorized_network_id
-  name                  = var.runner_registry.instance_name
-  region                = var.runner_registry.region
-  tier                  = var.runner_registry.tier
-  memory_size_gb        = var.runner_registry.memory_size_gb
-  connect_mode          = var.runner_registry.connect_mode
-  reserved_ip_range     = var.runner_registry.reserved_ip_range_name
+  authorized_network = var.runner_registry.authorized_network_id
+  name               = var.runner_registry.instance_name
+  region             = var.runner_registry.region
+  tier               = var.runner_registry.tier
+  memory_size_gb     = var.runner_registry.memory_size_gb
+  connect_mode       = var.runner_registry.connect_mode
+  reserved_ip_range  = var.runner_registry.reserved_ip_range_name
 
   depends_on = [
     google_project_service.runner_registry["redis.googleapis.com"],
