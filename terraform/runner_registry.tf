@@ -24,10 +24,16 @@ resource "google_project_service" "runner_registry" {
   disable_on_destroy = false
 }
 
+data "google_compute_network" "shared_network" {
+  project = var.vpc_host_project_id
+
+  name = var.vpc_network_name
+}
+
 resource "google_redis_instance" "primary" {
   project = var.project_id
 
-  authorized_network = var.runner_registry.authorized_network_id
+  authorized_network = data.google_compute_network.shared_network.id
   name               = var.runner_registry.instance_name
   region             = var.runner_registry.region
   tier               = var.runner_registry.tier
