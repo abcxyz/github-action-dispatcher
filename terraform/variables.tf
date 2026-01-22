@@ -162,6 +162,11 @@ variable "vpc_subnet_name" {
   type        = string
 }
 
+variable "vpc_subnet_region" {
+  description = "The VPC subnet region."
+  type        = string
+}
+
 variable "vpc_host_project_id" {
   description = "The project ID of the VPC."
   type        = string

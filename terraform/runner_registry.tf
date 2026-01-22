@@ -30,6 +30,13 @@ data "google_compute_network" "shared_network" {
   name = var.vpc_network_name
 }
 
+data "google_compute_subnetwork" "shared_subnetwork" {
+  project = var.vpc_host_project_id
+
+  name   = var.vpc_subnet_name
+  region = var.vpc_subnet_region
+}
+
 resource "google_redis_instance" "primary" {
   project = var.project_id
 
