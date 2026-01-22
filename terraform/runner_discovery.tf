@@ -39,8 +39,8 @@ resource "google_cloud_run_v2_job" "runner_discovery_job" {
 
       vpc_access {
         network_interfaces {
-          network    = var.vpc_network_name
-          subnetwork = var.vpc_subnet_name
+          network    = data.google_compute_network.shared_network.id
+          subnetwork = data.google_compute_subnetwork.shared_subnetwork.id
         }
         egress = "PRIVATE_RANGES_ONLY"
       }
