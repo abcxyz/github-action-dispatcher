@@ -175,19 +175,19 @@ variable "vpc_host_project_id" {
 variable "runner_registry" {
   description = "Configuration for the Memorystore for the runner registry instance."
   type = object({
-    connect_mode           = string
-    instance_name          = string
-    memory_size_gb         = number
-    region                 = string
-    reserved_ip_range_name = string
-    tier                   = string
+    connect_mode      = string
+    instance_name     = string
+    memory_size_gb    = number
+    region            = string
+    reserved_ip_range = string
+    tier              = string
   })
   default = {
-    connect_mode           = "PRIVATE_SERVICE_ACCESS"
-    instance_name          = "runner-registry"
-    memory_size_gb         = 1
-    region                 = "us-central1"
-    reserved_ip_range_name = ""
-    tier                   = "BASIC"
+    connect_mode      = "PRIVATE_SERVICE_ACCESS"
+    instance_name     = "runner-registry"
+    memory_size_gb    = 1
+    region            = "us-central1"
+    reserved_ip_range = ""
+    tier              = "BASIC"
   }
 }

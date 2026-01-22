@@ -46,7 +46,7 @@ resource "google_redis_instance" "primary" {
   tier               = var.runner_registry.tier
   memory_size_gb     = var.runner_registry.memory_size_gb
   connect_mode       = var.runner_registry.connect_mode
-  reserved_ip_range  = var.runner_registry.reserved_ip_range_name
+  reserved_ip_range  = var.runner_registry.reserved_ip_range
 
   depends_on = [
     google_project_service.runner_registry["redis.googleapis.com"],
