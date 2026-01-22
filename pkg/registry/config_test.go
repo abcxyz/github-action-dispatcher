@@ -35,8 +35,8 @@ func TestNewConfig(t *testing.T) {
 		{
 			name: "success",
 			lookup: envconfig.MapLookuper(map[string]string{
-				"REGISTRY_HOST": "localhost",
-				"REGISTRY_PORT": "6379",
+				"REDIS_HOST": "localhost",
+				"REDIS_PORT": "6379",
 			}),
 			expCfg: &RegistryConfig{
 				Host: "localhost",
@@ -46,16 +46,16 @@ func TestNewConfig(t *testing.T) {
 		{
 			name: "missing_host",
 			lookup: envconfig.MapLookuper(map[string]string{
-				"REGISTRY_PORT": "6379",
+				"REDIS_PORT": "6379",
 			}),
-			expErr: `failed to parse registry config: failed to load config: Host: missing required value: REGISTRY_HOST`,
+			expErr: `failed to parse registry config: failed to load config: Host: missing required value: REDIS_HOST`,
 		},
 		{
 			name: "missing_port",
 			lookup: envconfig.MapLookuper(map[string]string{
-				"REGISTRY_HOST": "localhost",
+				"REDIS_HOST": "localhost",
 			}),
-			expErr: `failed to parse registry config: failed to load config: Port: missing required value: REGISTRY_PORT`,
+			expErr: `failed to parse registry config: failed to load config: Port: missing required value: REDIS_PORT`,
 		},
 	}
 
