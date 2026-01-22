@@ -26,8 +26,8 @@ import (
 // RegistryConfig defines the set of environment variables required
 // for creating a registry client.
 type RegistryConfig struct {
-	Host string `env:"REGISTRY_HOST,required"`
-	Port string `env:"REGISTRY_PORT,required"`
+	Host string `env:"REDIS_HOST,required"`
+	Port string `env:"REDIS_PORT,required"`
 }
 
 // NewConfig creates a new RegistryConfig from environment variables.
