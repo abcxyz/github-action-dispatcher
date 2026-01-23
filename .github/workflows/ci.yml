@@ -23,6 +23,8 @@ env:
   INTEGRATION_RUNNER_LOCATION: 'us-central1'
   INTEGRATION_RUNNER_PROJECT_ID: 'abcxyz-runner-i-4f'
   INTEGRATION_RUNNER_SERVICE_ACCOUNT: 'projects/abcxyz-runner-i-4f/serviceAccounts/abcxyz-runner-sa@abcxyz-runner-i-4f.iam.gserviceaccount.com'
+  INTEGRATION_REDIS_HOST: '172.16.0.3'
+  INTEGRATION_REDIS_PORT: '6379'
 
   INTEGRATION_GH_APP_INSTALLATION_ID: '2320897'
   INTEGRATION_PROJECT_ID: 'github-action-dispatcher-i-e3'
@@ -40,6 +42,8 @@ env:
   AUTOPUSH_RUNNER_LOCATION: 'us-central1'
   AUTOPUSH_RUNNER_PROJECT_ID: 'abcxyz-runner-a-4f'
   AUTOPUSH_RUNNER_SERVICE_ACCOUNT: 'projects/abcxyz-runner-a-4f/serviceAccounts/abcxyz-runner-sa@abcxyz-runner-a-4f.iam.gserviceaccount.com'
+  AUTOPUSH_REDIS_HOST: '172.16.0.3'
+  AUTOPUSH_REDIS_PORT: '6379'
 
   AUTOPUSH_GH_APP_INSTALLATION_ID: '2320888'
   AUTOPUSH_PROJECT_ID: 'github-action-dispatcher-a-e3'
@@ -247,6 +251,8 @@ jobs:
           WEBHOOK_SECRET_VERSION="latest"
 
           cat > /tmp/env_vars <<EOF
+          REDIS_HOST: "${{ env.INTEGRATION_REDIS_HOST }}"
+          REDIS_PORT: "${{ env.INTEGRATION_REDIS_PORT }}"
           ENABLE_SELF_HOSTED_LABEL: 'true'
           EXTRA_RUNNER_COUNT: '0'
           GITHUB_APP_ID: '${{ env.GITHUB_APP_ID }}'
@@ -381,6 +387,8 @@ jobs:
           WEBHOOK_SECRET_VERSION="latest"
 
           cat > /tmp/env_vars <<EOF
+          REDIS_HOST: "${{ env.AUTOPUSH_REDIS_HOST }}"
+          REDIS_PORT: "${{ env.AUTOPUSH_REDIS_PORT }}"
           ENABLE_SELF_HOSTED_LABEL: 'true'
           EXTRA_RUNNER_COUNT: '0'
           GITHUB_APP_ID: '${{ env.GITHUB_APP_ID }}'
