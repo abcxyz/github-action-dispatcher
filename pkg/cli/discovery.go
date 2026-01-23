@@ -61,14 +61,14 @@ func (c *RunnerDiscoveryCommand) Run(ctx context.Context, args []string) error {
 
 	logger.DebugContext(ctx, "loaded registry configuration", "config", registryCfg)
 
-	registryClient, err := registry.NewRegistryClient(ctx, registryCfg)
+	rc, err := registry.NewRunnerRegistry(ctx, registryCfg)
 	if err != nil {
 		// Non-fatal, just log the error.
 		// The application can still function without the registry.
 		logger.ErrorContext(ctx, "failed to create registry client, caching will be disabled", "error", err)
 	}
 
-	rd, err := discovery.NewRunnerDiscovery(ctx, cfg, registryClient)
+	rd, err := discovery.NewRunnerDiscovery(ctx, cfg, rc)
 	if err != nil {
 		return fmt.Errorf("failed to create runner discovery: %w", err)
 	}

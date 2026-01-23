@@ -23,24 +23,25 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
+	"github.com/go-redis/redis/v8"
 	"github.com/google/go-github/v69/github"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/durationpb"
 
+	"github.com/abcxyz/github-action-dispatcher/pkg/registry"
 	"github.com/abcxyz/pkg/logging"
 )
 
 const (
-	deprecatedSelfHostedRunnerLabel   = "self-hosted"
-	runnerStartedMsg                  = "runner started"
-	githubWebhookEventKey             = "github_webhook_event"
-	selfHostedUbuntuLatestRunnerLabel = "sh-ubuntu-latest"
+	runnerStartedMsg      = "runner started"
+	githubWebhookEventKey = "github_webhook_event"
 )
 
 // apiResponse is a structure that contains a http status code,
@@ -165,7 +166,7 @@ func validateGitHubPayload(r *http.Request, webhookSecret []byte) (*github.Workf
 // startRunnersForJob contains the core logic for spawning runners for a given
 // queued job. It returns the names of the runners it successfully started and
 // an error if anything went wrong.
-func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJobEvent, label string) ([]string, error) {
+func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJobEvent, jobOriginalRunnerLabel, jobResolvedRunnerLabel string) ([]string, error) {
 	logger := logging.FromContext(ctx)
 
 	// This slice will hold the names of runners we successfully create.
@@ -181,7 +182,7 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 
 		runnerCtx := logging.WithLogger(ctx, runnerLogger)
 
-		responseText, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, s.runnerImageTag, label)
+		responseText, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, s.runnerImageTag, jobOriginalRunnerLabel, jobResolvedRunnerLabel)
 		if err != nil {
 			// If one fails, return the error and the list of any that succeeded before it.
 			return startedRunnerNames, fmt.Errorf("failed on runner %s: %w. response: %s", runnerID, err, responseText)
@@ -205,19 +206,15 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 	}
 
 	incomingLabel := event.WorkflowJob.Labels[0]
-	var labelToUse string
+	jobOriginalRunnerLabel := incomingLabel // used in jit config request
 
-	if incomingLabel == s.runnerLabel || incomingLabel == selfHostedUbuntuLatestRunnerLabel {
-		labelToUse = s.runnerLabel
-	} else if s.enableSelfHostedLabel && incomingLabel == deprecatedSelfHostedRunnerLabel {
-		// This case is a temporary hack to allow us to migrate away from the self-hosted label.
-		// It should be deleted once that is done.
-		labelToUse = deprecatedSelfHostedRunnerLabel
-	}
+	jobResolvedRunnerLabel, canHandle := s.resolveAndValidateRunnerLabel(ctx, incomingLabel)
 
-	if labelToUse == "" {
-		logger.WarnContext(ctx, "no action taken for label", "labels", event.WorkflowJob.Labels)
-		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken for label: %s", event.WorkflowJob.Labels), nil}
+	if !canHandle {
+		logger.WarnContext(ctx, "no action taken for label",
+			"original_label", jobOriginalRunnerLabel,
+			"resolved_label", jobResolvedRunnerLabel)
+		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken for label: %s", incomingLabel), nil}
 	}
 
 	if event.Installation == nil || event.Installation.ID == nil || event.Org == nil || event.Org.Login == nil || event.Repo == nil || event.Repo.Name == nil {
@@ -226,7 +223,7 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		return &apiResponse{http.StatusBadRequest, "unexpected event payload struture", err}
 	}
 
-	runnerNames, err := s.startRunnersForJob(ctx, event, labelToUse)
+	runnerNames, err := s.startRunnersForJob(ctx, event, jobOriginalRunnerLabel, jobResolvedRunnerLabel)
 	if err != nil {
 		return &apiResponse{http.StatusInternalServerError, err.Error(), err}
 	}
@@ -243,6 +240,39 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 	}
 
 	return &apiResponse{http.StatusOK, string(responseBytes), nil}
+}
+
+// resolveAndValidateRunnerLabel encapsulates the logic for resolving runner labels
+// and checking if they are provisionable based on the server's configuration.
+func (s *Server) resolveAndValidateRunnerLabel(ctx context.Context, incomingLabel string) (string, bool) {
+	logger := logging.FromContext(ctx)
+
+	// Determine the lookup label for the worker pool after resolving aliases.
+	jobResolvedRunnerLabel := incomingLabel
+	for {
+		if next, ok := s.config.RunnerLabelAliases[jobResolvedRunnerLabel]; ok {
+			logger.InfoContext(ctx, "resolved runner label alias",
+				"original_label", jobResolvedRunnerLabel,
+				"resolved_label", next)
+			jobResolvedRunnerLabel = next
+		} else {
+			break
+		}
+	}
+
+	// Check if the jobResolvedRunnerLabel is in the combined allowlist.
+	canHandle := s.allowedLabels[jobResolvedRunnerLabel]
+
+	return jobResolvedRunnerLabel, canHandle
+}
+
+// getRunnerKey creates a key for the runner in the format that the registry
+// expects. This key is used to lookup additional information about the runner,
+// such as the worker pool to use.
+func (s *Server) getRunnerKey(ctx context.Context, label string) string {
+	// TODO(controllers): Add support for org-specific keys.
+	// For now, we only support default runners that are org agnostic.
+	return fmt.Sprintf("%s:%s", s.runnerRegistryDefaultKeyPrefix, label)
 }
 
 func extractLoggedAttributes(event *github.WorkflowJobEvent) (string, []any) {
@@ -316,8 +346,8 @@ func compressAndBase64EncodeString(input string) (string, error) {
 	return base64.StdEncoding.EncodeToString(compressedJIT.Bytes()), nil
 }
 
-func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageTag, runnerLabel string) (string, error) {
-	jitConfig, err := s.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID, runnerLabel)
+func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageTag, jobOriginalRunnerLabel, jobResolvedRunnerLabel string) (string, error) {
+	jitConfig, err := s.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID, jobOriginalRunnerLabel)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to generate JIT config",
 			"error", err.Error(),
@@ -365,11 +395,48 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 		build.Tags = []string{"e2e-test", fmt.Sprintf("e2e-run-id-%s", s.e2eTestRunID)}
 	}
 
-	if s.runnerWorkerPoolID != "" {
+	// Determine the worker pool to use.
+	var workerPoolName string
+	var projectIDForSA string
+
+	// pools will be nil if not found in registry
+	pools := s.getWorkerPools(ctx, jobResolvedRunnerLabel)
+
+	if len(pools) > 0 {
+		// Use random selection to select a pool.
+		//nolint:gosec // G404: Use of weak random number generator is acceptable here because cryptographic randomness is not required for worker pool selection.
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+		randomIndex := r.Intn(len(pools))
+		selectedPool := pools[randomIndex]
+		workerPoolName = selectedPool.Name
+		projectIDForSA = selectedPool.ProjectID
+		logger.InfoContext(ctx, "found worker pool in registry",
+			"worker_pool", workerPoolName,
+			"total_worker_pools_found", len(pools))
+	} else {
+		// Fallback to default.
+		workerPoolName = s.runnerWorkerPoolID
+	}
+
+	// Default to the server's configured service account.
+	serviceAccount := s.runnerServiceAccount
+
+	if workerPoolName != "" {
 		build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{
-			Name: s.runnerWorkerPoolID,
+			Name: workerPoolName,
+		}
+
+		// If a SA was not provided via config, derive it.
+		if serviceAccount == "" {
+			if projectIDForSA != "" {
+				// If a custom worker pool is specified, derive the service account from
+				// the worker pool's project ID. The SA is colocated with the worker pool.
+				serviceAccount = fmt.Sprintf("runner-sa@%s.iam.gserviceaccount.com", projectIDForSA)
+				logger.DebugContext(ctx, "using dynamic service account", "service_account", serviceAccount)
+			}
 		}
 	}
+	build.ServiceAccount = serviceAccount
 
 	buildReq := &cloudbuildpb.CreateBuildRequest{
 		Parent:    fmt.Sprintf("projects/%s/locations/%s", s.runnerProjectID, s.runnerLocation),
@@ -383,6 +450,55 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 		return "failed to create build", err
 	}
 	return "", nil
+}
+
+// getWorkerPool determines the appropriate worker pool for a given runner label.
+// It first attempts to find a worker pool from the registry (Redis). If it
+// fails or if no pool is found, it returns nil.
+func (s *Server) getWorkerPools(ctx context.Context, runnerLabel string) []registry.WorkerPoolInfo {
+	logger := logging.FromContext(ctx)
+
+	// Return nil if registry is not configured.
+	if s.rc == nil {
+		logger.DebugContext(ctx, "registry not configured, no worker pools found")
+		return nil
+	}
+
+	// Attempt to get pools from the registry.
+	poolsKey := s.getRunnerKey(ctx, runnerLabel)
+	logger.DebugContext(ctx, "attempting to get worker pool from registry", "key", poolsKey)
+	val, err := s.rc.Get(ctx, poolsKey).Result()
+	if err != nil {
+		if !errors.Is(err, redis.Nil) {
+			// If it's a real error, log it, but we can still fall back to the default.
+			logger.ErrorContext(ctx, "Redis GET operation failed for worker pool from registry",
+				"error", err,
+				"key", poolsKey)
+		}
+		logger.DebugContext(ctx, "worker pool not found in registry (or redis.Nil error), using default",
+			"key", poolsKey,
+			"worker_pool", s.runnerWorkerPoolID)
+		return nil
+	}
+	logger.DebugContext(ctx, "successfully retrieved worker pool from registry", "key", poolsKey)
+
+	var pools []registry.WorkerPoolInfo
+	if err := json.Unmarshal([]byte(val), &pools); err != nil {
+		logger.ErrorContext(ctx, "failed to unmarshal pools from registry",
+			"error", err,
+			"value", val)
+		return nil
+	}
+	logger.DebugContext(ctx, "retrieved worker pools from registry", "pools", pools)
+
+	if len(pools) == 0 {
+		logger.InfoContext(ctx, "no worker pools found in registry for label, using default",
+			"label", runnerLabel,
+			"worker_pool", s.runnerWorkerPoolID)
+		return nil
+	}
+
+	return pools
 }
 
 // getTimeString is a helper function to format a *github.Timestamp pointer into an ISO 8601 string.
