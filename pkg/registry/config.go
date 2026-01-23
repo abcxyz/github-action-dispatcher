@@ -21,6 +21,7 @@ import (
 	"github.com/sethvargo/go-envconfig"
 
 	"github.com/abcxyz/pkg/cfgloader"
+	"github.com/abcxyz/pkg/cli"
 )
 
 // RegistryConfig defines the set of environment variables required
@@ -28,6 +29,23 @@ import (
 type RegistryConfig struct {
 	Host string `env:"REDIS_HOST,required"`
 	Port string `env:"REDIS_PORT,required"`
+}
+
+// ToFlags binds the config to a CLI flag set.
+func (c *RegistryConfig) ToFlags(set *cli.FlagSet) {
+	f := set.NewSection("Registry Options")
+	f.StringVar(&cli.StringVar{
+		Name:   "redis-host",
+		Target: &c.Host,
+		EnvVar: "REDIS_HOST",
+		Usage:  "The host of the redis server.",
+	})
+	f.StringVar(&cli.StringVar{
+		Name:   "redis-port",
+		Target: &c.Port,
+		EnvVar: "REDIS_PORT",
+		Usage:  "The port of the redis server.",
+	})
 }
 
 // NewConfig creates a new RegistryConfig from environment variables.

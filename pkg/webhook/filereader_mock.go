@@ -14,6 +14,10 @@
 
 package webhook
 
+import (
+	"fmt"
+)
+
 type ReadFileResErr struct {
 	Res []byte
 	Err error
@@ -21,8 +25,17 @@ type ReadFileResErr struct {
 
 type MockFileReader struct {
 	ReadFileMock *ReadFileResErr
+	ReadFileFunc func(filename string) ([]byte, error)
 }
 
 func (m *MockFileReader) ReadFile(filename string) ([]byte, error) {
-	return m.ReadFileMock.Res, m.ReadFileMock.Err
+	if m.ReadFileFunc != nil {
+		return m.ReadFileFunc(filename)
+	}
+
+	// Fallback to ReadFileMock if ReadFileFunc is not provided
+	if m.ReadFileMock != nil {
+		return m.ReadFileMock.Res, m.ReadFileMock.Err
+	}
+	return nil, fmt.Errorf("mock ReadFile not implemented")
 }

@@ -26,8 +26,9 @@ import (
 )
 
 const (
-	locationLabel    = "runner-location"
-	fallbackLocation = "us-central1"
+	runnerLabelGCPProjectLabelKey    = "runner-label"
+	runnerLocationGCPProjectLabelKey = "runner-location"
+	runnerTypeGCPProjectLabelKey     = "runner-type"
 )
 
 // RunnerDiscovery is the main struct for the runner-discovery job.
@@ -73,9 +74,11 @@ func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get projects: %w", err)
 	}
-	logger.InfoContext(ctx, "Discovered projects from API", "projects", projects)
+	logger.InfoContext(ctx, "Discovered projects from API",
+		"count", len(projects),
+		"projects", projects)
 
-	poolsByMachineType := make(map[string][]string)
+	poolsByRegistryKey := make(map[string][]string)
 	for _, project := range projects {
 		logger.InfoContext(ctx,
 			"Checking project for worker pools",
@@ -83,18 +86,49 @@ func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 			"project_number", project.Number,
 			"project_labels", project.Labels)
 
-		location, ok := project.Labels[locationLabel]
+		runnerType, ok := project.Labels[runnerTypeGCPProjectLabelKey]
 		if !ok {
-			location = fallbackLocation
+			logger.WarnContext(ctx, "project missing required label",
+				"project_id", project.ID,
+				"label", runnerTypeGCPProjectLabelKey)
+			continue
+		}
+		if runnerType == "" {
+			logger.WarnContext(ctx, "project has empty runner-type label", "project_id", project.ID)
+			continue
+		}
+
+		runnerLabel, ok := project.Labels[runnerLabelGCPProjectLabelKey]
+		if !ok {
+			logger.WarnContext(ctx, "project missing required label",
+				"project_id", project.ID,
+				"label", runnerLabelGCPProjectLabelKey)
+			continue
+		}
+		if runnerLabel == "" {
+			logger.WarnContext(ctx, "project has empty runner-label", "project_id", project.ID)
+			continue
+		}
+
+		location, ok := project.Labels[runnerLocationGCPProjectLabelKey]
+		if !ok {
+			logger.WarnContext(ctx, "project missing required label",
+				"project_id", project.ID,
+				"label", runnerLocationGCPProjectLabelKey)
+			continue
+		}
+		if location == "" {
+			logger.WarnContext(ctx, "project has empty runner-location label", "project_id", project.ID)
+			continue
 		}
 
 		wps, err := rd.cbc.ListWorkerPools(ctx, project.ID, location)
 		if err != nil {
-			logger.ErrorContext(ctx,
-				"failed to list worker pools",
-				"project_id", project.ID,
-				"project_number", project.Number,
-				"error", err)
+			return fmt.Errorf("failed to list worker pools for project %s: %w", project.ID, err)
+		}
+
+		if len(wps) == 0 {
+			logger.InfoContext(ctx, "no worker pools found in project", "project_id", project.ID)
 			continue
 		}
 
@@ -119,13 +153,15 @@ func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 				continue
 			}
 
-			machineType := workerConfig.GetMachineType()
-			if machineType == "" {
-				logger.InfoContext(ctx, "worker pool has no machine type, skipping", "worker_pool", wp.GetName())
-				continue
-			}
-			poolsByMachineType[machineType] = append(poolsByMachineType[machineType], wp.GetName())
+			// The key for Redis should be constructed from runner-type and runner-label from project labels.
+			registryKey := fmt.Sprintf("%s:%s", runnerType, runnerLabel)
+			poolsByRegistryKey[registryKey] = append(poolsByRegistryKey[registryKey], wp.GetName())
 		}
+	}
+
+	// Sort all collected pools to ensure deterministic order before marshaling.
+	for _, pools := range poolsByRegistryKey {
+		sort.Strings(pools)
 	}
 
 	if rd.rc == nil {
@@ -134,19 +170,18 @@ func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 
 	// First, prepare all the new data and verify it before touching the cache.
 	marshalledPools := make(map[string][]byte)
-	for machineType, pools := range poolsByMachineType {
-		registryKey := fmt.Sprintf("default-%s", machineType)
+	for registryKey, pools := range poolsByRegistryKey {
 		poolsJSON, err := json.Marshal(pools)
 		if err != nil {
 			// If we can't marshal the data, we can't update the cache. Abort.
-			return fmt.Errorf("failed to marshal pools for machine type %s: %w", machineType, err)
+			return fmt.Errorf("failed to marshal pools for key %s: %w", registryKey, err)
 		}
 		marshalledPools[registryKey] = poolsJSON
 	}
 
 	// Find all stale keys that need to be deleted.
 	var staleKeys []string
-	iter := rd.rc.Scan(ctx, 0, "default-*", 0).Iterator()
+	iter := rd.rc.Scan(ctx, 0, rd.config.RunnerRegistryDefaultKeyPrefix+":*", 0).Iterator()
 	for iter.Next(ctx) {
 		staleKeys = append(staleKeys, iter.Val())
 	}
@@ -157,7 +192,7 @@ func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 
 	// Atomically delete stale keys and set new keys in a transaction.
 	// Only initiate a transaction if there are keys to delete or set.
-	if len(staleKeys) == 0 && len(marshalledPools) == 0 {
+	if len(staleKeys) == 0 && len(poolsByRegistryKey) == 0 {
 		logger.InfoContext(ctx, "no keys to delete or set in registry, skipping transaction")
 		return nil
 	}

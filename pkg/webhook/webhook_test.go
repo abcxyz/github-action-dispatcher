@@ -16,6 +16,7 @@ package webhook
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
@@ -30,15 +31,18 @@ import (
 	"time"
 
 	"github.com/google/go-github/v69/github"
+	gcpkms "github.com/sethvargo/go-gcpkms/pkg/gcpkms"
 
 	"github.com/abcxyz/pkg/githubauth"
 )
 
 const (
-	SHA256SignatureHeader = "X-Hub-Signature-256"
-	EventTypeHeader       = "X-Github-Event"
-	DeliveryIDHeader      = "X-Github-Delivery"
-	ContentTypeHeader     = "Content-Type"
+	SHA256SignatureHeader             = "X-Hub-Signature-256"
+	EventTypeHeader                   = "X-Github-Event"
+	DeliveryIDHeader                  = "X-Github-Delivery"
+	ContentTypeHeader                 = "Content-Type"
+	SelfHostedRunnerLabel             = "self-hosted"
+	SelfHostedUbuntuLatestRunnerLabel = "sh-ubuntu-latest"
 	//nolint:gosec // this is a test value
 	serverGitHubWebhookSecret = "test-github-webhook-secret"
 )
@@ -65,8 +69,6 @@ func TestHandleWebhook(t *testing.T) {
 		runnerExecutionTimeoutSeconds int
 		runnerLabels                  []string
 		payloadWebhookSecret          string
-		serverRunnerLabel             string
-		serverEnableSelfHostedLabel   bool
 		extraSpawnNumber              int
 		contentType                   string
 		createdAt                     *github.Timestamp
@@ -84,9 +86,8 @@ func TestHandleWebhook(t *testing.T) {
 			payloadType:                   payloadType,
 			action:                        queuedAction,
 			runnerExecutionTimeoutSeconds: 7200,
-			runnerLabels:                  []string{deprecatedSelfHostedRunnerLabel},
+			runnerLabels:                  []string{SelfHostedRunnerLabel},
 			payloadWebhookSecret:          serverGitHubWebhookSecret,
-			serverRunnerLabel:             "self-hosted",
 			contentType:                   contentType,
 			createdAt:                     &queuedTime,
 			startedAt:                     nil,
@@ -100,13 +101,13 @@ func TestHandleWebhook(t *testing.T) {
 			expRespBody:      "",
 			expectBuildCount: 1,
 		},
+
 		{
-			name:                 "Workflow Job Queued - Custom Label",
+			name:                 "Workflow Job Queued - Default And Custom Label",
 			payloadType:          payloadType,
 			action:               queuedAction,
-			runnerLabels:         []string{"custom-label"},
+			runnerLabels:         []string{SelfHostedRunnerLabel},
 			payloadWebhookSecret: serverGitHubWebhookSecret,
-			serverRunnerLabel:    "custom-label",
 			contentType:          contentType,
 			createdAt:            &queuedTime,
 			startedAt:            nil,
@@ -119,31 +120,11 @@ func TestHandleWebhook(t *testing.T) {
 			expectBuildCount:     1,
 		},
 		{
-			name:                        "Workflow Job Queued - Default And Custom Label",
-			payloadType:                 payloadType,
-			action:                      queuedAction,
-			runnerLabels:                []string{"self-hosted"},
-			payloadWebhookSecret:        serverGitHubWebhookSecret,
-			serverRunnerLabel:           "custom-label",
-			serverEnableSelfHostedLabel: true,
-			contentType:                 contentType,
-			createdAt:                   &queuedTime,
-			startedAt:                   nil,
-			completedAt:                 nil,
-			runID:                       &runID,
-			jobID:                       &jobID,
-			jobName:                     &jobName,
-			expStatusCode:               200,
-			expRespBody:                 "", // Expects JSON
-			expectBuildCount:            1,
-		},
-		{
 			name:                 "Workflow Job Queued - Multiple Builds Spawned",
 			payloadType:          payloadType,
 			action:               queuedAction,
-			runnerLabels:         []string{deprecatedSelfHostedRunnerLabel},
+			runnerLabels:         []string{SelfHostedRunnerLabel},
 			payloadWebhookSecret: serverGitHubWebhookSecret,
-			serverRunnerLabel:    "self-hosted",
 			extraSpawnNumber:     2,
 			contentType:          contentType,
 			createdAt:            &queuedTime,
@@ -157,31 +138,11 @@ func TestHandleWebhook(t *testing.T) {
 			expectBuildCount:     3,
 		},
 		{
-			name:                        "Workflow Job Queued - Multiple Label Fails",
-			payloadType:                 payloadType,
-			action:                      queuedAction,
-			runnerLabels:                []string{"self-hosted", "custom-label"},
-			payloadWebhookSecret:        serverGitHubWebhookSecret,
-			serverRunnerLabel:           "custom-label",
-			serverEnableSelfHostedLabel: true,
-			contentType:                 contentType,
-			createdAt:                   &queuedTime,
-			startedAt:                   nil,
-			completedAt:                 nil,
-			runID:                       &runID,
-			jobID:                       &jobID,
-			jobName:                     &jobName,
-			expStatusCode:               200,
-			expRespBody:                 fmt.Sprintf("no action taken, only accept single label jobs, got: %s", []string{"self-hosted", "custom-label"}),
-			expectBuildCount:            0,
-		},
-		{
-			name:                 "Workflow Job Queued - No Matching Label",
+			name:                 "Workflow Job Queued - Multiple Label Fails",
 			payloadType:          payloadType,
 			action:               queuedAction,
-			runnerLabels:         []string{"other-label"},
+			runnerLabels:         []string{"self-hosted", "custom-label"},
 			payloadWebhookSecret: serverGitHubWebhookSecret,
-			serverRunnerLabel:    "self-hosted",
 			contentType:          contentType,
 			createdAt:            &queuedTime,
 			startedAt:            nil,
@@ -190,16 +151,32 @@ func TestHandleWebhook(t *testing.T) {
 			jobID:                &jobID,
 			jobName:              &jobName,
 			expStatusCode:        200,
-			expRespBody:          fmt.Sprintf("no action taken for label: %s", []string{"other-label"}),
+			expRespBody:          fmt.Sprintf("no action taken, only accept single label jobs, got: %v", []string{SelfHostedRunnerLabel, "custom-label"}),
+			expectBuildCount:     0,
+		},
+		{
+			name:                 "Workflow Job Queued - No Matching Label",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{"other-label"},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          fmt.Sprintf("no action taken for label: %s", "other-label"),
 			expectBuildCount:     0,
 		},
 		{
 			name:                 "Workflow Job In Progress",
 			payloadType:          payloadType,
 			action:               "in_progress",
-			runnerLabels:         []string{deprecatedSelfHostedRunnerLabel},
+			runnerLabels:         []string{SelfHostedRunnerLabel},
 			payloadWebhookSecret: serverGitHubWebhookSecret,
-			serverRunnerLabel:    "self-hosted",
 			contentType:          contentType,
 			createdAt:            &queuedTime,
 			startedAt:            &inProgressTime,
@@ -214,9 +191,8 @@ func TestHandleWebhook(t *testing.T) {
 			name:                 "Workflow Job Completed - Success",
 			payloadType:          payloadType,
 			action:               "completed",
-			runnerLabels:         []string{deprecatedSelfHostedRunnerLabel},
+			runnerLabels:         []string{SelfHostedRunnerLabel},
 			payloadWebhookSecret: serverGitHubWebhookSecret,
-			serverRunnerLabel:    "self-hosted",
 			contentType:          contentType,
 			createdAt:            &queuedTime,
 			startedAt:            &inProgressTime,
@@ -232,9 +208,25 @@ func TestHandleWebhook(t *testing.T) {
 			name:                 "Workflow Job Queued - Self Hosted Ubuntu Latest",
 			payloadType:          payloadType,
 			action:               queuedAction,
-			runnerLabels:         []string{selfHostedUbuntuLatestRunnerLabel},
+			runnerLabels:         []string{SelfHostedUbuntuLatestRunnerLabel},
 			payloadWebhookSecret: serverGitHubWebhookSecret,
-			serverRunnerLabel:    "sh-ubuntu-latest",
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          "",
+			expectBuildCount:     1,
+		},
+		{
+			name:                 "Workflow Job Queued - Supported Runner Label",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{"ubuntu-20.04-n2d-standard-2"}, // Directly from SupportedRunnerLabels
+			payloadWebhookSecret: serverGitHubWebhookSecret,
 			contentType:          contentType,
 			createdAt:            &queuedTime,
 			startedAt:            nil,
@@ -252,6 +244,8 @@ func TestHandleWebhook(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
+			ctx := t.Context()
+
 			// Determine environment for the test case
 			var testEnv string
 			if strings.Contains(tc.name, "Autopush") {
@@ -262,7 +256,7 @@ func TestHandleWebhook(t *testing.T) {
 
 			buildTimeoutForTest := tc.runnerExecutionTimeoutSeconds
 			if buildTimeoutForTest == 0 {
-				buildTimeoutForTest = 3600 // Default value
+				buildTimeoutForTest = 3600
 			}
 			expectedBuildTimeout := time.Duration(buildTimeoutForTest) * time.Second
 
@@ -345,18 +339,63 @@ func TestHandleWebhook(t *testing.T) {
 
 			mockCloudBuildClient := &MockCloudBuildClient{}
 
-			srv := &Server{
-				webhookSecret:                 []byte(tc.payloadWebhookSecret),
-				appClient:                     app,
-				cbc:                           mockCloudBuildClient,
-				enableSelfHostedLabel:         tc.serverEnableSelfHostedLabel,
-				environment:                   testEnv,
-				extraRunnerCount:              tc.extraSpawnNumber,
-				ghAPIBaseURL:                  fakeGitHub.URL,
-				runnerExecutionTimeoutSeconds: buildTimeoutForTest,
-				runnerImageTag:                "latest",
-				runnerLabel:                   tc.serverRunnerLabel,
+			cfg := &Config{
+				GitHubAppID:                   "app-id",
+				GitHubWebhookKeyMountPath:     "/test",
+				GitHubWebhookKeyName:          "test-key",
+				KMSAppPrivateKeyID:            "test-kms-key",
+				RunnerLocation:                "us-central1",
+				RunnerProjectID:               "test-project",
+				RunnerRepositoryID:            "test-repo",
+				RunnerServiceAccount:          "test-sa",
+				RunnerExecutionTimeoutSeconds: buildTimeoutForTest, // Now an int
+				ExtraRunnerCount:              tc.extraSpawnNumber, // Now an int
+				RunnerImageTag:                "latest",
+				Environment:                   testEnv,
+				GitHubAPIBaseURL:              fakeGitHub.URL,
+				RunnerLabelAliases: map[string]string{
+					SelfHostedRunnerLabel:             SelfHostedUbuntuLatestRunnerLabel,
+					SelfHostedUbuntuLatestRunnerLabel: "ubuntu-24.04-n2d-standard-2",
+				},
+				SupportedRunnerLabels: []string{
+					"ubuntu-24.04-n2d-standard-2",
+					"ubuntu-20.04-n2d-standard-2",
+				},
 			}
+
+			// Create a mock FileReader for the webhook secret.
+			mockFileReader := &MockFileReader{
+				ReadFileFunc: func(filename string) ([]byte, error) {
+					if filename == fmt.Sprintf("%s/%s", cfg.GitHubWebhookKeyMountPath, cfg.GitHubWebhookKeyName) {
+						return []byte(serverGitHubWebhookSecret), nil
+					}
+					return nil, fmt.Errorf("unexpected file read: %s", filename)
+				},
+			}
+
+			// Create a mock KeyManagementClient.
+			mockKMSClient := &MockKeyManagementClient{
+				CreateSignerFunc: func(ctx context.Context, kmsAppPrivateKeyID string) (*gcpkms.Signer, error) {
+					// Return a dummy signer for testing purposes.
+					// The actual signer is not used within these webhook tests.
+					return &gcpkms.Signer{}, nil
+				},
+				CloseFunc: func() error { return nil },
+			}
+
+			// For tests, use a dummy renderer, nil redis client, and inject mocks.
+			srv, err := NewServer(ctx, nil, cfg, nil, &WebhookClientOptions{
+				CloudBuildClientOverride:    mockCloudBuildClient,
+				OSFileReaderOverride:        mockFileReader,
+				KeyManagementClientOverride: mockKMSClient,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// The test requires directly setting these, as NewServer sets up its own.
+			srv.webhookSecret = []byte(tc.payloadWebhookSecret)
+			srv.appClient = app
 			srv.handleWebhook().ServeHTTP(resp, req)
 
 			if got, want := resp.Code, tc.expStatusCode; got != want {
@@ -403,6 +442,22 @@ func TestHandleWebhook(t *testing.T) {
 			}
 		})
 	}
+}
+
+// MockKeyManagementClient is a mock implementation of the KeyManagementClient interface for testing.
+type MockKeyManagementClient struct {
+	CreateSignerFunc func(ctx context.Context, kmsAppPrivateKeyID string) (*gcpkms.Signer, error)
+	CloseFunc        func() error
+}
+
+// CreateSigner calls the CreateSignerFunc.
+func (m *MockKeyManagementClient) CreateSigner(ctx context.Context, kmsAppPrivateKeyID string) (*gcpkms.Signer, error) {
+	return m.CreateSignerFunc(ctx, kmsAppPrivateKeyID)
+}
+
+// Close calls the CloseFunc.
+func (m *MockKeyManagementClient) Close() error {
+	return m.CloseFunc()
 }
 
 // createSignature creates a HMAC 256 signature for the test request payload.

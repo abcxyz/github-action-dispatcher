@@ -172,6 +172,16 @@ variable "vpc_host_project_id" {
   type        = string
 }
 
+variable "cloud_run_vpc_access_egress" {
+  description = "The egress setting for the Cloud Run service, controlling what traffic is sent through the VPC. Valid values are `all-traffic` or `private-ranges-only`."
+  type        = string
+  default     = "all-traffic"
+  validation {
+    condition     = contains(["all-traffic", "private-ranges-only"], var.cloud_run_vpc_access_egress)
+    error_message = "Valid values for cloud_run_vpc_access_egress are 'all-traffic' or 'private-ranges-only'."
+  }
+}
+
 variable "runner_registry" {
   description = "Configuration for the Memorystore for the runner registry instance."
   type = object({
