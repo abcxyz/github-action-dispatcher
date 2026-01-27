@@ -75,10 +75,30 @@ module "cloud_run" {
     invokers   = toset(var.service_iam.invokers)
   }
 
+  additional_revision_annotations = {
+    # GitHub webhooks call without authorization so the service
+    # must allow unauthenticated requests to come through
+    "run.googleapis.com/invoker-iam-disabled" : true
+    "run.googleapis.com/vpc-access-egress" : var.cloud_run_vpc_access_egress
+    "run.googleapis.com/network-interfaces" : jsonencode([
+      {
+        network    = data.google_compute_network.shared_network.id
+        subnetwork = data.google_compute_subnetwork.shared_subnetwork.id
+      }
+    ]),
+  }
+
   additional_service_annotations = {
     # GitHub webhooks call without authorization so the service
     # must allow unauthenticated requests to come through
     "run.googleapis.com/invoker-iam-disabled" : true
+    "run.googleapis.com/vpc-access-egress" : var.cloud_run_vpc_access_egress
+    "run.googleapis.com/network-interfaces" : jsonencode([
+      {
+        network    = data.google_compute_network.shared_network.id
+        subnetwork = data.google_compute_subnetwork.shared_subnetwork.id
+      }
+    ]),
   }
 
   envvars = merge(

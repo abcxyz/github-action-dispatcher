@@ -21,9 +21,15 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-// NewRegistryClient creates and returns a new registry client.
+// WorkerPoolInfo holds information about a discovered worker pool and its project.
+type WorkerPoolInfo struct {
+	Name      string `json:"name"`
+	ProjectID string `json:"project_id"`
+}
+
+// NewRunnerRegistry creates and returns a new registry client.
 // It uses the host and port from the provided config.
-func NewRegistryClient(ctx context.Context, cfg *RegistryConfig) (*redis.Client, error) {
+func NewRunnerRegistry(ctx context.Context, cfg *RegistryConfig) (*redis.Client, error) {
 	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
 	rdb := redis.NewClient(&redis.Options{
 		Addr: addr,

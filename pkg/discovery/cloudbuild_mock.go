@@ -16,6 +16,7 @@ package discovery
 
 import (
 	"context"
+	"strings"
 
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 )
@@ -29,5 +30,11 @@ func (m *mockCloudBuildClient) ListWorkerPools(ctx context.Context, projectID, l
 	if m.listWorkerPoolsErr != nil {
 		return nil, m.listWorkerPoolsErr
 	}
-	return m.workerPools, nil
+	var filteredPools []*cloudbuildpb.WorkerPool
+	for _, pool := range m.workerPools {
+		if strings.Contains(pool.GetName(), projectID) {
+			filteredPools = append(filteredPools, pool)
+		}
+	}
+	return filteredPools, nil
 }

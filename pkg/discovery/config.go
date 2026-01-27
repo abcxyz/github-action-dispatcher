@@ -26,8 +26,9 @@ import (
 // Config defines the set of environment variables required
 // for running the runner-discovery job.
 type Config struct {
-	GCPFolderID string   `env:"GCP_FOLDER_ID"`
-	LabelQuery  []string `env:"LABEL_QUERY"`
+	GCPFolderID                    string   `env:"GCP_FOLDER_ID"`
+	LabelQuery                     []string `env:"LABEL_QUERY"`
+	RunnerRegistryDefaultKeyPrefix string   `env:"RUNNER_REGISTRY_DEFAULT_KEY_PREFIX,default=default"`
 }
 
 // Validate validates the runner-discovery config after load.

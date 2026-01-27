@@ -19,9 +19,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
+	"github.com/go-redis/redis/v8"
 	"github.com/googleapis/gax-go/v2"
 	"github.com/sethvargo/go-gcpkms/pkg/gcpkms"
 	"google.golang.org/api/option"
@@ -35,26 +35,28 @@ import (
 
 // Server provides the server implementation.
 type Server struct {
-	appClient                     *githubauth.App
-	cbc                           CloudBuildClient
-	environment                   string
-	ghAPIBaseURL                  string
-	h                             *renderer.Renderer
-	kmc                           KeyManagementClient
-	runnerExecutionTimeoutSeconds int
-	runnerIdleTimeoutSeconds      int
-	runnerLocation                string
-	runnerProjectID               string
-	runnerImageName               string
-	runnerImageTag                string
-	runnerRepositoryID            string
-	runnerServiceAccount          string
-	extraRunnerCount              int
-	runnerWorkerPoolID            string
-	webhookSecret                 []byte
-	e2eTestRunID                  string
-	runnerLabel                   string
-	enableSelfHostedLabel         bool
+	appClient                      *githubauth.App
+	cbc                            CloudBuildClient
+	config                         *Config
+	allowedLabels                  map[string]bool
+	environment                    string
+	ghAPIBaseURL                   string
+	h                              *renderer.Renderer
+	kmc                            KeyManagementClient
+	rc                             *redis.Client
+	runnerExecutionTimeoutSeconds  int
+	runnerIdleTimeoutSeconds       int
+	runnerLocation                 string
+	runnerProjectID                string
+	runnerImageName                string
+	runnerImageTag                 string
+	runnerRepositoryID             string
+	runnerServiceAccount           string
+	extraRunnerCount               int
+	runnerWorkerPoolID             string
+	webhookSecret                  []byte
+	e2eTestRunID                   string
+	runnerRegistryDefaultKeyPrefix string
 }
 
 // FileReader can read a file and return the content.
@@ -86,7 +88,7 @@ type WebhookClientOptions struct {
 
 // NewServer creates a new HTTP server implementation that will handle
 // receiving webhook payloads.
-func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *WebhookClientOptions) (*Server, error) {
+func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, rc *redis.Client, wco *WebhookClientOptions) (*Server, error) {
 	fr := wco.OSFileReaderOverride
 	if fr == nil {
 		fr = NewOSFileReader()
@@ -129,32 +131,42 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 		cbc = cb
 	}
 
-	// cfg.Validate() is called before NewServer, safe to convert
-	extraRunnerCount, _ := strconv.Atoi(cfg.ExtraRunnerCount)
-	runnerIdleTimeoutSeconds, _ := strconv.Atoi(cfg.RunnerIdleTimeoutSeconds)
-	runnerExecutionTimeoutSeconds, _ := strconv.Atoi(cfg.RunnerExecutionTimeoutSeconds)
+	// Pre-compute the set of allowed labels for efficient lookup.
+	allowedLabels := make(map[string]bool)
+
+	// Add all target values from the RunnerLabelAliases map.
+	for _, target := range cfg.RunnerLabelAliases {
+		allowedLabels[target] = true
+	}
+
+	// Add all explicitly supported runner labels from the config.
+	for _, supportedLabel := range cfg.SupportedRunnerLabels {
+		allowedLabels[supportedLabel] = true
+	}
 
 	return &Server{
-		appClient:                     appClient,
-		extraRunnerCount:              extraRunnerCount,
-		cbc:                           cbc,
-		environment:                   cfg.Environment,
-		ghAPIBaseURL:                  cfg.GitHubAPIBaseURL,
-		h:                             h,
-		kmc:                           kmc,
-		runnerExecutionTimeoutSeconds: runnerExecutionTimeoutSeconds,
-		runnerIdleTimeoutSeconds:      runnerIdleTimeoutSeconds,
-		runnerLabel:                   cfg.RunnerLabel,
-		runnerLocation:                cfg.RunnerLocation,
-		runnerImageName:               cfg.RunnerImageName,
-		runnerImageTag:                cfg.RunnerImageTag,
-		runnerProjectID:               cfg.RunnerProjectID,
-		runnerRepositoryID:            cfg.RunnerRepositoryID,
-		runnerServiceAccount:          cfg.RunnerServiceAccount,
-		runnerWorkerPoolID:            cfg.RunnerWorkerPoolID,
-		webhookSecret:                 webhookSecret,
-		e2eTestRunID:                  cfg.E2ETestRunID,
-		enableSelfHostedLabel:         cfg.EnableSelfHostedLabel,
+		appClient:                      appClient,
+		cbc:                            cbc,
+		config:                         cfg,           // Initialize the config field
+		allowedLabels:                  allowedLabels, // Initialize the pre-computed map
+		environment:                    cfg.Environment,
+		ghAPIBaseURL:                   cfg.GitHubAPIBaseURL,
+		h:                              h,
+		kmc:                            kmc,
+		rc:                             rc,
+		runnerExecutionTimeoutSeconds:  cfg.RunnerExecutionTimeoutSeconds,
+		runnerIdleTimeoutSeconds:       cfg.RunnerIdleTimeoutSeconds,
+		runnerLocation:                 cfg.RunnerLocation,
+		runnerImageName:                cfg.RunnerImageName,
+		runnerImageTag:                 cfg.RunnerImageTag,
+		runnerProjectID:                cfg.RunnerProjectID,
+		runnerRepositoryID:             cfg.RunnerRepositoryID,
+		runnerServiceAccount:           cfg.RunnerServiceAccount,
+		runnerWorkerPoolID:             cfg.RunnerWorkerPoolID,
+		webhookSecret:                  webhookSecret,
+		e2eTestRunID:                   cfg.E2ETestRunID,
+		extraRunnerCount:               cfg.ExtraRunnerCount,
+		runnerRegistryDefaultKeyPrefix: cfg.RunnerRegistryDefaultKeyPrefix,
 	}, nil
 }
 
