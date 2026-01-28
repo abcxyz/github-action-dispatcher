@@ -17,8 +17,10 @@ package webhook
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/google/go-github/v69/github"
 	"golang.org/x/oauth2"
@@ -32,17 +34,56 @@ func (s *Server) GenerateOrgJITConfig(ctx context.Context, installationID int64,
 	return s.generateJITConfig(ctx, installationID, org, nil, runnerName, runnerLabel)
 }
 
+// retryableRoundTripper is a custom http.RoundTripper that retries requests with exponential backoff.
+type retryableRoundTripper struct {
+	transport http.RoundTripper
+	maxRetries int
+	backoff    time.Duration
+}
+
+// RoundTrip implements the http.RoundTripper interface.
+func (rt *retryableRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	var lastErr error
+	for i := 0; i < rt.maxRetries; i++ {
+		resp, err := rt.transport.RoundTrip(req)
+		if err == nil && resp.StatusCode < 500 {
+			return resp, nil
+		}
+
+		lastErr = err
+		if resp != nil {
+			lastErr = fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		}
+
+		time.Sleep(rt.backoff * time.Duration(i+1))
+	}
+	return nil, fmt.Errorf("failed after %d retries: %w", rt.maxRetries, lastErr)
+}
+
 func (s *Server) generateJITConfig(ctx context.Context, installationID int64, org string, repo *string, runnerName, runnerLabel string) (*github.JITRunnerConfig, error) {
 	installation, err := s.appClient.InstallationForID(ctx, strconv.FormatInt(installationID, 10))
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup installation client: %w", err)
 	}
 
-	httpClient := oauth2.NewClient(ctx, (*installation).AllReposOAuth2TokenSource(ctx, map[string]string{
+	baseTransport := &http.Transport{}
+	retryableTransport := &retryableRoundTripper{
+		transport: baseTransport,
+		maxRetries: 3,
+		backoff:    2 * time.Second,
+	}
+
+	oauthClient := oauth2.NewClient(ctx, (*installation).AllReposOAuth2TokenSource(ctx, map[string]string{
 		"administration": "write",
 	}))
+	oauthClient.Transport = &oauth2.Transport{
+		Base:   retryableTransport,
+		Source: oauth2.ReuseTokenSource(nil, (*installation).AllReposOAuth2TokenSource(ctx, map[string]string{
+			"administration": "write",
+		})),
+	}
 
-	gh := github.NewClient(httpClient)
+	gh := github.NewClient(oauthClient)
 	baseURL, err := url.Parse(fmt.Sprintf("%s/", s.ghAPIBaseURL))
 	if err != nil {
 		return nil, fmt.Errorf("failed to set github base URL: %w", err)
@@ -50,8 +91,6 @@ func (s *Server) generateJITConfig(ctx context.Context, installationID int64, or
 	gh.BaseURL = baseURL
 	gh.UploadURL = baseURL
 
-	// Note that even though event.WorkflowJob.RunID is used for a dynamic string, it's not
-	// guaranteed that particular job will run on this specific runner.
 	// Note that even though event.WorkflowJob.RunID is used for a dynamic string, it's not
 	// guaranteed that particular job will run on this specific runner.
 	jitRequest := &github.GenerateJITConfigRequest{

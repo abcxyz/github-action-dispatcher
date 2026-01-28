@@ -17,17 +17,27 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/sethvargo/go-envconfig"
 
+	"github.com/abcxyz/github-action-dispatcher/pkg/retry"
 	"github.com/abcxyz/pkg/cfgloader"
 )
 
 // Config defines the set of environment variables required
 // for running the runner-discovery job.
 type Config struct {
-	GCPFolderID string   `env:"GCP_FOLDER_ID"`
-	LabelQuery  []string `env:"LABEL_QUERY"`
+	GCPFolderID              string        `env:"GCP_FOLDER_ID"`
+	LabelQuery               []string      `env:"LABEL_QUERY"`
+	RetryHTTPMaxAttempts     int           `env:"RETRY_HTTP_MAX_ATTEMPTS,default=3"`
+	RetryBackoffInitialDelay time.Duration `env:"RETRY_BACKOFF_INITIAL_DELAY"`
+	RetryBackoffMaxDelay     time.Duration `env:"RETRY_BACKOFF_MAX_DELAY"`
+	RetryBackoffMultiplier   float64       `env:"RETRY_BACKOFF_MULTIPLIER"`
+
+	// Retry is the configuration for retryable operations. This field is populated
+	// after envconfig loads the other fields.
+	Retry *retry.BackoffConfig
 }
 
 // Validate validates the runner-discovery config after load.
@@ -48,8 +58,20 @@ func NewConfig(ctx context.Context) (*Config, error) {
 
 func newConfig(ctx context.Context, lu envconfig.Lookuper) (*Config, error) {
 	var cfg Config
+	// Pre-fill the retry config with defaults, which can be overridden by env.
+	defaultRetry := retry.DefaultBackoffConfig()
+	cfg.RetryBackoffInitialDelay = defaultRetry.Initial
+	cfg.RetryBackoffMaxDelay = defaultRetry.Max
+	cfg.RetryBackoffMultiplier = defaultRetry.Multiplier
+
 	if err := cfgloader.Load(ctx, &cfg, cfgloader.WithLookuper(lu)); err != nil {
 		return nil, fmt.Errorf("failed to parse runner-discovery config: %w", err)
+	}
+
+	cfg.Retry = &retry.BackoffConfig{
+		Initial:    cfg.RetryBackoffInitialDelay,
+		Max:        cfg.RetryBackoffMaxDelay,
+		Multiplier: cfg.RetryBackoffMultiplier,
 	}
 	return &cfg, nil
 }
