@@ -1,10 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-_SERVER="${GITHUB_SERVER_URL:-https://github.com}"
-_REPO="${GITHUB_REPOSITORY:-unknown/repo}"
-_RUN="${GITHUB_RUN_ID:-0}"
-_JOB="${GITHUB_JOB:-0}"
+_SERVER="${GITHUB_SERVER_URL:-unknown}"
+_REPO="${GITHUB_REPOSITORY:-unknown/unknown}"
+_RUN="${GITHUB_RUN_ID:-unknown}"
+_JOB="${GITHUB_JOB:-unknown}"
 GH_JOB_URL="${_SERVER}/${_REPO}/actions/runs/${_RUN}/job/${_JOB}"
 
 echo "==================== BUILD METADATA ===================="
