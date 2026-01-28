@@ -317,12 +317,12 @@ func compressAndBase64EncodeString(input string) (string, error) {
 }
 
 func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageTag, runnerLabel string) (string, error) {
-	jitConfig, err := s.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID, runnerLabel)
+	jitConfig, err := s.ghc.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID, runnerLabel)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to generate JIT config",
-			"error", err.Error(),
+			"error", err,
 		)
-		return "error generating jitconfig", err
+		return "", fmt.Errorf("failed to generate JIT config: %w", err)
 	}
 
 	// Sometimes JITConfig has exceeded the 4,000-character limit for
@@ -378,9 +378,7 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 	}
 
 	if err := s.cbc.CreateBuild(ctx, buildReq); err != nil {
-		err = fmt.Errorf("failed to create cloud run build: %w", err)
-		logger.ErrorContext(ctx, "cloud run build failed", "error", err)
-		return "failed to create build", err
+		return "", fmt.Errorf("failed to create build: %w", err)
 	}
 	return "", nil
 }

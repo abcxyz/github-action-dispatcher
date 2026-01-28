@@ -17,6 +17,7 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/sethvargo/go-envconfig"
 
@@ -26,8 +27,10 @@ import (
 // Config defines the set of environment variables required
 // for running the runner-discovery job.
 type Config struct {
-	GCPFolderID string   `env:"GCP_FOLDER_ID"`
-	LabelQuery  []string `env:"LABEL_QUERY"`
+	GCPFolderID         string        `env:"GCP_FOLDER_ID"`
+	LabelQuery          []string      `env:"LABEL_QUERY"`
+	MaxRetryAttempts    int           `env:"MAX_RETRY_ATTEMPTS,default=3"`
+	BackoffInitialDelay time.Duration `env:"BACKOFF_INITIAL_DELAY,default=500ms"`
 }
 
 // Validate validates the runner-discovery config after load.

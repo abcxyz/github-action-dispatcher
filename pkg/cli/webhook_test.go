@@ -23,6 +23,7 @@ import (
 
 	"github.com/sethvargo/go-envconfig"
 
+	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
 	"github.com/abcxyz/github-action-dispatcher/pkg/webhook"
 	"github.com/abcxyz/pkg/cli"
 	"github.com/abcxyz/pkg/logging"
@@ -167,7 +168,7 @@ func TestWebhookServerCommand(t *testing.T) {
 
 			// Provide mock implementation of dependencies
 			cmd.testOSFileReaderOverride = tc.fileMock
-			cmd.testCloudBuildClientOverride = &webhook.CloudBuild{}
+			cmd.testCloudBuildClientOverride = &cloudbuild.MockClient{}
 			cmd.testKMSClientOverride = &webhook.MockKMSClient{}
 
 			_, _, _ = cmd.Pipe()
