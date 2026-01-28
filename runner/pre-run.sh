@@ -24,7 +24,7 @@ printf "WORKFLOW | %s\n" \
   "${GITHUB_WORKFLOW_REF:-unknown}"
 
 printf "LINK     | %s\n" \
-  "$GH_JOB_URL"
+  "${GH_JOB_URL}"
 echo "========================================================"
 
 
