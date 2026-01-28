@@ -22,6 +22,8 @@ import (
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/googleapis/gax-go/v2"
 	"google.golang.org/api/option"
+	"google.golang.org/grpc/codes"
+	"time"
 )
 
 // CloudBuild provides a client and dataset identifiers.
@@ -42,7 +44,20 @@ func NewCloudBuild(ctx context.Context, opts ...option.ClientOption) (*CloudBuil
 }
 
 func (cb *CloudBuild) CreateBuild(ctx context.Context, req *cloudbuildpb.CreateBuildRequest, opts ...gax.CallOption) error {
-	if _, err := cb.client.CreateBuild(ctx, req); err != nil {
+	// Define a retryer with exponential backoff and jitter. See https://pkg.go.dev/google.golang.org/grpc/codes#Code for all codes.
+	opts = append(opts, gax.WithRetry(func() gax.Retryer {
+		return gax.OnCodes([]codes.Code{
+			codes.Unavailable,
+			codes.DeadlineExceeded,
+			codes.ResourceExhausted,
+		}, gax.Backoff{
+			Initial:    500 * time.Millisecond,
+			Max:        60 * time.Second,
+			Multiplier: 2.0,
+		})
+	}))
+
+	if _, err := cb.client.CreateBuild(ctx, req, opts...); err != nil {
 		return fmt.Errorf("failed to create cloud build build: %w", err)
 	}
 	return nil

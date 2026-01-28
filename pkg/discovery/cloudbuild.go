@@ -22,6 +22,10 @@ import (
 	cloudbuild "cloud.google.com/go/cloudbuild/apiv1/v2"
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"google.golang.org/api/iterator"
+	"google.golang.org/grpc/codes"
+	"time"
+
+	"github.com/googleapis/gax-go/v2"
 )
 
 type cloudBuildClient interface {
@@ -45,9 +49,23 @@ func newCloudBuildClient(ctx context.Context) (cloudBuildClient, error) {
 // ListWorkerPools lists the worker pools for a given project.
 func (c *cloudBuildClientImpl) ListWorkerPools(ctx context.Context, projectID, location string) ([]*cloudbuildpb.WorkerPool, error) {
 	var pools []*cloudbuildpb.WorkerPool
+
+	// Define a retryer with exponential backoff and jitter.
+	opts := []gax.CallOption{gax.WithRetry(func() gax.Retryer {
+		return gax.OnCodes([]codes.Code{
+			codes.Unavailable,
+			codes.DeadlineExceeded,
+			codes.ResourceExhausted,
+		}, gax.Backoff{
+			Initial:    500 * time.Millisecond,
+			Max:        60 * time.Second,
+			Multiplier: 2.0,
+		})
+	})}
+
 	it := c.client.ListWorkerPools(ctx, &cloudbuildpb.ListWorkerPoolsRequest{
 		Parent: fmt.Sprintf("projects/%s/locations/%s", projectID, location),
-	})
+	}, opts...)
 	for {
 		pool, err := it.Next()
 		if errors.Is(err, iterator.Done) {
