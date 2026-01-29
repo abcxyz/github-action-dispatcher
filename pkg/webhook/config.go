@@ -17,8 +17,6 @@ package webhook
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/sethvargo/go-envconfig"
 
@@ -37,26 +35,27 @@ const (
 // Config defines the set of environment variables required
 // for running the webhook service.
 type Config struct {
-	Environment                   string `env:"ENVIRONMENT,default=production"`
-	GitHubAPIBaseURL              string `env:"GITHUB_API_BASE_URL,default=https://api.github.com"`
-	GitHubAppID                   string `env:"GITHUB_APP_ID,required"`
-	GitHubWebhookKeyMountPath     string `env:"WEBHOOK_KEY_MOUNT_PATH,required"`
-	GitHubWebhookKeyName          string `env:"WEBHOOK_KEY_NAME,required"`
-	KMSAppPrivateKeyID            string `env:"KMS_APP_PRIVATE_KEY_ID,required"`
-	Port                          string `env:"PORT,default=8080"`
-	RunnerExecutionTimeoutSeconds string `env:"RUNNER_EXECUTION_TIMEOUT_SECONDS,default=3600"`
-	RunnerIdleTimeoutSeconds      string `env:"RUNNER_IDLE_TIMEOUT_SECONDS,default=300"`
-	RunnerImageName               string `env:"RUNNER_IMAGE_NAME,default=default-runner"`
-	RunnerImageTag                string `env:"RUNNER_IMAGE_TAG,default=latest"`
-	RunnerLocation                string `env:"RUNNER_LOCATION,required"`
-	RunnerProjectID               string `env:"RUNNER_PROJECT_ID,required"`
-	RunnerRepositoryID            string `env:"RUNNER_REPOSITORY_ID,required"`
-	RunnerServiceAccount          string `env:"RUNNER_SERVICE_ACCOUNT,required"`
-	ExtraRunnerCount              string `env:"EXTRA_RUNNER_COUNT,default=0"`
-	RunnerWorkerPoolID            string `env:"RUNNER_WORKER_POOL_ID"`
-	E2ETestRunID                  string `env:"E2ETestRunID"`
-	RunnerLabel                   string `env:"RUNNER_LABEL,default=self-hosted"`
-	EnableSelfHostedLabel         bool   `env:"ENABLE_SELF_HOSTED_LABEL,default=false"`
+	Environment                    string            `env:"ENVIRONMENT,default=production"`
+	GitHubAPIBaseURL               string            `env:"GITHUB_API_BASE_URL,default=https://api.github.com"`
+	GitHubAppID                    string            `env:"GITHUB_APP_ID,required"`
+	GitHubWebhookKeyMountPath      string            `env:"WEBHOOK_KEY_MOUNT_PATH,required"`
+	GitHubWebhookKeyName           string            `env:"WEBHOOK_KEY_NAME,required"`
+	KMSAppPrivateKeyID             string            `env:"KMS_APP_PRIVATE_KEY_ID,required"`
+	Port                           string            `env:"PORT,default=8080"`
+	RunnerExecutionTimeoutSeconds  int               `env:"RUNNER_EXECUTION_TIMEOUT_SECONDS,default=3600"`
+	RunnerIdleTimeoutSeconds       int               `env:"RUNNER_IDLE_TIMEOUT_SECONDS,default=300"`
+	RunnerImageName                string            `env:"RUNNER_IMAGE_NAME,default=default-runner"`
+	RunnerImageTag                 string            `env:"RUNNER_IMAGE_TAG,default=latest"`
+	RunnerLocation                 string            `env:"RUNNER_LOCATION,required"`
+	RunnerProjectID                string            `env:"RUNNER_PROJECT_ID,required"`
+	RunnerRepositoryID             string            `env:"RUNNER_REPOSITORY_ID,required"`
+	RunnerServiceAccount           string            `env:"RUNNER_SERVICE_ACCOUNT,required"`
+	ExtraRunnerCount               int               `env:"EXTRA_RUNNER_COUNT,default=0"`
+	RunnerWorkerPoolID             string            `env:"RUNNER_WORKER_POOL_ID"`
+	E2ETestRunID                   string            `env:"E2ETestRunID"`
+	RunnerRegistryDefaultKeyPrefix string            `env:"RUNNER_REGISTRY_DEFAULT_KEY_PREFIX,default=default"`
+	RunnerLabelAliases             map[string]string `env:"RUNNER_LABEL_ALIASES"`
+	SupportedRunnerLabels          []string          `env:"SUPPORTED_RUNNER_LABELS,required"`
 }
 
 // Validate validates the webhook config after load.
@@ -97,20 +96,23 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("RUNNER_SERVICE_ACCOUNT is required")
 	}
 
-	if _, err := validateRunnerIdleTimeout(cfg.RunnerIdleTimeoutSeconds); err != nil {
-		return err
+	// Validate ExtraRunnerCount
+	if cfg.ExtraRunnerCount < 0 {
+		return fmt.Errorf("EXTRA_RUNNER_COUNT must be non-negative, got %d", cfg.ExtraRunnerCount)
 	}
 
-	if _, err := validateRunnerExecutionTimeout(cfg.RunnerExecutionTimeoutSeconds); err != nil {
-		return err
+	// Validate RunnerIdleTimeoutSeconds
+	if cfg.RunnerIdleTimeoutSeconds < minRunnerIdleTimeoutSeconds || cfg.RunnerIdleTimeoutSeconds > maxRunnerIdleTimeoutSeconds {
+		return fmt.Errorf("RUNNER_IDLE_TIMEOUT_SECONDS must be between %d (5 minutes) and %d (24 hours) seconds, got %d", minRunnerIdleTimeoutSeconds, maxRunnerIdleTimeoutSeconds, cfg.RunnerIdleTimeoutSeconds)
 	}
 
-	if _, err := validateExtraRunnerCount(cfg.ExtraRunnerCount); err != nil {
-		return err
+	// Validate RunnerExecutionTimeoutSeconds
+	if cfg.RunnerExecutionTimeoutSeconds < minRunnerExecutionTimeoutSeconds || cfg.RunnerExecutionTimeoutSeconds > maxRunnerExecutionTimeoutSeconds {
+		return fmt.Errorf("RUNNER_EXECUTION_TIMEOUT_SECONDS must be between %d (1 hour) and %d (24 hours) seconds, got %d", minRunnerExecutionTimeoutSeconds, maxRunnerExecutionTimeoutSeconds, cfg.RunnerExecutionTimeoutSeconds)
 	}
 
-	if strings.TrimSpace(cfg.RunnerLabel) == "" {
-		return fmt.Errorf("RUNNER_LABEL is required")
+	if len(cfg.SupportedRunnerLabels) == 0 {
+		return fmt.Errorf("SUPPORTED_RUNNER_LABELS must be provided")
 	}
 
 	return nil
@@ -119,42 +121,6 @@ func (cfg *Config) Validate() error {
 // NewConfig creates a new Config from environment variables.
 func NewConfig(ctx context.Context) (*Config, error) {
 	return newConfig(ctx, envconfig.OsLookuper())
-}
-
-func validateRunnerIdleTimeout(value string) (int, error) {
-	num, err := strconv.Atoi(value)
-	if err != nil {
-		return 0, fmt.Errorf("RUNNER_IDLE_TIMEOUT_SECONDS must be an integer: %w", err)
-	}
-
-	if num < minRunnerIdleTimeoutSeconds || num > maxRunnerIdleTimeoutSeconds {
-		return 0, fmt.Errorf("RUNNER_IDLE_TIMEOUT_SECONDS must be between %d (5 minutes) and %d (24 hours) seconds, got %d", minRunnerIdleTimeoutSeconds, maxRunnerIdleTimeoutSeconds, num)
-	}
-
-	return num, nil
-}
-
-func validateRunnerExecutionTimeout(value string) (int, error) {
-	num, err := strconv.Atoi(value)
-	if err != nil {
-		return 0, fmt.Errorf("RUNNER_EXECUTION_TIMEOUT_SECONDS must be an integer: %w", err)
-	}
-
-	if num < minRunnerExecutionTimeoutSeconds || num > maxRunnerExecutionTimeoutSeconds {
-		return 0, fmt.Errorf("RUNNER_EXECUTION_TIMEOUT_SECONDS must be between %d (1 hour) and %d (24 hours) seconds, got %d", minRunnerExecutionTimeoutSeconds, maxRunnerExecutionTimeoutSeconds, num)
-	}
-
-	return num, nil
-}
-
-func validateExtraRunnerCount(value string) (int, error) {
-	if num, err := strconv.Atoi(value); err != nil {
-		return 0, fmt.Errorf("EXTRA_RUNNER_COUNT must be an integer: %w", err)
-	} else if num < 0 || num >= 10 {
-		return 0, fmt.Errorf("EXTRA_RUNNER_COUNT must be in a range of [0,10)")
-	} else {
-		return num, nil
-	}
 }
 
 func newConfig(ctx context.Context, lu envconfig.Lookuper) (*Config, error) {
@@ -184,12 +150,12 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Usage:   `The execution environment (e.g., "autopush", "production"). Controls environment-specific features.`,
 	})
 
-	f.StringVar(&cli.StringVar{
+	f.IntVar(&cli.IntVar{
 		Name:    "extra-runner-count",
 		Target:  &cfg.ExtraRunnerCount,
 		EnvVar:  "EXTRA_RUNNER_COUNT",
-		Default: "0",
-		Usage:   `How many extra runners to spawn per webhook. Used to create excess runners to avoid runner deficit. Must be in range [0,10).`,
+		Default: 0,
+		Usage:   `How many extra runners to spawn per webhook. Used to create excess runners to avoid runner deficit. Must be greater than or equal to 0.`,
 	})
 
 	f.StringVar(&cli.StringVar{
@@ -273,6 +239,14 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 	})
 
 	f.StringVar(&cli.StringVar{
+		Name:    "runner-registry-default-key-prefix",
+		Target:  &cfg.RunnerRegistryDefaultKeyPrefix,
+		EnvVar:  "RUNNER_REGISTRY_DEFAULT_KEY_PREFIX",
+		Default: "default",
+		Usage:   "The prefix for the default runner registry key.",
+	})
+
+	f.StringVar(&cli.StringVar{
 		Name:   "runner-service-account",
 		Target: &cfg.RunnerServiceAccount,
 		EnvVar: "RUNNER_SERVICE_ACCOUNT",
@@ -286,36 +260,34 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Usage:  `The private runner worker pool ID`,
 	})
 
-	f.StringVar(&cli.StringVar{
-		Name:    "runner-label",
-		Target:  &cfg.RunnerLabel,
-		EnvVar:  "RUNNER_LABEL",
-		Default: "self-hosted",
-		Usage:   `The single, exact label that the webhook will process for self-hosted runners.`,
-	})
-
-	f.StringVar(&cli.StringVar{
+	f.IntVar(&cli.IntVar{
 		Name:    "runner-idle-timeout-seconds",
 		Target:  &cfg.RunnerIdleTimeoutSeconds,
 		EnvVar:  "RUNNER_IDLE_TIMEOUT_SECONDS",
-		Default: "300",
+		Default: 300,
 		Usage:   `The timeout for the runner in seconds. Must be between 300 (5 minutes) and 86400 (24 hours).`,
 	})
 
-	f.StringVar(&cli.StringVar{
+	f.IntVar(&cli.IntVar{
 		Name:    "runner-execution-timeout-seconds",
 		Target:  &cfg.RunnerExecutionTimeoutSeconds,
 		EnvVar:  "RUNNER_EXECUTION_TIMEOUT_SECONDS",
-		Default: "3600",
+		Default: 3600,
 		Usage:   `The timeout for the entire build in seconds. Must be between 3600 (1 hour) and 86400 (24 hours).`,
 	})
 
-	f.BoolVar(&cli.BoolVar{
-		Name:    "enable-self-hosted-label",
-		Target:  &cfg.EnableSelfHostedLabel,
-		Usage:   "Enable to also allow self-hosted in addition to runner-label. Temporary until org registration is enabled.",
-		Default: false,
-		EnvVar:  "ENABLE_SELF_HOSTED_LABEL",
+	f.StringMapVar(&cli.StringMapVar{
+		Name:   "runner-label-aliases",
+		Target: &cfg.RunnerLabelAliases,
+		EnvVar: "RUNNER_LABEL_ALIASES",
+		Usage:  `Mapping from user-provided labels to system labels.`,
+	})
+
+	f.StringSliceVar(&cli.StringSliceVar{
+		Name:   "supported-runner-labels",
+		Target: &cfg.SupportedRunnerLabels,
+		EnvVar: "SUPPORTED_RUNNER_LABELS",
+		Usage:  `List of labels that are supported by the dispatcher.`,
 	})
 
 	return set

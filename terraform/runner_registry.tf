@@ -59,3 +59,11 @@ resource "google_project_iam_member" "runner_discovery_job_registry_editor" {
   role   = "roles/redis.editor"
   member = "serviceAccount:${google_service_account.runner_discovery_job_sa.email}"
 }
+
+resource "google_project_iam_member" "dispatcher_run_sa_registry_viewer" {
+  project = var.project_id
+
+  role   = "roles/redis.viewer"
+  member = "serviceAccount:${google_service_account.run_service_account.email}"
+}
+
