@@ -21,6 +21,8 @@ import (
 
 	"google.golang.org/api/option"
 
+	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
+	"github.com/abcxyz/github-action-dispatcher/pkg/retry"
 	"github.com/abcxyz/github-action-dispatcher/pkg/version"
 	"github.com/abcxyz/github-action-dispatcher/pkg/webhook"
 	"github.com/abcxyz/pkg/cli"
@@ -40,7 +42,7 @@ type WebhookServerCommand struct {
 	testFlagSetOpts []cli.Option
 
 	// only used for testing
-	testCloudBuildClientOverride webhook.CloudBuildClient
+	testCloudBuildClientOverride cloudbuild.Client
 
 	// only used for testing
 	testKMSClientOverride webhook.KeyManagementClient
@@ -62,6 +64,8 @@ Usage: {{ COMMAND }} [options]
 
 func (c *WebhookServerCommand) Flags() *cli.FlagSet {
 	c.cfg = &webhook.Config{}
+	// Initialize the embedded Retry config with defaults, to prevent nil dereference in ToFlags.
+	c.cfg.Retry = retry.DefaultBackoffConfig()
 	set := cli.NewFlagSet(c.testFlagSetOpts...)
 	return c.cfg.ToFlags(set)
 }

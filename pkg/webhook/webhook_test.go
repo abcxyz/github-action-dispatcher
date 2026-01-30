@@ -31,6 +31,7 @@ import (
 
 	"github.com/google/go-github/v69/github"
 
+	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
 	"github.com/abcxyz/pkg/githubauth"
 )
 
@@ -343,7 +344,7 @@ func TestHandleWebhook(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			mockCloudBuildClient := &MockCloudBuildClient{}
+			mockCloudBuildClient := &cloudbuild.MockClient{}
 
 			srv := &Server{
 				webhookSecret:                 []byte(tc.payloadWebhookSecret),

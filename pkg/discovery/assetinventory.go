@@ -23,6 +23,7 @@ import (
 	asset "cloud.google.com/go/asset/apiv1"
 	"cloud.google.com/go/asset/apiv1/assetpb"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 const assetTypeProject = "cloudresourcemanager.googleapis.com/Project"
@@ -42,8 +43,8 @@ type assetInventoryClientImpl struct {
 	client *asset.Client
 }
 
-func newAssetInventoryClient(ctx context.Context) (assetInventoryClient, error) {
-	client, err := asset.NewClient(ctx)
+func newAssetInventoryClient(ctx context.Context, opts ...option.ClientOption) (assetInventoryClient, error) {
+	client, err := asset.NewClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new asset inventory client: %w", err)
 	}

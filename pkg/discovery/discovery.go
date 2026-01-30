@@ -18,10 +18,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"sort"
 
+	"google.golang.org/api/option"
 	redisapi "github.com/go-redis/redis/v8"
 
+	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
+	"github.com/abcxyz/github-action-dispatcher/pkg/httpclient"
 	"github.com/abcxyz/pkg/logging"
 )
 
@@ -32,25 +36,28 @@ const (
 
 // RunnerDiscovery is the main struct for the runner-discovery job.
 type RunnerDiscovery struct {
-	cbc    cloudBuildClient
+	cbc    cloudbuild.Client
 	aic    assetInventoryClient
 	rc     *redisapi.Client
 	config *Config
 }
 
-// NewRunnerDiscovery creates a new RunnerDiscovery instance.
-// It initializes the necessary Cloud Build and Asset Inventory clients based on the provided configuration,
-// and accepts a registry client for caching.
-// Returns a pointer to the initialized RunnerDiscovery instance or an error if client creation fails.
 func NewRunnerDiscovery(ctx context.Context, config *Config, rc *redisapi.Client) (*RunnerDiscovery, error) {
-	cbc, err := newCloudBuildClient(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create cloud build client: %w", err)
+	// Create a retryable HTTP client for REST clients.
+	baseTransport := &http.Transport{}
+	retryableTransport := httpclient.NewRetryableRoundTripper(baseTransport, config.Retry, config.RetryHTTPMaxAttempts)
+	httpClient := &http.Client{
+		Transport: retryableTransport,
 	}
 
-	aic, err := newAssetInventoryClient(ctx)
+	aic, err := newAssetInventoryClient(ctx, option.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cloud asset inventory client: %w", err)
+	}
+
+	cbc, err := cloudbuild.NewClient(ctx, config.Retry)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cloud build client: %w", err)
 	}
 
 	return &RunnerDiscovery{

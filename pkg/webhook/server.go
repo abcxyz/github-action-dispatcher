@@ -21,11 +21,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
-	"github.com/googleapis/gax-go/v2"
 	"github.com/sethvargo/go-gcpkms/pkg/gcpkms"
 	"google.golang.org/api/option"
 
+	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
 	"github.com/abcxyz/github-action-dispatcher/pkg/version"
 	"github.com/abcxyz/pkg/githubauth"
 	"github.com/abcxyz/pkg/healthcheck"
@@ -36,7 +35,7 @@ import (
 // Server provides the server implementation.
 type Server struct {
 	appClient                     *githubauth.App
-	cbc                           CloudBuildClient
+	cbc                           cloudbuild.Client
 	environment                   string
 	ghAPIBaseURL                  string
 	h                             *renderer.Renderer
@@ -68,19 +67,13 @@ type KeyManagementClient interface {
 	CreateSigner(ctx context.Context, kmsAppPrivateKeyID string) (*gcpkms.Signer, error)
 }
 
-// CloudBuildClient adheres to the interaction the webhook service has with a subset of Cloud Build APIs.
-type CloudBuildClient interface {
-	Close() error
-	CreateBuild(ctx context.Context, req *cloudbuildpb.CreateBuildRequest, opts ...gax.CallOption) error
-}
-
 // WebhookClientOptions encapsulate client config options as well as dependency implementation overrides.
 type WebhookClientOptions struct {
 	CloudBuildClientOpts    []option.ClientOption
 	KeyManagementClientOpts []option.ClientOption
 
 	OSFileReaderOverride        FileReader
-	CloudBuildClientOverride    CloudBuildClient
+	CloudBuildClientOverride    cloudbuild.Client
 	KeyManagementClientOverride KeyManagementClient
 }
 
@@ -122,7 +115,7 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 
 	cbc := wco.CloudBuildClientOverride
 	if cbc == nil {
-		cb, err := NewCloudBuild(ctx, wco.CloudBuildClientOpts...)
+		cb, err := cloudbuild.NewClient(ctx, cfg.Retry, wco.CloudBuildClientOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cloudbuild client: %w", err)
 		}
