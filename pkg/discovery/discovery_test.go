@@ -24,6 +24,8 @@ import (
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 	"github.com/go-redis/redismock/v8"
 
+	"github.com/abcxyz/github-action-dispatcher/pkg/assetinventory"
+	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
 	"github.com/abcxyz/pkg/logging"
 	"github.com/abcxyz/pkg/testutil"
 )
@@ -66,8 +68,8 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 	cases := []struct {
 		name               string
 		config             *Config
-		cloudbuildMock     *mockCloudBuildClient
-		assetInventoryMock *mockAssetInventoryClient
+		cloudbuildMock     *cloudbuild.MockClient
+		assetInventoryMock *assetinventory.MockClient
 		expErr             string
 		expRegistrySets    map[string][]string // Key: machineType, Value: list of worker pool names
 		expRegistryDels    []string            // Keys expected to be deleted
@@ -78,17 +80,15 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 				LabelQuery:  []string{"env=test"},
 				GCPFolderID: testGCPFolderID,
 			},
-			cloudbuildMock: &mockCloudBuildClient{
-				workerPools: []*cloudbuildpb.WorkerPool{
+			cloudbuildMock: &cloudbuild.MockClient{
+				WorkerPools: []*cloudbuildpb.WorkerPool{
 					newMockWorkerPool(testProjectID1, testLocation, testWorkerPoolID1, testMachineTypeE2Medium),
 					newMockWorkerPool(testProjectID2, testLocation, testWorkerPoolID2, testMachineTypeE2Medium),
 					newMockWorkerPool(testProjectID1, testLocation, testWorkerPoolID3, testMachineTypeE2Small),
 				},
 			},
-			assetInventoryMock: &mockAssetInventoryClient{
-				projects: []*ProjectInfo{
-					{ID: "labeled-project", Number: "labeled-project", Labels: map[string]string{}},
-				},
+			assetInventoryMock: &assetinventory.MockClient{
+				StubProjects: []*assetinventory.ProjectInfo{{ProjectID: "labeled-project", Labels: map[string]string{}}},
 			},
 			expRegistrySets: map[string][]string{
 				testMachineTypeE2Medium: {
@@ -109,11 +109,11 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 				LabelQuery:  []string{"env=test"},
 				GCPFolderID: testGCPFolderID,
 			},
-			cloudbuildMock: &mockCloudBuildClient{},
-			assetInventoryMock: &mockAssetInventoryClient{
-				projectsErr: fmt.Errorf("failed to get projects"),
+			cloudbuildMock: &cloudbuild.MockClient{},
+			assetInventoryMock: &assetinventory.MockClient{
+				ListProjectsErr: fmt.Errorf("failed to get projects"),
 			},
-			expErr: `failed to get projects: failed to get projects`,
+			expErr: `failed to list projects: failed to get projects`,
 		},
 		{
 			name: "list_worker_pools_error",
@@ -121,12 +121,12 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 				LabelQuery:  []string{"env=test"},
 				GCPFolderID: testGCPFolderID,
 			},
-			cloudbuildMock: &mockCloudBuildClient{
-				listWorkerPoolsErr: fmt.Errorf("failed to list worker pools"),
+			cloudbuildMock: &cloudbuild.MockClient{
+				ListWorkerPoolsErr: fmt.Errorf("failed to list worker pools"),
 			},
-			assetInventoryMock: &mockAssetInventoryClient{
-				projects: []*ProjectInfo{
-					{ID: "my-project", Number: "my-project", Labels: map[string]string{}},
+			assetInventoryMock: &assetinventory.MockClient{
+				StubProjects: []*assetinventory.ProjectInfo{
+					{ProjectID: "my-project", Labels: map[string]string{}},
 				},
 			},
 			expRegistrySets: map[string][]string{},

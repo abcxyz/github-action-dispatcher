@@ -12,28 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package webhook
+package assetinventory
 
 import (
 	"context"
-
-	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
-	"github.com/googleapis/gax-go/v2"
 )
 
-type MockCloudBuildClient struct {
-	CreateBuildReqs []*cloudbuildpb.CreateBuildRequest
-	createBuildErr  error
+var _ Client = (*MockClient)(nil)
+
+// MockClient is a mock of the Client interface.
+type MockClient struct {
+	ListProjectsErr error
+	StubProjects    []*ProjectInfo
 }
 
-func (m *MockCloudBuildClient) CreateBuild(ctx context.Context, req *cloudbuildpb.CreateBuildRequest, opts ...gax.CallOption) error {
-	m.CreateBuildReqs = append(m.CreateBuildReqs, req)
-	if m.createBuildErr != nil {
-		return m.createBuildErr
+// Projects is a mock of the Projects method.
+func (m *MockClient) FindProjects(ctx context.Context, folderID string, labelQuery []string) ([]*ProjectInfo, error) {
+	if m.ListProjectsErr != nil {
+		return nil, m.ListProjectsErr
 	}
-	return nil
+	return m.StubProjects, nil
 }
 
-func (m *MockCloudBuildClient) Close() error {
+// Close is a mock of the Close method.
+func (m *MockClient) Close() error {
 	return nil
 }

@@ -20,12 +20,13 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
-	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
-	"github.com/googleapis/gax-go/v2"
 	"github.com/sethvargo/go-gcpkms/pkg/gcpkms"
 	"google.golang.org/api/option"
 
+	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
+	gh "github.com/abcxyz/github-action-dispatcher/pkg/github"
 	"github.com/abcxyz/github-action-dispatcher/pkg/version"
 	"github.com/abcxyz/pkg/githubauth"
 	"github.com/abcxyz/pkg/healthcheck"
@@ -35,26 +36,28 @@ import (
 
 // Server provides the server implementation.
 type Server struct {
-	appClient                     *githubauth.App
-	cbc                           CloudBuildClient
+	cbc                           cloudbuild.Client
+	ghc                           gh.Client
+	e2eTestRunID                  string
+	enableSelfHostedLabel         bool
 	environment                   string
+	extraRunnerCount              int
 	ghAPIBaseURL                  string
 	h                             *renderer.Renderer
 	kmc                           KeyManagementClient
 	runnerExecutionTimeoutSeconds int
 	runnerIdleTimeoutSeconds      int
+	runnerLabel                   string
 	runnerLocation                string
 	runnerProjectID               string
 	runnerImageName               string
 	runnerImageTag                string
 	runnerRepositoryID            string
 	runnerServiceAccount          string
-	extraRunnerCount              int
 	runnerWorkerPoolID            string
 	webhookSecret                 []byte
-	e2eTestRunID                  string
-	runnerLabel                   string
-	enableSelfHostedLabel         bool
+	backoffInitialDelay           time.Duration
+	maxRetryAttempts              int
 }
 
 // FileReader can read a file and return the content.
@@ -68,19 +71,14 @@ type KeyManagementClient interface {
 	CreateSigner(ctx context.Context, kmsAppPrivateKeyID string) (*gcpkms.Signer, error)
 }
 
-// CloudBuildClient adheres to the interaction the webhook service has with a subset of Cloud Build APIs.
-type CloudBuildClient interface {
-	Close() error
-	CreateBuild(ctx context.Context, req *cloudbuildpb.CreateBuildRequest, opts ...gax.CallOption) error
-}
-
 // WebhookClientOptions encapsulate client config options as well as dependency implementation overrides.
 type WebhookClientOptions struct {
 	CloudBuildClientOpts    []option.ClientOption
 	KeyManagementClientOpts []option.ClientOption
 
 	OSFileReaderOverride        FileReader
-	CloudBuildClientOverride    CloudBuildClient
+	CloudBuildClientOverride    cloudbuild.Client
+	GitHubClientOverride        gh.Client
 	KeyManagementClientOverride KeyManagementClient
 }
 
@@ -111,18 +109,21 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 		return nil, fmt.Errorf("failed to create app signer: %w", err)
 	}
 
-	options := []githubauth.Option{
-		githubauth.WithBaseURL(cfg.GitHubAPIBaseURL),
-	}
-
-	appClient, err := githubauth.NewApp(cfg.GitHubAppID, signer, options...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to setup app client: %w", err)
+	ghc := wco.GitHubClientOverride
+	if ghc == nil {
+		options := []githubauth.Option{
+			githubauth.WithBaseURL(cfg.GitHubAPIBaseURL),
+		}
+		appClient, err := githubauth.NewApp(cfg.GitHubAppID, signer, options...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create github app client: %w", err)
+		}
+		ghc = gh.NewClient(appClient, cfg.GitHubAPIBaseURL, cfg.BackoffInitialDelay, cfg.MaxRetryAttempts)
 	}
 
 	cbc := wco.CloudBuildClientOverride
 	if cbc == nil {
-		cb, err := NewCloudBuild(ctx, wco.CloudBuildClientOpts...)
+		cb, err := cloudbuild.NewClient(ctx, cfg.BackoffInitialDelay, cfg.MaxRetryAttempts, wco.CloudBuildClientOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cloudbuild client: %w", err)
 		}
@@ -135,26 +136,28 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 	runnerExecutionTimeoutSeconds, _ := strconv.Atoi(cfg.RunnerExecutionTimeoutSeconds)
 
 	return &Server{
-		appClient:                     appClient,
-		extraRunnerCount:              extraRunnerCount,
+		backoffInitialDelay:           cfg.BackoffInitialDelay,
 		cbc:                           cbc,
+		e2eTestRunID:                  cfg.E2ETestRunID,
+		enableSelfHostedLabel:         cfg.EnableSelfHostedLabel,
 		environment:                   cfg.Environment,
+		extraRunnerCount:              extraRunnerCount,
 		ghAPIBaseURL:                  cfg.GitHubAPIBaseURL,
+		ghc:                           ghc,
 		h:                             h,
 		kmc:                           kmc,
+		maxRetryAttempts:              cfg.MaxRetryAttempts,
 		runnerExecutionTimeoutSeconds: runnerExecutionTimeoutSeconds,
 		runnerIdleTimeoutSeconds:      runnerIdleTimeoutSeconds,
 		runnerLabel:                   cfg.RunnerLabel,
 		runnerLocation:                cfg.RunnerLocation,
+		runnerProjectID:               cfg.RunnerProjectID,
 		runnerImageName:               cfg.RunnerImageName,
 		runnerImageTag:                cfg.RunnerImageTag,
-		runnerProjectID:               cfg.RunnerProjectID,
 		runnerRepositoryID:            cfg.RunnerRepositoryID,
 		runnerServiceAccount:          cfg.RunnerServiceAccount,
 		runnerWorkerPoolID:            cfg.RunnerWorkerPoolID,
 		webhookSecret:                 webhookSecret,
-		e2eTestRunID:                  cfg.E2ETestRunID,
-		enableSelfHostedLabel:         cfg.EnableSelfHostedLabel,
 	}, nil
 }
 
@@ -171,11 +174,6 @@ func (s *Server) Routes(ctx context.Context) http.Handler {
 	root := logging.HTTPInterceptor(logger, s.runnerProjectID)(mux)
 
 	return root
-}
-
-// SetAppClient sets the app client for the server.
-func (s *Server) SetAppClient(app *githubauth.App) {
-	s.appClient = app
 }
 
 // handleVersion is a simple http.HandlerFunc that responds with version

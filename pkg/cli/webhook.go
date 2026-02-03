@@ -21,6 +21,7 @@ import (
 
 	"google.golang.org/api/option"
 
+	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
 	"github.com/abcxyz/github-action-dispatcher/pkg/version"
 	"github.com/abcxyz/github-action-dispatcher/pkg/webhook"
 	"github.com/abcxyz/pkg/cli"
@@ -40,7 +41,7 @@ type WebhookServerCommand struct {
 	testFlagSetOpts []cli.Option
 
 	// only used for testing
-	testCloudBuildClientOverride webhook.CloudBuildClient
+	testCloudBuildClientOverride cloudbuild.Client
 
 	// only used for testing
 	testKMSClientOverride webhook.KeyManagementClient

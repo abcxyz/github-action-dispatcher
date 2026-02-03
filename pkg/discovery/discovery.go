@@ -22,6 +22,8 @@ import (
 
 	redisapi "github.com/go-redis/redis/v8"
 
+	"github.com/abcxyz/github-action-dispatcher/pkg/assetinventory"
+	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
 	"github.com/abcxyz/pkg/logging"
 )
 
@@ -32,25 +34,21 @@ const (
 
 // RunnerDiscovery is the main struct for the runner-discovery job.
 type RunnerDiscovery struct {
-	cbc    cloudBuildClient
-	aic    assetInventoryClient
+	cbc    cloudbuild.Client
+	aic    assetinventory.Client
 	rc     *redisapi.Client
 	config *Config
 }
 
-// NewRunnerDiscovery creates a new RunnerDiscovery instance.
-// It initializes the necessary Cloud Build and Asset Inventory clients based on the provided configuration,
-// and accepts a registry client for caching.
-// Returns a pointer to the initialized RunnerDiscovery instance or an error if client creation fails.
 func NewRunnerDiscovery(ctx context.Context, config *Config, rc *redisapi.Client) (*RunnerDiscovery, error) {
-	cbc, err := newCloudBuildClient(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create cloud build client: %w", err)
-	}
-
-	aic, err := newAssetInventoryClient(ctx)
+	aic, err := assetinventory.NewClient(ctx, config.BackoffInitialDelay, config.MaxRetryAttempts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cloud asset inventory client: %w", err)
+	}
+
+	cbc, err := cloudbuild.NewClient(ctx, config.BackoffInitialDelay, config.MaxRetryAttempts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cloud build client: %w", err)
 	}
 
 	return &RunnerDiscovery{
@@ -61,17 +59,14 @@ func NewRunnerDiscovery(ctx context.Context, config *Config, rc *redisapi.Client
 	}, nil
 }
 
-// Run is the main entrypoint for the runner-discovery job.
-// It discovers projects based on configured criteria, lists worker pools within those projects,
-// and logs relevant information. Returns an error if any part of the discovery process fails.
+// Run discovers worker pool projects and caches them in a runner registry.
 func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 	logger := logging.FromContext(ctx)
 
-	logger.InfoContext(ctx, "Calling Run method")
-
-	projects, err := rd.aic.Projects(ctx, rd.config.GCPFolderID, rd.config.LabelQuery)
+	// Fetch all projects in the folder.
+	projects, err := rd.aic.FindProjects(ctx, rd.config.GCPFolderID, rd.config.LabelQuery)
 	if err != nil {
-		return fmt.Errorf("failed to get projects: %w", err)
+		return fmt.Errorf("failed to list projects: %w", err)
 	}
 	logger.InfoContext(ctx, "Discovered projects from API", "projects", projects)
 
@@ -79,8 +74,7 @@ func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 	for _, project := range projects {
 		logger.InfoContext(ctx,
 			"Checking project for worker pools",
-			"project_id", project.ID,
-			"project_number", project.Number,
+			"project_id", project.ProjectID,
 			"project_labels", project.Labels)
 
 		location, ok := project.Labels[locationLabel]
@@ -88,12 +82,11 @@ func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 			location = fallbackLocation
 		}
 
-		wps, err := rd.cbc.ListWorkerPools(ctx, project.ID, location)
+		wps, err := rd.cbc.ListWorkerPools(ctx, project.ProjectID, location)
 		if err != nil {
 			logger.ErrorContext(ctx,
 				"failed to list worker pools",
-				"project_id", project.ID,
-				"project_number", project.Number,
+				"project_id", project.ProjectID,
 				"error", err)
 			continue
 		}
@@ -101,8 +94,7 @@ func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 		for _, wp := range wps {
 			logger.InfoContext(ctx,
 				"Found worker pool",
-				"project_id", project.ID,
-				"project_number", project.Number,
+				"project_id", project.ProjectID,
 				"worker_pool", wp.GetName(),
 				"state", wp.GetState(),
 				"config", wp.GetConfig())

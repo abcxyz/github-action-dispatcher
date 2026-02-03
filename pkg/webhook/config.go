@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sethvargo/go-envconfig"
 
@@ -37,26 +38,28 @@ const (
 // Config defines the set of environment variables required
 // for running the webhook service.
 type Config struct {
-	Environment                   string `env:"ENVIRONMENT,default=production"`
-	GitHubAPIBaseURL              string `env:"GITHUB_API_BASE_URL,default=https://api.github.com"`
-	GitHubAppID                   string `env:"GITHUB_APP_ID,required"`
-	GitHubWebhookKeyMountPath     string `env:"WEBHOOK_KEY_MOUNT_PATH,required"`
-	GitHubWebhookKeyName          string `env:"WEBHOOK_KEY_NAME,required"`
-	KMSAppPrivateKeyID            string `env:"KMS_APP_PRIVATE_KEY_ID,required"`
-	Port                          string `env:"PORT,default=8080"`
-	RunnerExecutionTimeoutSeconds string `env:"RUNNER_EXECUTION_TIMEOUT_SECONDS,default=3600"`
-	RunnerIdleTimeoutSeconds      string `env:"RUNNER_IDLE_TIMEOUT_SECONDS,default=300"`
-	RunnerImageName               string `env:"RUNNER_IMAGE_NAME,default=default-runner"`
-	RunnerImageTag                string `env:"RUNNER_IMAGE_TAG,default=latest"`
-	RunnerLocation                string `env:"RUNNER_LOCATION,required"`
-	RunnerProjectID               string `env:"RUNNER_PROJECT_ID,required"`
-	RunnerRepositoryID            string `env:"RUNNER_REPOSITORY_ID,required"`
-	RunnerServiceAccount          string `env:"RUNNER_SERVICE_ACCOUNT,required"`
-	ExtraRunnerCount              string `env:"EXTRA_RUNNER_COUNT,default=0"`
-	RunnerWorkerPoolID            string `env:"RUNNER_WORKER_POOL_ID"`
-	E2ETestRunID                  string `env:"E2ETestRunID"`
-	RunnerLabel                   string `env:"RUNNER_LABEL,default=self-hosted"`
-	EnableSelfHostedLabel         bool   `env:"ENABLE_SELF_HOSTED_LABEL,default=false"`
+	Environment                   string        `env:"ENVIRONMENT,default=production"`
+	GitHubAPIBaseURL              string        `env:"GITHUB_API_BASE_URL,default=https://api.github.com"`
+	GitHubAppID                   string        `env:"GITHUB_APP_ID,required"`
+	GitHubWebhookKeyMountPath     string        `env:"WEBHOOK_KEY_MOUNT_PATH,required"`
+	GitHubWebhookKeyName          string        `env:"WEBHOOK_KEY_NAME,required"`
+	KMSAppPrivateKeyID            string        `env:"KMS_APP_PRIVATE_KEY_ID,required"`
+	Port                          string        `env:"PORT,default=8080"`
+	RunnerExecutionTimeoutSeconds string        `env:"RUNNER_EXECUTION_TIMEOUT_SECONDS,default=3600"`
+	RunnerIdleTimeoutSeconds      string        `env:"RUNNER_IDLE_TIMEOUT_SECONDS,default=300"`
+	RunnerImageName               string        `env:"RUNNER_IMAGE_NAME,default=default-runner"`
+	RunnerImageTag                string        `env:"RUNNER_IMAGE_TAG,default=latest"`
+	RunnerLocation                string        `env:"RUNNER_LOCATION,required"`
+	RunnerProjectID               string        `env:"RUNNER_PROJECT_ID,required"`
+	RunnerRepositoryID            string        `env:"RUNNER_REPOSITORY_ID,required"`
+	RunnerServiceAccount          string        `env:"RUNNER_SERVICE_ACCOUNT,required"`
+	ExtraRunnerCount              string        `env:"EXTRA_RUNNER_COUNT,default=0"`
+	RunnerWorkerPoolID            string        `env:"RUNNER_WORKER_POOL_ID"`
+	E2ETestRunID                  string        `env:"E2ETestRunID"`
+	RunnerLabel                   string        `env:"RUNNER_LABEL,default=self-hosted"`
+	EnableSelfHostedLabel         bool          `env:"ENABLE_SELF_HOSTED_LABEL,default=false"`
+	MaxRetryAttempts              int           `env:"MAX_RETRY_ATTEMPTS,default=3"`
+	BackoffInitialDelay           time.Duration `env:"BACKOFF_INITIAL_DELAY,default=500ms"`
 }
 
 // Validate validates the webhook config after load.
@@ -316,6 +319,24 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Usage:   "Enable to also allow self-hosted in addition to runner-label. Temporary until org registration is enabled.",
 		Default: false,
 		EnvVar:  "ENABLE_SELF_HOSTED_LABEL",
+	})
+
+	rf := set.NewSection("RETRY OPTIONS")
+
+	rf.IntVar(&cli.IntVar{
+		Name:    "max-retry-attempts",
+		Target:  &cfg.MaxRetryAttempts,
+		EnvVar:  "MAX_RETRY_ATTEMPTS",
+		Default: 3,
+		Usage:   "The maximum number of attempts for network calls, including the initial attempt.",
+	})
+
+	rf.DurationVar(&cli.DurationVar{
+		Name:    "backoff-initial-delay",
+		Target:  &cfg.BackoffInitialDelay,
+		EnvVar:  "BACKOFF_INITIAL_DELAY",
+		Default: 500 * time.Millisecond,
+		Usage:   "The initial delay for retries in the exponential backoff strategy.",
 	})
 
 	return set
