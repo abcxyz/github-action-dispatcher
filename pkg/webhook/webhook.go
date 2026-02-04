@@ -320,9 +320,9 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 	jitConfig, err := s.ghc.GenerateRepoJITConfig(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, runnerID, runnerLabel)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to generate JIT config",
-			"error", err,
+			"error", err.Error(),
 		)
-		return "", fmt.Errorf("failed to generate JIT config: %w", err)
+		return "", fmt.Errorf("error generating jitconfig: %w", err)
 	}
 
 	// Sometimes JITConfig has exceeded the 4,000-character limit for
