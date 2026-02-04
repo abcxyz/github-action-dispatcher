@@ -108,11 +108,11 @@ func (c *cloudbuildClient) CreateBuild(ctx context.Context, req *cloudbuildpb.Cr
 	if err := goretry.Do(ctx, backoff, func(ctx context.Context) error {
 		if _, err := c.client.CreateBuild(ctx, req); err != nil {
 			logger.WarnContext(ctx, "retrying due to CreateBuild failure", "error", err)
-			return goretry.RetryableError(fmt.Errorf("failed to create cloud build build: %w", err))
+			return goretry.RetryableError(fmt.Errorf("failed to create Cloud Build build: %w", err))
 		}
 		return nil
 	}); err != nil {
-		return fmt.Errorf("failed to create cloud build build: %w", err)
+		return fmt.Errorf("failed to create Cloud Build build after retries: %w", err)
 	}
 	return nil
 }
