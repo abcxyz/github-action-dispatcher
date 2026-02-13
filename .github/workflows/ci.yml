@@ -16,13 +16,13 @@ env:
   IMAGE_NAME: 'github-action-dispatcher'
 
   RUNNER_DOCKER_REPO: 'us-docker.pkg.dev/abcxyz-artifacts/docker-images'
-  RUNNER_IMAGE_TAG: 'v0.0.2-ubuntu-24-04-amd64'
+  RUNNER_IMAGE_TAG: 'v0.1.1-ubuntu-24-04-amd64'
   RUNNER_IMAGE_NAME: 'github-action-runner'
 
   INTEGRATION_RUNNER_LABEL: 'github-action-dispatcher-integration' # <repo-name>-<env>
   INTEGRATION_RUNNER_LOCATION: 'us-central1'
   INTEGRATION_RUNNER_PROJECT_ID: 'abcxyz-runner-i-4f'
-  INTEGRATION_RUNNER_SERVICE_ACCOUNT: 'projects/abcxyz-runner-i-4f/serviceAccounts/abcxyz-runner-sa@abcxyz-runner-i-4f.iam.gserviceaccount.com'
+  INTEGRATION_RUNNER_SERVICE_ACCOUNT: 'projects/abcxyz-runner-i-4f/serviceAccounts/runner-sa@abcxyz-runner-i-4f.iam.gserviceaccount.com'
   INTEGRATION_REDIS_HOST: '172.16.0.3'
   INTEGRATION_REDIS_PORT: '6379'
 
@@ -41,7 +41,7 @@ env:
   AUTOPUSH_RUNNER_LABEL: 'github-action-dispatcher-autopush' # <repo-name>-<env>
   AUTOPUSH_RUNNER_LOCATION: 'us-central1'
   AUTOPUSH_RUNNER_PROJECT_ID: 'abcxyz-runner-a-4f'
-  AUTOPUSH_RUNNER_SERVICE_ACCOUNT: 'projects/abcxyz-runner-a-4f/serviceAccounts/abcxyz-runner-sa@abcxyz-runner-a-4f.iam.gserviceaccount.com'
+  AUTOPUSH_RUNNER_SERVICE_ACCOUNT: 'projects/abcxyz-runner-a-4f/serviceAccounts/runner-sa@abcxyz-runner-a-4f.iam.gserviceaccount.com'
   AUTOPUSH_REDIS_HOST: '172.16.0.3'
   AUTOPUSH_REDIS_PORT: '6379'
 
@@ -251,20 +251,20 @@ jobs:
           WEBHOOK_SECRET_VERSION="latest"
 
           cat > /tmp/env_vars <<EOF
-          REDIS_HOST: "${{ env.INTEGRATION_REDIS_HOST }}"
-          REDIS_PORT: "${{ env.INTEGRATION_REDIS_PORT }}"
-          ENABLE_SELF_HOSTED_LABEL: 'true'
+          REDIS_HOST: '${{ env.INTEGRATION_REDIS_HOST }}'
+          REDIS_PORT: '${{ env.INTEGRATION_REDIS_PORT }}'
           EXTRA_RUNNER_COUNT: '0'
           GITHUB_APP_ID: '${{ env.GITHUB_APP_ID }}'
           KMS_APP_PRIVATE_KEY_ID: '${{ env.KMS_APP_PRIVATE_KEY_ID }}'
           RUNNER_IMAGE_NAME: '${{ env.RUNNER_IMAGE_NAME }}'
           RUNNER_IMAGE_TAG: '${{ env.RUNNER_IMAGE_TAG }}'
-          RUNNER_LABEL: '${{ env.INTEGRATION_RUNNER_LABEL }}'
           RUNNER_LOCATION: '${{ env.INTEGRATION_RUNNER_LOCATION }}'
           RUNNER_PROJECT_ID: '${{ env.INTEGRATION_RUNNER_PROJECT_ID }}'
           RUNNER_REPOSITORY_ID: '${{ env.RUNNER_DOCKER_REPO }}'
           RUNNER_SERVICE_ACCOUNT: '${{ env.INTEGRATION_RUNNER_SERVICE_ACCOUNT }}'
           RUNNER_WORKER_POOL_ID: '${{ env.INTEGRATION_WORKER_POOL_ID }}'
+          RUNNER_LABEL_ALIASES: 'self-hosted=${{ env.INTEGRATION_RUNNER_LABEL }}'
+          SUPPORTED_RUNNER_LABELS: '${{ env.INTEGRATION_RUNNER_LABEL }}'
           WEBHOOK_KEY_MOUNT_PATH: '${WEBHOOK_SECRET_MOUNT_PATH}'
           WEBHOOK_KEY_NAME: '${WEBHOOK_SECRET_NAME}'
           EOF
@@ -387,20 +387,19 @@ jobs:
           WEBHOOK_SECRET_VERSION="latest"
 
           cat > /tmp/env_vars <<EOF
-          REDIS_HOST: "${{ env.AUTOPUSH_REDIS_HOST }}"
-          REDIS_PORT: "${{ env.AUTOPUSH_REDIS_PORT }}"
-          ENABLE_SELF_HOSTED_LABEL: 'true'
+          REDIS_HOST: '${{ env.AUTOPUSH_REDIS_HOST }}'
+          REDIS_PORT: '${{ env.AUTOPUSH_REDIS_PORT }}'
           EXTRA_RUNNER_COUNT: '0'
           GITHUB_APP_ID: '${{ env.GITHUB_APP_ID }}'
           KMS_APP_PRIVATE_KEY_ID: '${{ env.KMS_APP_PRIVATE_KEY_ID }}'
           RUNNER_IMAGE_NAME: '${{ env.RUNNER_IMAGE_NAME }}'
           RUNNER_IMAGE_TAG: '${{ env.RUNNER_IMAGE_TAG }}'
-          RUNNER_LABEL: '${{ env.AUTOPUSH_RUNNER_LABEL }}'
           RUNNER_LOCATION: '${{ env.AUTOPUSH_RUNNER_LOCATION }}'
           RUNNER_PROJECT_ID: '${{ env.AUTOPUSH_RUNNER_PROJECT_ID }}'
           RUNNER_REPOSITORY_ID: '${{ env.RUNNER_DOCKER_REPO }}'
           RUNNER_SERVICE_ACCOUNT: '${{ env.AUTOPUSH_RUNNER_SERVICE_ACCOUNT }}'
           RUNNER_WORKER_POOL_ID: '${{ env.AUTOPUSH_WORKER_POOL_ID }}'
+          SUPPORTED_RUNNER_LABELS: '${{ env.AUTOPUSH_RUNNER_LABEL }}'
           WEBHOOK_KEY_MOUNT_PATH: '${WEBHOOK_SECRET_MOUNT_PATH}'
           WEBHOOK_KEY_NAME: '${WEBHOOK_SECRET_NAME}'
           EOF

@@ -26,7 +26,7 @@ type MockClient struct {
 	StubProjects    []*ProjectInfo
 }
 
-// Projects is a mock of the Projects method.
+// FindProjects is a mock of the FindProjects method.
 func (m *MockClient) FindProjects(ctx context.Context, folderID string, labelQuery []string) ([]*ProjectInfo, error) {
 	if m.ListProjectsErr != nil {
 		return nil, m.ListProjectsErr

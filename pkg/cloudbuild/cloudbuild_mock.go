@@ -16,6 +16,7 @@ package cloudbuild
 
 import (
 	"context"
+	"strings"
 
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
 )
@@ -35,7 +36,14 @@ func (m *MockClient) ListWorkerPools(ctx context.Context, projectID, location st
 	if m.ListWorkerPoolsErr != nil {
 		return nil, m.ListWorkerPoolsErr
 	}
-	return m.WorkerPools, nil
+
+	var matchingPools []*cloudbuildpb.WorkerPool
+	for _, p := range m.WorkerPools {
+		if strings.Contains(p.GetName(), projectID) {
+			matchingPools = append(matchingPools, p)
+		}
+	}
+	return matchingPools, nil
 }
 
 // CreateBuild is a mock of the CreateBuild method.

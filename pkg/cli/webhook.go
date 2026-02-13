@@ -22,6 +22,7 @@ import (
 	"google.golang.org/api/option"
 
 	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
+	"github.com/abcxyz/github-action-dispatcher/pkg/registry"
 	"github.com/abcxyz/github-action-dispatcher/pkg/version"
 	"github.com/abcxyz/github-action-dispatcher/pkg/webhook"
 	"github.com/abcxyz/pkg/cli"
@@ -35,7 +36,8 @@ var _ cli.Command = (*WebhookServerCommand)(nil)
 type WebhookServerCommand struct {
 	cli.BaseCommand
 
-	cfg *webhook.Config
+	cfg         *webhook.Config
+	registryCfg *registry.RegistryConfig
 
 	// only used for testing
 	testFlagSetOpts []cli.Option
@@ -63,8 +65,11 @@ Usage: {{ COMMAND }} [options]
 
 func (c *WebhookServerCommand) Flags() *cli.FlagSet {
 	c.cfg = &webhook.Config{}
+	c.registryCfg = &registry.RegistryConfig{}
 	set := cli.NewFlagSet(c.testFlagSetOpts...)
-	return c.cfg.ToFlags(set)
+	c.cfg.ToFlags(set)
+	c.registryCfg.ToFlags(set)
+	return set
 }
 
 func (c *WebhookServerCommand) Run(ctx context.Context, args []string) error {
@@ -105,6 +110,11 @@ func (c *WebhookServerCommand) RunUnstarted(ctx context.Context, args []string) 
 	}
 	logger.DebugContext(ctx, "loaded configuration", "config", c.cfg)
 
+	registryClient, err := registry.NewRunnerRegistry(ctx, c.registryCfg)
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to create registry client, caching will be disabled", "error", err)
+	}
+
 	agent := fmt.Sprintf("google:github-action-dispatcher/%s", version.Version)
 	opts := []option.ClientOption{option.WithUserAgent(agent)}
 	webhookClientOptions := &webhook.WebhookClientOptions{
@@ -126,7 +136,7 @@ func (c *WebhookServerCommand) RunUnstarted(ctx context.Context, args []string) 
 		webhookClientOptions.OSFileReaderOverride = c.testOSFileReaderOverride
 	}
 
-	webhookServer, err := webhook.NewServer(ctx, h, c.cfg, webhookClientOptions)
+	webhookServer, err := webhook.NewServer(ctx, h, c.cfg, registryClient, webhookClientOptions)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create server: %w", err)
 	}

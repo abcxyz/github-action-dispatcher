@@ -27,10 +27,11 @@ import (
 // Config defines the set of environment variables required
 // for running the runner-discovery job.
 type Config struct {
-	GCPFolderID         string        `env:"GCP_FOLDER_ID"`
-	LabelQuery          []string      `env:"LABEL_QUERY"`
-	MaxRetryAttempts    int           `env:"MAX_RETRY_ATTEMPTS,default=3"`
-	BackoffInitialDelay time.Duration `env:"BACKOFF_INITIAL_DELAY,default=500ms"`
+	GCPFolderID                    string        `env:"GCP_FOLDER_ID"`
+	LabelQuery                     []string      `env:"LABEL_QUERY"`
+	MaxRetryAttempts               int           `env:"MAX_RETRY_ATTEMPTS,default=3"`
+	BackoffInitialDelay            time.Duration `env:"BACKOFF_INITIAL_DELAY,default=500ms"`
+	RunnerRegistryDefaultKeyPrefix string        `env:"RUNNER_REGISTRY_DEFAULT_KEY_PREFIX,default=default"`
 }
 
 // Validate validates the runner-discovery config after load.

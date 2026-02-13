@@ -15,7 +15,6 @@
 package discovery
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -26,21 +25,24 @@ import (
 
 	"github.com/abcxyz/github-action-dispatcher/pkg/assetinventory"
 	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
+	"github.com/abcxyz/github-action-dispatcher/pkg/registry"
 	"github.com/abcxyz/pkg/logging"
 	"github.com/abcxyz/pkg/testutil"
 )
 
 const (
-	testProjectID1              = "my-project"
-	testProjectID2              = "another-project"
-	testLocation                = "us-central1"
-	testMachineTypeE2Medium     = "e2-medium"
-	testMachineTypeE2Small      = "e2-small"
-	testMachineTypeE2LargeStale = "e2-large-stale"
-	testWorkerPoolID1           = "my-worker-pool-e2-medium"
-	testWorkerPoolID2           = "my-worker-pool-e2-medium-2"
-	testWorkerPoolID3           = "my-worker-pool-e2-small"
-	testGCPFolderID             = "12345"
+	testProjectID1                     = "my-project"
+	testProjectID2                     = "another-project"
+	testProjectID3                     = "labeled-project-e2-small"
+	testLocation                       = "us-central1"
+	testMachineTypeE2Medium            = "e2-medium"
+	testMachineTypeE2Small             = "e2-small"
+	testMachineTypeE2LargeStale        = "e2-large-stale"
+	testWorkerPoolID1                  = "my-worker-pool-e2-medium"
+	testWorkerPoolID2                  = "my-worker-pool-e2-medium-2"
+	testWorkerPoolID3                  = "my-worker-pool-e2-small"
+	testGCPFolderID                    = "12345"
+	testRunnerRegistryDefaultKeyPrefix = "default"
 )
 
 // newMockWorkerPool creates a new mock cloudbuildpb.WorkerPool for testing.
@@ -57,9 +59,8 @@ func newMockWorkerPool(projectID, location, poolID, machineType string) *cloudbu
 	}
 }
 
-// defaultRegistryKey generates a registry key in the "default-<machine-type>" format.
-func defaultRegistryKey(machineType string) string {
-	return fmt.Sprintf("default-%s", machineType)
+func testRegistryKey(prefix, machineType string) string {
+	return fmt.Sprintf("%s:%s", prefix, machineType)
 }
 
 func TestRunnerDiscovery_Run(t *testing.T) {
@@ -71,66 +72,120 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		cloudbuildMock     *cloudbuild.MockClient
 		assetInventoryMock *assetinventory.MockClient
 		expErr             string
-		expRegistrySets    map[string][]string // Key: machineType, Value: list of worker pool names
-		expRegistryDels    []string            // Keys expected to be deleted
+		expRegistrySets    map[string][]registry.WorkerPoolInfo
+		expRegistryDels    []string
+		expectRedis        bool
 	}{
 		{
 			name: "success_no_cache_read_new_registry_write",
 			config: &Config{
-				LabelQuery:  []string{"env=test"},
-				GCPFolderID: testGCPFolderID,
+				LabelQuery:                     []string{"env=test"},
+				GCPFolderID:                    testGCPFolderID,
+				RunnerRegistryDefaultKeyPrefix: testRunnerRegistryDefaultKeyPrefix,
 			},
 			cloudbuildMock: &cloudbuild.MockClient{
 				WorkerPools: []*cloudbuildpb.WorkerPool{
 					newMockWorkerPool(testProjectID1, testLocation, testWorkerPoolID1, testMachineTypeE2Medium),
 					newMockWorkerPool(testProjectID2, testLocation, testWorkerPoolID2, testMachineTypeE2Medium),
-					newMockWorkerPool(testProjectID1, testLocation, testWorkerPoolID3, testMachineTypeE2Small),
+					newMockWorkerPool(testProjectID3, testLocation, testWorkerPoolID3, testMachineTypeE2Small),
 				},
 			},
 			assetInventoryMock: &assetinventory.MockClient{
-				StubProjects: []*assetinventory.ProjectInfo{{ProjectID: "labeled-project", Labels: map[string]string{}}},
-			},
-			expRegistrySets: map[string][]string{
-				testMachineTypeE2Medium: {
-					newMockWorkerPool(testProjectID1, testLocation, testWorkerPoolID1, testMachineTypeE2Medium).GetName(),
-					newMockWorkerPool(testProjectID2, testLocation, testWorkerPoolID2, testMachineTypeE2Medium).GetName(),
+				StubProjects: []*assetinventory.ProjectInfo{
+					{
+						ProjectID: testProjectID1,
+						Labels: map[string]string{
+							runnerTypeGCPProjectLabelKey:     testRunnerRegistryDefaultKeyPrefix,
+							runnerLabelGCPProjectLabelKey:    testMachineTypeE2Medium,
+							runnerLocationGCPProjectLabelKey: testLocation,
+						},
+					},
+					{
+						ProjectID: testProjectID2,
+						Labels: map[string]string{
+							runnerTypeGCPProjectLabelKey:     testRunnerRegistryDefaultKeyPrefix,
+							runnerLabelGCPProjectLabelKey:    testMachineTypeE2Medium,
+							runnerLocationGCPProjectLabelKey: testLocation,
+						},
+					},
+					{
+						ProjectID: testProjectID3,
+						Labels: map[string]string{
+							runnerTypeGCPProjectLabelKey:     testRunnerRegistryDefaultKeyPrefix,
+							runnerLabelGCPProjectLabelKey:    testMachineTypeE2Small,
+							runnerLocationGCPProjectLabelKey: testLocation,
+						},
+					},
 				},
-				testMachineTypeE2Small: {
-					newMockWorkerPool(testProjectID1, testLocation, testWorkerPoolID3, testMachineTypeE2Small).GetName(),
+			},
+			expRegistrySets: map[string][]registry.WorkerPoolInfo{
+				testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testMachineTypeE2Medium): func() []registry.WorkerPoolInfo {
+					pools := []registry.WorkerPoolInfo{
+						{
+							Name:      newMockWorkerPool(testProjectID1, testLocation, testWorkerPoolID1, testMachineTypeE2Medium).GetName(),
+							ProjectID: testProjectID1,
+						},
+						{
+							Name:      newMockWorkerPool(testProjectID2, testLocation, testWorkerPoolID2, testMachineTypeE2Medium).GetName(),
+							ProjectID: testProjectID2,
+						},
+					}
+					sort.Slice(pools, func(i, j int) bool {
+						return pools[i].Name < pools[j].Name
+					})
+					return pools
+				}(),
+				testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testMachineTypeE2Small): {
+					{
+						Name:      newMockWorkerPool(testProjectID3, testLocation, testWorkerPoolID3, testMachineTypeE2Small).GetName(),
+						ProjectID: testProjectID3,
+					},
 				},
 			},
 			// This test simulates a scenario where a stale worker pool key exists
 			// in the registry and should be deleted because it's no longer discovered.
-			expRegistryDels: []string{defaultRegistryKey(testMachineTypeE2LargeStale)},
+			expRegistryDels: []string{testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testMachineTypeE2LargeStale)},
+			expectRedis:     true,
 		},
 		{
 			name: "projects_error",
 			config: &Config{
-				LabelQuery:  []string{"env=test"},
-				GCPFolderID: testGCPFolderID,
+				LabelQuery:                     []string{"env=test"},
+				GCPFolderID:                    testGCPFolderID,
+				RunnerRegistryDefaultKeyPrefix: testRunnerRegistryDefaultKeyPrefix,
 			},
 			cloudbuildMock: &cloudbuild.MockClient{},
 			assetInventoryMock: &assetinventory.MockClient{
 				ListProjectsErr: fmt.Errorf("failed to get projects"),
 			},
-			expErr: `failed to list projects: failed to get projects`,
+			expErr:      `failed to list projects: failed to get projects`,
+			expectRedis: false,
 		},
 		{
 			name: "list_worker_pools_error",
 			config: &Config{
-				LabelQuery:  []string{"env=test"},
-				GCPFolderID: testGCPFolderID,
+				LabelQuery:                     []string{"env=test"},
+				GCPFolderID:                    testGCPFolderID,
+				RunnerRegistryDefaultKeyPrefix: testRunnerRegistryDefaultKeyPrefix,
 			},
 			cloudbuildMock: &cloudbuild.MockClient{
 				ListWorkerPoolsErr: fmt.Errorf("failed to list worker pools"),
 			},
 			assetInventoryMock: &assetinventory.MockClient{
 				StubProjects: []*assetinventory.ProjectInfo{
-					{ProjectID: "my-project", Labels: map[string]string{}},
+					{
+						ProjectID: testProjectID1,
+						Labels: map[string]string{
+							runnerTypeGCPProjectLabelKey:     testRunnerRegistryDefaultKeyPrefix,
+							runnerLabelGCPProjectLabelKey:    testMachineTypeE2Medium,
+							runnerLocationGCPProjectLabelKey: testLocation,
+						},
+					},
 				},
 			},
-			expRegistrySets: map[string][]string{},
-			expErr:          "",
+			expRegistrySets: map[string][]registry.WorkerPoolInfo{},
+			expErr:          fmt.Sprintf("failed to list worker pools for project %s: failed to list worker pools", testProjectID1),
+			expectRedis:     false,
 		},
 	}
 
@@ -138,49 +193,31 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := logging.WithLogger(context.Background(), logging.TestLogger(t))
+			ctx := logging.WithLogger(t.Context(), logging.TestLogger(t))
 			db, mock := redismock.NewClientMock()
 
-			if tc.expRegistrySets != nil {
-				// Expect Scan for stale keys.
+			if tc.expectRedis {
+				mock.ExpectScan(0, tc.config.RunnerRegistryDefaultKeyPrefix+":*", 0).SetVal(tc.expRegistryDels, 0)
+				mock.ExpectTxPipeline()
 				if len(tc.expRegistryDels) > 0 {
-					mock.ExpectScan(0, "default-*", 0).SetVal(tc.expRegistryDels, 0)
-				} else {
-					mock.ExpectScan(0, "default-*", 0).SetVal([]string{}, 0)
+					mock.ExpectDel(tc.expRegistryDels...).SetVal(int64(len(tc.expRegistryDels)))
 				}
 
-				// Only expect a transaction if there are keys to delete or set.
-				if len(tc.expRegistryDels) > 0 || len(tc.expRegistrySets) > 0 {
-					// Begin pipeline for transactional update
-					mock.ExpectTxPipeline()
-
-					if len(tc.expRegistryDels) > 0 {
-						// Expect DEL for stale keys
-						mock.ExpectDel(tc.expRegistryDels...).SetVal(int64(len(tc.expRegistryDels)))
-					}
-
-					// Collect and sort keys for deterministic expectation setting
-					var sortedMachineTypes []string
-					for machineType := range tc.expRegistrySets {
-						sortedMachineTypes = append(sortedMachineTypes, machineType)
-					}
-					sort.Strings(sortedMachineTypes)
-
-					for _, machineType := range sortedMachineTypes {
-						pools := tc.expRegistrySets[machineType]
-						registryKey := defaultRegistryKey(machineType)
-						poolsJSON, err := json.Marshal(pools)
-						if err != nil {
-							t.Fatalf("failed to marshal pools for machine type %s: %v", machineType, err)
-						}
-						mock.ExpectSet(registryKey, poolsJSON, 0).SetVal("OK")
-					}
-
-					// Expect the pipeline to be executed.
-					// Since discovery.go now conditionally initiates the pipeline,
-					// this ExpectTxPipelineExec will only be reached if there are actual commands.
-					mock.ExpectTxPipelineExec()
+				var keys []string
+				for key := range tc.expRegistrySets {
+					keys = append(keys, key)
 				}
+				sort.Strings(keys)
+
+				for _, registryKey := range keys { // Iterate over sorted keys
+					pools := tc.expRegistrySets[registryKey]
+					poolsJSON, err := json.Marshal(pools)
+					if err != nil {
+						t.Fatalf("failed to marshal pools for key %s: %v", registryKey, err)
+					}
+					mock.ExpectSet(registryKey, poolsJSON, 0).SetVal("OK")
+				}
+				mock.ExpectTxPipelineExec()
 			}
 			rd := &RunnerDiscovery{
 				cbc:    tc.cloudbuildMock,

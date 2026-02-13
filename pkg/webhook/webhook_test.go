@@ -24,24 +24,29 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-redis/redismock/v8"
 	"github.com/google/go-github/v69/github"
 
 	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
 	gh "github.com/abcxyz/github-action-dispatcher/pkg/github"
+	"github.com/abcxyz/github-action-dispatcher/pkg/registry"
+	"github.com/abcxyz/pkg/logging"
 )
 
 const (
-	SHA256SignatureHeader = "X-Hub-Signature-256"
-	EventTypeHeader       = "X-Github-Event"
-	DeliveryIDHeader      = "X-Github-Delivery"
-	ContentTypeHeader     = "Content-Type"
+	SHA256SignatureHeader             = "X-Hub-Signature-256"
+	EventTypeHeader                   = "X-Github-Event"
+	DeliveryIDHeader                  = "X-Github-Delivery"
+	ContentTypeHeader                 = "Content-Type"
+	SelfHostedRunnerLabel             = "self-hosted"
+	SelfHostedUbuntuLatestRunnerLabel = "sh-ubuntu-latest"
 	//nolint:gosec // this is a test value
 	serverGitHubWebhookSecret = "test-github-webhook-secret"
+	testEnv                   = "test"
 )
 
 func TestHandleWebhook(t *testing.T) {
@@ -60,210 +65,289 @@ func TestHandleWebhook(t *testing.T) {
 	payloadType := "workflow_job"
 
 	cases := []struct {
-		name                          string
-		payloadType                   string
-		action                        string
-		runnerExecutionTimeoutSeconds int
-		runnerIdleTimeoutSeconds      int
-		runnerLabels                  []string
-		payloadWebhookSecret          string
-		serverRunnerLabel             string
-		serverEnableSelfHostedLabel   bool
-		extraSpawnNumber              int
-		contentType                   string
-		createdAt                     *github.Timestamp
-		startedAt                     *github.Timestamp
-		completedAt                   *github.Timestamp
-		runID                         *int64
-		jobID                         *int64
-		jobName                       *string
-		expStatusCode                 int
-		expRespBody                   string // This is now only for plain text responses.
-		expectBuildCount              int
+		name                 string
+		payloadType          string
+		action               string
+		runnerLabels         []string
+		payloadWebhookSecret string
+		extraSpawnNumber     int
+		contentType          string
+		createdAt            *github.Timestamp
+		startedAt            *github.Timestamp
+		completedAt          *github.Timestamp
+		runID                *int64
+		jobID                *int64
+		jobName              *string
+		expStatusCode        int
+		expRespBody          string // This is now only for plain text responses.
+		expectBuildCount     int
+
+		runnerExecutionTimeoutSeconds  int
+		runnerIdleTimeoutSeconds       int
+		runnerLabelAliases             map[string]string
+		supportedRunnerLabels          []string
+		runnerRegistryDefaultKeyPrefix string
+		registryWorkerPools            map[string][]registry.WorkerPoolInfo
 	}{
 		{
-			name:                          "Workflow Job Queued - Default Label",
-			payloadType:                   payloadType,
-			action:                        queuedAction,
+			name:                 "Workflow Job Queued - Default Label",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{SelfHostedRunnerLabel},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          "",
+			expectBuildCount:     1,
+
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
-			runnerLabels:                  []string{deprecatedSelfHostedRunnerLabel},
-			payloadWebhookSecret:          serverGitHubWebhookSecret,
-			serverRunnerLabel:             "self-hosted",
-			contentType:                   contentType,
-			createdAt:                     &queuedTime,
-			startedAt:                     nil,
-			completedAt:                   nil,
-			runID:                         &runID,
-			jobID:                         &jobID,
-			jobName:                       &jobName,
-			expStatusCode:                 200,
-			// This now expects a JSON response, so we clear expRespBody.
-			// The test logic will parse the JSON instead of doing a string compare.
-			expRespBody:      "",
-			expectBuildCount: 1,
+			supportedRunnerLabels:         []string{SelfHostedRunnerLabel},
 		},
 		{
-			name:                          "Workflow Job Queued - Custom Label",
-			payloadType:                   payloadType,
-			action:                        queuedAction,
+			name:                 "Workflow Job Queued - Custom Label",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{"custom-label"},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          "",
+			expectBuildCount:     1,
+
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
-			runnerLabels:                  []string{"custom-label"},
-			payloadWebhookSecret:          serverGitHubWebhookSecret,
-			serverRunnerLabel:             "custom-label",
-			contentType:                   contentType,
-			createdAt:                     &queuedTime,
-			startedAt:                     nil,
-			completedAt:                   nil,
-			runID:                         &runID,
-			jobID:                         &jobID,
-			jobName:                       &jobName,
-			expStatusCode:                 200,
-			expRespBody:                   "", // Expects JSON
-			expectBuildCount:              1,
+			supportedRunnerLabels:         []string{"custom-label"},
 		},
 		{
-			name:                          "Workflow Job Queued - Default And Custom Label",
-			payloadType:                   payloadType,
-			action:                        queuedAction,
+			name:                 "Workflow Job Queued - Aliased Label",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{"old-label"},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          "",
+			expectBuildCount:     1,
+
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
-			runnerLabels:                  []string{"self-hosted"},
-			payloadWebhookSecret:          serverGitHubWebhookSecret,
-			serverRunnerLabel:             "custom-label",
-			serverEnableSelfHostedLabel:   true,
-			contentType:                   contentType,
-			createdAt:                     &queuedTime,
-			startedAt:                     nil,
-			completedAt:                   nil,
-			runID:                         &runID,
-			jobID:                         &jobID,
-			jobName:                       &jobName,
-			expStatusCode:                 200,
-			expRespBody:                   "", // Expects JSON
-			expectBuildCount:              1,
+			runnerLabelAliases: map[string]string{
+				"old-label": "new-label",
+			},
+			supportedRunnerLabels: []string{"new-label"},
 		},
 		{
-			name:                          "Workflow Job Queued - Multiple Builds Spawned",
-			payloadType:                   payloadType,
-			action:                        queuedAction,
+			name:                 "Workflow Job Queued - Multiple Builds Spawned",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{SelfHostedRunnerLabel},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			extraSpawnNumber:     2,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          "",
+			expectBuildCount:     3,
+
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
-			runnerLabels:                  []string{deprecatedSelfHostedRunnerLabel},
-			payloadWebhookSecret:          serverGitHubWebhookSecret,
-			serverRunnerLabel:             "self-hosted",
-			extraSpawnNumber:              2,
-			contentType:                   contentType,
-			createdAt:                     &queuedTime,
-			startedAt:                     nil,
-			completedAt:                   nil,
-			runID:                         &runID,
-			jobID:                         &jobID,
-			jobName:                       &jobName,
-			expStatusCode:                 200,
-			expRespBody:                   "", // Expects JSON
-			expectBuildCount:              3,
+			supportedRunnerLabels:         []string{SelfHostedRunnerLabel},
 		},
 		{
-			name:                          "Workflow Job Queued - Multiple Label Fails",
-			payloadType:                   payloadType,
-			action:                        queuedAction,
-			runnerExecutionTimeoutSeconds: 7200,
-			runnerIdleTimeoutSeconds:      300,
-			runnerLabels:                  []string{"self-hosted", "custom-label"},
-			payloadWebhookSecret:          serverGitHubWebhookSecret,
-			serverRunnerLabel:             "custom-label",
-			serverEnableSelfHostedLabel:   true,
-			contentType:                   contentType,
-			createdAt:                     &queuedTime,
-			startedAt:                     nil,
-			completedAt:                   nil,
-			runID:                         &runID,
-			jobID:                         &jobID,
-			jobName:                       &jobName,
-			expStatusCode:                 200,
-			expRespBody:                   fmt.Sprintf("no action taken, only accept single label jobs, got: %s", []string{"self-hosted", "custom-label"}),
-			expectBuildCount:              0,
+			name:                 "Workflow Job Queued - Multiple Label Fails",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{"self-hosted", "custom-label"},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          "no action taken, only accept single label jobs, got: [self-hosted custom-label]",
+			expectBuildCount:     0,
 		},
 		{
-			name:                          "Workflow Job Queued - No Matching Label",
-			payloadType:                   payloadType,
-			action:                        queuedAction,
-			runnerExecutionTimeoutSeconds: 7200,
-			runnerIdleTimeoutSeconds:      300,
-			runnerLabels:                  []string{"other-label"},
-			payloadWebhookSecret:          serverGitHubWebhookSecret,
-			serverRunnerLabel:             "self-hosted",
-			contentType:                   contentType,
-			createdAt:                     &queuedTime,
-			startedAt:                     nil,
-			completedAt:                   nil,
-			runID:                         &runID,
-			jobID:                         &jobID,
-			jobName:                       &jobName,
-			expStatusCode:                 200,
-			expRespBody:                   fmt.Sprintf("no action taken for label: %s", []string{"other-label"}),
-			expectBuildCount:              0,
+			name:                 "Workflow Job Queued - No Matching Label",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{"other-label"},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          "no action taken for label: other-label",
+			expectBuildCount:     0,
 		},
 		{
-			name:                          "Workflow Job In Progress",
-			payloadType:                   payloadType,
-			action:                        "in_progress",
+			name:                 "Workflow Job In Progress",
+			payloadType:          payloadType,
+			action:               "in_progress",
+			runnerLabels:         []string{SelfHostedRunnerLabel},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            &inProgressTime,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          "workflow job in progress event logged",
+			expectBuildCount:     0,
+
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
-			runnerLabels:                  []string{deprecatedSelfHostedRunnerLabel},
-			payloadWebhookSecret:          serverGitHubWebhookSecret,
-			serverRunnerLabel:             "self-hosted",
-			contentType:                   contentType,
-			createdAt:                     &queuedTime,
-			startedAt:                     &inProgressTime,
-			runID:                         &runID,
-			jobID:                         &jobID,
-			jobName:                       &jobName,
-			expStatusCode:                 200,
-			expRespBody:                   "workflow job in progress event logged",
-			expectBuildCount:              0,
+			supportedRunnerLabels:         []string{SelfHostedRunnerLabel},
 		},
 		{
-			name:                          "Workflow Job Completed - Success",
-			payloadType:                   payloadType,
-			action:                        "completed",
+			name:                 "Workflow Job Completed - Success",
+			payloadType:          payloadType,
+			action:               "completed",
+			runnerLabels:         []string{SelfHostedRunnerLabel},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            &inProgressTime,
+			completedAt:          &completedTime,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          "workflow job completed event logged",
+			expectBuildCount:     0,
+
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
-			runnerLabels:                  []string{deprecatedSelfHostedRunnerLabel},
-			payloadWebhookSecret:          serverGitHubWebhookSecret,
-			serverRunnerLabel:             "self-hosted",
-			contentType:                   contentType,
-			createdAt:                     &queuedTime,
-			startedAt:                     &inProgressTime,
-			completedAt:                   &completedTime,
-			runID:                         &runID,
-			jobID:                         &jobID,
-			jobName:                       &jobName,
-			expStatusCode:                 200,
-			expRespBody:                   "workflow job completed event logged",
-			expectBuildCount:              0,
+			supportedRunnerLabels:         []string{SelfHostedRunnerLabel},
 		},
 		{
-			name:                          "Workflow Job Queued - Self Hosted Ubuntu Latest",
-			payloadType:                   payloadType,
-			action:                        queuedAction,
+			name:                 "Workflow Job Queued - Self Hosted Ubuntu Latest",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{SelfHostedUbuntuLatestRunnerLabel},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          "",
+			expectBuildCount:     1,
+
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
-			runnerLabels:                  []string{selfHostedUbuntuLatestRunnerLabel},
-			payloadWebhookSecret:          serverGitHubWebhookSecret,
-			serverRunnerLabel:             "sh-ubuntu-latest",
-			contentType:                   contentType,
-			createdAt:                     &queuedTime,
-			startedAt:                     nil,
-			completedAt:                   nil,
-			runID:                         &runID,
-			jobID:                         &jobID,
-			jobName:                       &jobName,
-			expStatusCode:                 200,
-			expRespBody:                   "",
-			expectBuildCount:              1,
+			supportedRunnerLabels:         []string{SelfHostedUbuntuLatestRunnerLabel},
+		},
+		{
+			name:                 "Workflow Job Queued - Supported Runner Label",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{"ubuntu-20.04-n2d-standard-2"}, // Directly from SupportedRunnerLabels
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          "",
+			expectBuildCount:     1,
+
+			runnerExecutionTimeoutSeconds: 7200,
+			runnerIdleTimeoutSeconds:      300,
+			supportedRunnerLabels:         []string{"ubuntu-20.04-n2d-standard-2"},
+		},
+		{
+			name:                 "Workflow Job Queued - Worker Pool From Registry",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{"ubuntu-20.04-n2d-standard-2"},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          "",
+			expectBuildCount:     1,
+
+			runnerExecutionTimeoutSeconds:  7200,
+			runnerIdleTimeoutSeconds:       300,
+			supportedRunnerLabels:          []string{"ubuntu-20.04-n2d-standard-2"},
+			runnerRegistryDefaultKeyPrefix: "runner",
+			registryWorkerPools: map[string][]registry.WorkerPoolInfo{
+				"runner:ubuntu-20.04-n2d-standard-2": {
+					{Name: "projects/test-project-1/locations/us-west1/workerPools/wp1", ProjectID: "test-project-1"},
+				},
+			},
+		},
+		{
+			name:                 "Workflow Job Queued - Worker Pool From Registry - Multiple Pools",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{"ubuntu-20.04-n2d-standard-2"},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          "",
+			expectBuildCount:     1,
+
+			runnerExecutionTimeoutSeconds:  7200,
+			runnerIdleTimeoutSeconds:       300,
+			supportedRunnerLabels:          []string{"ubuntu-20.04-n2d-standard-2"},
+			runnerRegistryDefaultKeyPrefix: "runner",
+			registryWorkerPools: map[string][]registry.WorkerPoolInfo{
+				"runner:ubuntu-20.04-n2d-standard-2": {
+					{Name: "projects/test-project-1/locations/us-west1/workerPools/wp1", ProjectID: "test-project-1"},
+					{Name: "projects/test-project-2/locations/us-west1/workerPools/wp2", ProjectID: "test-project-2"},
+				},
+			},
 		},
 	}
 
@@ -271,11 +355,11 @@ func TestHandleWebhook(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Determine environment for the test case
+			ctx := logging.WithLogger(t.Context(), logging.TestLogger(t))
 
 			buildTimeoutForTest := tc.runnerExecutionTimeoutSeconds
 			if buildTimeoutForTest == 0 {
-				buildTimeoutForTest = 3600 // Default value
+				buildTimeoutForTest = 3600
 			}
 			expectedBuildTimeout := time.Duration(buildTimeoutForTest) * time.Second
 
@@ -322,50 +406,72 @@ func TestHandleWebhook(t *testing.T) {
 
 			resp := httptest.NewRecorder()
 
-			wco := &WebhookClientOptions{
-				GitHubClientOverride: &gh.MockClient{
-					GenerateRepoJITConfigF: func(ctx context.Context, installationID int64, org, repo, runnerName, runnerLabel string) (*github.JITRunnerConfig, error) {
-						return jit, nil
-					},
-					GenerateOrgJITConfigF: func(ctx context.Context, installationID int64, org, runnerName, runnerLabel string) (*github.JITRunnerConfig, error) {
-						return jit, nil
-					},
+			// Mock Redis client for registry operations
+			db, mockRedis := redismock.NewClientMock()
+			if tc.registryWorkerPools != nil {
+				for key, pools := range tc.registryWorkerPools {
+					poolsJSON, err := json.Marshal(pools)
+					if err != nil {
+						t.Fatalf("failed to marshal pools for key %s: %v", key, err)
+					}
+					mockRedis.ExpectGet(key).SetVal(string(poolsJSON))
+				}
+			}
+
+			mockCloudBuildClient := &cloudbuild.MockClient{}
+			mockGitHubClient := &gh.MockClient{
+				GenerateRepoJITConfigF: func(ctx context.Context, installationID int64, org, repo, runnerName, runnerLabel string) (*github.JITRunnerConfig, error) {
+					return jit, nil
 				},
-				CloudBuildClientOverride: &cloudbuild.MockClient{},
+				GenerateOrgJITConfigF: func(ctx context.Context, installationID int64, org, runnerName, runnerLabel string) (*github.JITRunnerConfig, error) {
+					return jit, nil
+				},
+			}
+
+			cfg := &Config{
+				GitHubAppID:                    "app-id",
+				GitHubWebhookKeyMountPath:      "test-path",
+				GitHubWebhookKeyName:           "test-key",
+				KMSAppPrivateKeyID:             "test-kms-key",
+				RunnerLocation:                 "us-central1", // Default runner location for tests
+				RunnerProjectID:                "test-project",
+				RunnerRepositoryID:             "test-repo",
+				RunnerServiceAccount:           "test-sa",
+				RunnerExecutionTimeoutSeconds:  tc.runnerExecutionTimeoutSeconds,
+				RunnerIdleTimeoutSeconds:       tc.runnerIdleTimeoutSeconds,
+				ExtraRunnerCount:               tc.extraSpawnNumber,
+				RunnerImageTag:                 "latest",
+				Environment:                    testEnv,
+				GitHubAPIBaseURL:               "http://github-api-base-url",
+				RunnerLabelAliases:             tc.runnerLabelAliases,
+				SupportedRunnerLabels:          tc.supportedRunnerLabels,
+				RunnerRegistryDefaultKeyPrefix: tc.runnerRegistryDefaultKeyPrefix,
+				BackoffInitialDelay:            1 * time.Second,
+				MaxRetryAttempts:               3,
+			}
+
+			// Configure WebhookClientOptions
+			wco := &WebhookClientOptions{
+				CloudBuildClientOverride: mockCloudBuildClient,
+				GitHubClientOverride:     mockGitHubClient,
 				OSFileReaderOverride: &MockFileReader{
-					ReadFileMock: &ReadFileResErr{
-						Res: []byte(serverGitHubWebhookSecret),
-						Err: nil,
+					ReadFileFunc: func(filename string) ([]byte, error) {
+						if filename == fmt.Sprintf("%s/%s", cfg.GitHubWebhookKeyMountPath, cfg.GitHubWebhookKeyName) {
+							return []byte(serverGitHubWebhookSecret), nil
+						}
+						return nil, fmt.Errorf("unexpected file read: %s", filename)
 					},
 				},
 				KeyManagementClientOverride: &MockKMSClient{},
 			}
 
-			srv, err := NewServer(context.Background(), nil, &Config{
-				GitHubWebhookKeyName:          "test-key",
-				GitHubWebhookKeyMountPath:     "test-path",
-				KMSAppPrivateKeyID:            "test-kms-key",
-				RunnerLabel:                   tc.serverRunnerLabel,
-				EnableSelfHostedLabel:         tc.serverEnableSelfHostedLabel,
-				ExtraRunnerCount:              strconv.Itoa(tc.extraSpawnNumber),
-				RunnerExecutionTimeoutSeconds: strconv.Itoa(buildTimeoutForTest),
-				RunnerIdleTimeoutSeconds:      strconv.Itoa(tc.runnerIdleTimeoutSeconds),
-				RunnerImageTag:                "latest",
-				BackoffInitialDelay:           1 * time.Second,
-				MaxRetryAttempts:              3,
-			}, wco)
+			srv, err := NewServer(ctx, nil, cfg, db, wco)
 			if err != nil {
 				t.Fatal(err)
 			}
+
+			// The test requires directly setting these, as NewServer sets up its own.
 			srv.webhookSecret = []byte(tc.payloadWebhookSecret)
-			mockCloudBuildClient, ok := wco.CloudBuildClientOverride.(*cloudbuild.MockClient)
-			if !ok {
-				t.Fatal("could not convert cloudbuild client to mock")
-			}
-			mockGitHubClient, ok := wco.GitHubClientOverride.(*gh.MockClient)
-			if !ok {
-				t.Fatal("could not convert github client to mock")
-			}
 			srv.handleWebhook().ServeHTTP(resp, req)
 
 			if got, want := resp.Code, tc.expStatusCode; got != want {
@@ -397,7 +503,7 @@ func TestHandleWebhook(t *testing.T) {
 			if tc.expectBuildCount == len(mockCloudBuildClient.CreateBuildReqs) {
 				for _, buildReq := range mockCloudBuildClient.CreateBuildReqs {
 					if got, want := buildReq.GetBuild().GetSubstitutions()["_IMAGE_TAG"], "latest"; got != want {
-						t.Errorf("expected image tag %q to be %q", got, want)
+						t.Errorf("expected image tag %q to be %q", want, got)
 					}
 					if got, want := buildReq.GetBuild().GetTimeout().AsDuration(), expectedBuildTimeout; got != want {
 						t.Errorf("expected build timeout %v to be %v", got, want)
@@ -412,6 +518,9 @@ func TestHandleWebhook(t *testing.T) {
 			}
 			if got, want := mockGitHubClient.GenerateRepoJITConfigCalls, tc.expectBuildCount; got != want {
 				t.Errorf("expected %d calls to GenerateRepoJITConfig, but got %d", want, got)
+			}
+			if err := mockRedis.ExpectationsWereMet(); err != nil {
+				t.Errorf("redis expectations not met: %v", err)
 			}
 		})
 	}
