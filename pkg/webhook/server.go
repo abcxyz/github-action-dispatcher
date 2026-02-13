@@ -19,9 +19,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/sethvargo/go-gcpkms/pkg/gcpkms"
 	"google.golang.org/api/option"
 
@@ -36,28 +36,30 @@ import (
 
 // Server provides the server implementation.
 type Server struct {
-	cbc                           cloudbuild.Client
-	ghc                           gh.Client
-	e2eTestRunID                  string
-	enableSelfHostedLabel         bool
-	environment                   string
-	extraRunnerCount              int
-	ghAPIBaseURL                  string
-	h                             *renderer.Renderer
-	kmc                           KeyManagementClient
-	runnerExecutionTimeoutSeconds int
-	runnerIdleTimeoutSeconds      int
-	runnerLabel                   string
-	runnerLocation                string
-	runnerProjectID               string
-	runnerImageName               string
-	runnerImageTag                string
-	runnerRepositoryID            string
-	runnerServiceAccount          string
-	runnerWorkerPoolID            string
-	webhookSecret                 []byte
-	backoffInitialDelay           time.Duration
-	maxRetryAttempts              int
+	allowedLabels                  map[string]bool
+	backoffInitialDelay            time.Duration
+	cbc                            cloudbuild.Client
+	config                         *Config
+	e2eTestRunID                   string // TODO remove this, post refactor it may no longer be needed
+	environment                    string
+	extraRunnerCount               int
+	ghAPIBaseURL                   string
+	ghc                            gh.Client
+	h                              *renderer.Renderer
+	kmc                            KeyManagementClient
+	maxRetryAttempts               int
+	rc                             *redis.Client
+	runnerExecutionTimeoutSeconds  int
+	runnerIdleTimeoutSeconds       int
+	runnerLocation                 string
+	runnerProjectID                string
+	runnerImageName                string
+	runnerImageTag                 string
+	runnerRegistryDefaultKeyPrefix string
+	runnerRepositoryID             string
+	runnerServiceAccount           string
+	runnerWorkerPoolID             string
+	webhookSecret                  []byte
 }
 
 // FileReader can read a file and return the content.
@@ -84,7 +86,7 @@ type WebhookClientOptions struct {
 
 // NewServer creates a new HTTP server implementation that will handle
 // receiving webhook payloads.
-func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *WebhookClientOptions) (*Server, error) {
+func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, rc *redis.Client, wco *WebhookClientOptions) (*Server, error) {
 	fr := wco.OSFileReaderOverride
 	if fr == nil {
 		fr = NewOSFileReader()
@@ -130,34 +132,44 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, wco *Webh
 		cbc = cb
 	}
 
-	// cfg.Validate() is called before NewServer, safe to convert
-	extraRunnerCount, _ := strconv.Atoi(cfg.ExtraRunnerCount)
-	runnerIdleTimeoutSeconds, _ := strconv.Atoi(cfg.RunnerIdleTimeoutSeconds)
-	runnerExecutionTimeoutSeconds, _ := strconv.Atoi(cfg.RunnerExecutionTimeoutSeconds)
+	// Pre-compute the set of allowed labels for efficient lookup.
+	allowedLabels := make(map[string]bool)
+
+	// Add all target values from the RunnerLabelAliases map.
+	for _, target := range cfg.RunnerLabelAliases {
+		allowedLabels[target] = true
+	}
+
+	// Add all explicitly supported runner labels from the config.
+	for _, supportedLabel := range cfg.SupportedRunnerLabels {
+		allowedLabels[supportedLabel] = true
+	}
 
 	return &Server{
-		backoffInitialDelay:           cfg.BackoffInitialDelay,
-		cbc:                           cbc,
-		e2eTestRunID:                  cfg.E2ETestRunID,
-		enableSelfHostedLabel:         cfg.EnableSelfHostedLabel,
-		environment:                   cfg.Environment,
-		extraRunnerCount:              extraRunnerCount,
-		ghAPIBaseURL:                  cfg.GitHubAPIBaseURL,
-		ghc:                           ghc,
-		h:                             h,
-		kmc:                           kmc,
-		maxRetryAttempts:              cfg.MaxRetryAttempts,
-		runnerExecutionTimeoutSeconds: runnerExecutionTimeoutSeconds,
-		runnerIdleTimeoutSeconds:      runnerIdleTimeoutSeconds,
-		runnerLabel:                   cfg.RunnerLabel,
-		runnerLocation:                cfg.RunnerLocation,
-		runnerProjectID:               cfg.RunnerProjectID,
-		runnerImageName:               cfg.RunnerImageName,
-		runnerImageTag:                cfg.RunnerImageTag,
-		runnerRepositoryID:            cfg.RunnerRepositoryID,
-		runnerServiceAccount:          cfg.RunnerServiceAccount,
-		runnerWorkerPoolID:            cfg.RunnerWorkerPoolID,
-		webhookSecret:                 webhookSecret,
+		backoffInitialDelay:            cfg.BackoffInitialDelay,
+		cbc:                            cbc,
+		config:                         cfg,
+		allowedLabels:                  allowedLabels,
+		environment:                    cfg.Environment,
+		ghAPIBaseURL:                   cfg.GitHubAPIBaseURL,
+		ghc:                            ghc,
+		h:                              h,
+		kmc:                            kmc,
+		maxRetryAttempts:               cfg.MaxRetryAttempts,
+		rc:                             rc,
+		runnerExecutionTimeoutSeconds:  cfg.RunnerExecutionTimeoutSeconds,
+		runnerIdleTimeoutSeconds:       cfg.RunnerIdleTimeoutSeconds,
+		runnerLocation:                 cfg.RunnerLocation,
+		runnerImageName:                cfg.RunnerImageName,
+		runnerImageTag:                 cfg.RunnerImageTag,
+		runnerProjectID:                cfg.RunnerProjectID,
+		runnerRepositoryID:             cfg.RunnerRepositoryID,
+		runnerServiceAccount:           cfg.RunnerServiceAccount,
+		runnerWorkerPoolID:             cfg.RunnerWorkerPoolID,
+		webhookSecret:                  webhookSecret,
+		e2eTestRunID:                   cfg.E2ETestRunID,
+		extraRunnerCount:               cfg.ExtraRunnerCount,
+		runnerRegistryDefaultKeyPrefix: cfg.RunnerRegistryDefaultKeyPrefix,
 	}, nil
 }
 
