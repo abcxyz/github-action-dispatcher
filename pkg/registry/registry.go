@@ -23,9 +23,10 @@ import (
 
 // WorkerPoolInfo holds information about a discovered worker pool and its project.
 type WorkerPoolInfo struct {
-	Name      string `json:"name"`
-	ProjectID string `json:"project_id"`
-	Location  string `json:"location"`
+	Name          string `json:"name"`
+	ProjectID     string `json:"project_id"`
+	ProjectNumber string `json:"project_number"`
+	Location      string `json:"location"`
 }
 
 // NewRunnerRegistry creates and returns a new registry client.

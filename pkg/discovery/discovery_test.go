@@ -32,8 +32,11 @@ import (
 
 const (
 	testProjectID1                     = "my-project"
+	testProjectNumber1                 = "111111-my-project"
 	testProjectID2                     = "another-project"
+	testProjectNumber2                 = "222222-another-project"
 	testProjectID3                     = "labeled-project-e2-small"
+	testProjectNumber3                 = "333333-labeled-project-e2-small"
 	testLocation                       = "us-central1"
 	testMachineTypeE2Medium            = "e2-medium"
 	testMachineTypeE2Small             = "e2-small"
@@ -46,9 +49,9 @@ const (
 )
 
 // newMockWorkerPool creates a new mock cloudbuildpb.WorkerPool for testing.
-func newMockWorkerPool(projectID, location, poolID, machineType string) *cloudbuildpb.WorkerPool {
+func newMockWorkerPool(projectIdentifier, location, poolID, machineType string) *cloudbuildpb.WorkerPool {
 	return &cloudbuildpb.WorkerPool{
-		Name: fmt.Sprintf("projects/%s/locations/%s/workerPools/%s", projectID, location, poolID),
+		Name: fmt.Sprintf("projects/%s/locations/%s/workerPools/%s", projectIdentifier, location, poolID),
 		Config: &cloudbuildpb.WorkerPool_PrivatePoolV1Config{
 			PrivatePoolV1Config: &cloudbuildpb.PrivatePoolV1Config{
 				WorkerConfig: &cloudbuildpb.PrivatePoolV1Config_WorkerConfig{
@@ -85,9 +88,9 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 			},
 			cloudbuildMock: &cloudbuild.MockClient{
 				WorkerPools: []*cloudbuildpb.WorkerPool{
-					newMockWorkerPool(testProjectID1, testLocation, testWorkerPoolID1, testMachineTypeE2Medium),
-					newMockWorkerPool(testProjectID2, testLocation, testWorkerPoolID2, testMachineTypeE2Medium),
-					newMockWorkerPool(testProjectID3, testLocation, testWorkerPoolID3, testMachineTypeE2Small),
+					newMockWorkerPool(testProjectNumber1, testLocation, testWorkerPoolID1, testMachineTypeE2Medium),
+					newMockWorkerPool(testProjectNumber2, testLocation, testWorkerPoolID2, testMachineTypeE2Medium),
+					newMockWorkerPool(testProjectNumber3, testLocation, testWorkerPoolID3, testMachineTypeE2Small),
 				},
 			},
 			assetInventoryMock: &assetinventory.MockClient{
@@ -122,14 +125,16 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 				testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testMachineTypeE2Medium): func() []registry.WorkerPoolInfo {
 					pools := []registry.WorkerPoolInfo{
 						{
-							Name:      newMockWorkerPool(testProjectID1, testLocation, testWorkerPoolID1, testMachineTypeE2Medium).GetName(),
-							ProjectID: testProjectID1,
-							Location:  testLocation,
+							Name:          newMockWorkerPool(testProjectNumber1, testLocation, testWorkerPoolID1, testMachineTypeE2Medium).GetName(),
+							ProjectID:     testProjectID1,
+							ProjectNumber: testProjectNumber1,
+							Location:      testLocation,
 						},
 						{
-							Name:      newMockWorkerPool(testProjectID2, testLocation, testWorkerPoolID2, testMachineTypeE2Medium).GetName(),
-							ProjectID: testProjectID2,
-							Location:  testLocation,
+							Name:          newMockWorkerPool(testProjectNumber2, testLocation, testWorkerPoolID2, testMachineTypeE2Medium).GetName(),
+							ProjectID:     testProjectID2,
+							ProjectNumber: testProjectNumber2,
+							Location:      testLocation,
 						},
 					}
 					sort.Slice(pools, func(i, j int) bool {
@@ -139,9 +144,10 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 				}(),
 				testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testMachineTypeE2Small): {
 					{
-						Name:      newMockWorkerPool(testProjectID3, testLocation, testWorkerPoolID3, testMachineTypeE2Small).GetName(),
-						ProjectID: testProjectID3,
-						Location:  testLocation,
+						Name:          newMockWorkerPool(testProjectNumber3, testLocation, testWorkerPoolID3, testMachineTypeE2Small).GetName(),
+						ProjectID:     testProjectID3,
+						ProjectNumber: testProjectNumber3,
+						Location:      testLocation,
 					},
 				},
 			},
