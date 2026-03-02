@@ -317,7 +317,7 @@ func TestHandleWebhook(t *testing.T) {
 			runnerRegistryDefaultKeyPrefix: "runner",
 			registryWorkerPools: map[string][]registry.WorkerPoolInfo{
 				"runner:ubuntu-20.04-n2d-standard-2": {
-					{Name: "projects/test-project-1/locations/us-west1/workerPools/wp1", ProjectID: "test-project-1"},
+					{Name: "projects/12345-test-project-1/locations/us-west1/workerPools/wp1", ProjectID: "test-project-1", ProjectNumber: "12345-test-project-1"},
 				},
 			},
 		},
@@ -344,8 +344,8 @@ func TestHandleWebhook(t *testing.T) {
 			runnerRegistryDefaultKeyPrefix: "runner",
 			registryWorkerPools: map[string][]registry.WorkerPoolInfo{
 				"runner:ubuntu-20.04-n2d-standard-2": {
-					{Name: "projects/test-project-1/locations/us-west1/workerPools/wp1", ProjectID: "test-project-1"},
-					{Name: "projects/test-project-2/locations/us-west1/workerPools/wp2", ProjectID: "test-project-2"},
+					{Name: "projects/12345-test-project-1/locations/us-west1/workerPools/wp1", ProjectID: "test-project-1", ProjectNumber: "12345-test-project-1"},
+					{Name: "projects/67890-test-project-2/locations/us-west1/workerPools/wp2", ProjectID: "test-project-2", ProjectNumber: "67890-test-project-2"},
 				},
 			},
 		},
