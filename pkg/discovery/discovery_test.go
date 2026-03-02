@@ -124,10 +124,12 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 						{
 							Name:      newMockWorkerPool(testProjectID1, testLocation, testWorkerPoolID1, testMachineTypeE2Medium).GetName(),
 							ProjectID: testProjectID1,
+							Location:  testLocation,
 						},
 						{
 							Name:      newMockWorkerPool(testProjectID2, testLocation, testWorkerPoolID2, testMachineTypeE2Medium).GetName(),
 							ProjectID: testProjectID2,
+							Location:  testLocation,
 						},
 					}
 					sort.Slice(pools, func(i, j int) bool {
@@ -139,6 +141,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 					{
 						Name:      newMockWorkerPool(testProjectID3, testLocation, testWorkerPoolID3, testMachineTypeE2Small).GetName(),
 						ProjectID: testProjectID3,
+						Location:  testLocation,
 					},
 				},
 			},

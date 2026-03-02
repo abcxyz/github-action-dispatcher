@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	redisapi "github.com/go-redis/redis/v8"
 
@@ -149,9 +150,23 @@ func (rd *RunnerDiscovery) discoverAndGroupWorkerPools(ctx context.Context, proj
 
 			// The key for Redis should be constructed from runner-type and runner-label from project labels.
 			registryKey := fmt.Sprintf("%s:%s", runnerType, runnerLabel)
+
+			// Parse project and location from the full resource name to ensure accuracy.
+			// Format: projects/{PROJECT}/locations/{LOCATION}/workerPools/{WORKERPOOL}
+			var poolProjectID, poolLocation string
+			parts := strings.Split(wp.GetName(), "/")
+			if len(parts) == 6 && parts[0] == "projects" && parts[2] == "locations" && parts[4] == "workerPools" {
+				poolProjectID = parts[1]
+				poolLocation = parts[3]
+			} else {
+				logger.ErrorContext(ctx, "worker pool name is not in expected format, cannot parse project/location", "worker_pool_name", wp.GetName())
+				continue // Skip this pool if we can't parse it.
+			}
+
 			poolInfo := registry.WorkerPoolInfo{
 				Name:      wp.GetName(),
-				ProjectID: project.ProjectID,
+				ProjectID: poolProjectID,
+				Location:  poolLocation,
 			}
 			poolsByRegistryKey[registryKey] = append(poolsByRegistryKey[registryKey], poolInfo)
 		}

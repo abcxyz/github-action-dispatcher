@@ -388,9 +388,9 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 		return "", fmt.Errorf("failed to generate and compress JIT config: %w", err)
 	}
 
-	workerPoolName, projectIDForSA := s.selectWorkerPool(ctx, jobResolvedRunnerLabel)
+	pool := s.selectWorkerPool(ctx, jobResolvedRunnerLabel)
 
-	buildReq := s.buildCloudBuildRequest(ctx, compressedJIT, imageTag, workerPoolName, projectIDForSA)
+	buildReq := s.buildCloudBuildRequest(ctx, compressedJIT, imageTag, pool)
 
 	if err := s.cbc.CreateBuild(ctx, buildReq); err != nil {
 		return "", fmt.Errorf("failed to create build: %w", err)
@@ -417,8 +417,10 @@ func (s *Server) generateAndCompressJITConfig(ctx context.Context, event *github
 	return compressedJIT, nil
 }
 
-// selectWorkerPool selects a worker pool for the job.
-func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel string) (string, string) {
+// selectWorkerPool selects a worker pool for the job. It returns a specific
+// *registry.WorkerPoolInfo if a pool is found in the registry, otherwise it
+// returns nil.
+func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel string) *registry.WorkerPoolInfo {
 	logger := logging.FromContext(ctx)
 	pools := s.getWorkerPools(ctx, jobResolvedRunnerLabel)
 
@@ -432,25 +434,23 @@ func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel st
 			"worker_pool", selectedPool.Name,
 			"total_worker_pools_found", len(pools),
 		)
-		return selectedPool.Name, selectedPool.ProjectID
+		return &selectedPool
 	}
 
 	// Fallback to default.
 	logger.InfoContext(
 		ctx,
-		"no worker pools found in registry for label, using default worker pool",
+		"no worker pools found in registry for label, using default server configuration",
 		"label", jobResolvedRunnerLabel,
-		"worker_pool", s.runnerWorkerPoolID,
 	)
-	return s.runnerWorkerPoolID, ""
+	return nil
 }
 
 // buildCloudBuildRequest creates a cloud build request.
-func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imageTag, workerPoolName, projectIDForSA string) *cloudbuildpb.CreateBuildRequest {
+func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imageTag string, pool *registry.WorkerPoolInfo) *cloudbuildpb.CreateBuildRequest {
 	logger := logging.FromContext(ctx)
 	build := &cloudbuildpb.Build{
-		ServiceAccount: s.runnerServiceAccount,
-		Timeout:        durationpb.New(time.Duration(s.runnerExecutionTimeoutSeconds) * time.Second),
+		Timeout: durationpb.New(time.Duration(s.runnerExecutionTimeoutSeconds) * time.Second),
 		Steps: []*cloudbuildpb.BuildStep{
 			{
 				Id:   "run",
@@ -480,36 +480,48 @@ func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imag
 		build.Tags = []string{"e2e-test", fmt.Sprintf("e2e-run-id-%s", s.e2eTestRunID)}
 	}
 
-	// Default to the server's configured service account.
-	serviceAccount := s.runnerServiceAccount
+	var projectID, location, serviceAccount string
 
-	if workerPoolName != "" {
-		build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{
-			Name: workerPoolName,
+	if pool != nil && pool.ProjectID != "" {
+		// Use configuration from the registry.
+		projectID = pool.ProjectID
+		// Use location from pool, but fall back to server default if it's missing
+		// for safety during transitions.
+		location = pool.Location
+		if location == "" {
+			location = s.runnerLocation
+			logger.WarnContext(ctx, "worker pool from registry is missing location, falling back to default",
+				"pool_name", pool.Name,
+				"default_location", location)
 		}
 
-		// If a SA was not provided via config, derive it.
-		if serviceAccount == "" {
-			if projectIDForSA != "" {
-				// If a custom worker pool is specified, derive the service account from
-				// the worker pool's project ID. The SA is colocated with the worker pool.
-				serviceAccount = fmt.Sprintf("runner-sa@%s.iam.gserviceaccount.com", projectIDForSA)
-				logger.DebugContext(ctx, "using dynamic service account", "service_account", serviceAccount)
-			}
+		serviceAccount = fmt.Sprintf("runner-sa@%s.iam.gserviceaccount.com", pool.ProjectID)
+		build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: pool.Name}
+	} else {
+		// Otherwise, use the default server configuration.
+		projectID = s.runnerProjectID
+		location = s.runnerLocation
+		serviceAccount = s.runnerServiceAccount
+		if s.runnerWorkerPoolID != "" {
+			build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: s.runnerWorkerPoolID}
 		}
 	}
+
+	// Ensure the service account is in the full resource name format.
+	if serviceAccount != "" && !strings.HasPrefix(serviceAccount, "projects/") {
+		serviceAccount = fmt.Sprintf("projects/%s/serviceAccounts/%s", projectID, serviceAccount)
+	}
+
 	build.ServiceAccount = serviceAccount
 
 	return &cloudbuildpb.CreateBuildRequest{
-		Parent:    fmt.Sprintf("projects/%s/locations/%s", s.runnerProjectID, s.runnerLocation),
-		ProjectId: s.runnerProjectID,
+		Parent:    fmt.Sprintf("projects/%s/locations/%s", projectID, location),
+		ProjectId: projectID,
 		Build:     build,
 	}
 }
 
-// getWorkerPool determines the appropriate worker pool for a given runner label.
-// It first attempts to find a worker pool from the registry (Redis). If it
-// fails or if no pool is found, it returns nil.
+// getWorkerPools determines the appropriate worker pools for a given runner label.
 func (s *Server) getWorkerPools(ctx context.Context, runnerLabel string) []registry.WorkerPoolInfo {
 	logger := logging.FromContext(ctx)
 
