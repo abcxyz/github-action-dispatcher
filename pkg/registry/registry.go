@@ -25,6 +25,7 @@ import (
 type WorkerPoolInfo struct {
 	Name      string `json:"name"`
 	ProjectID string `json:"project_id"`
+	Location  string `json:"location"`
 }
 
 // NewRunnerRegistry creates and returns a new registry client.
