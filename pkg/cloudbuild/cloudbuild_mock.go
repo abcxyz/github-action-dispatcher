@@ -29,6 +29,7 @@ type MockClient struct {
 	CreateBuildErr     error
 	WorkerPools        []*cloudbuildpb.WorkerPool
 	CreateBuildReqs    []*cloudbuildpb.CreateBuildRequest
+	CreateBuildID      string
 }
 
 // ListWorkerPools is a mock of the ListWorkerPools method.
@@ -47,12 +48,12 @@ func (m *MockClient) ListWorkerPools(ctx context.Context, projectID, location st
 }
 
 // CreateBuild is a mock of the CreateBuild method.
-func (m *MockClient) CreateBuild(ctx context.Context, req *cloudbuildpb.CreateBuildRequest) error {
+func (m *MockClient) CreateBuild(ctx context.Context, req *cloudbuildpb.CreateBuildRequest) (string, error) {
 	m.CreateBuildReqs = append(m.CreateBuildReqs, req)
 	if m.CreateBuildErr != nil {
-		return m.CreateBuildErr
+		return "", m.CreateBuildErr
 	}
-	return nil
+	return m.CreateBuildID, nil
 }
 
 // Close is a mock of the Close method.

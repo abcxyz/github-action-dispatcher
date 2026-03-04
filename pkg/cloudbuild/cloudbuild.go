@@ -32,7 +32,7 @@ import (
 // Client is a wrapper around the Google Cloud Build client.
 type Client interface {
 	ListWorkerPools(ctx context.Context, projectID, location string) ([]*cloudbuildpb.WorkerPool, error)
-	CreateBuild(ctx context.Context, req *cloudbuildpb.CreateBuildRequest) error
+	CreateBuild(ctx context.Context, req *cloudbuildpb.CreateBuildRequest) (string, error)
 	Close() error
 }
 
@@ -101,20 +101,28 @@ func (c *cloudbuildClient) ListWorkerPools(ctx context.Context, projectID, locat
 }
 
 // CreateBuild creates a new build.
-func (c *cloudbuildClient) CreateBuild(ctx context.Context, req *cloudbuildpb.CreateBuildRequest) error {
+func (c *cloudbuildClient) CreateBuild(ctx context.Context, req *cloudbuildpb.CreateBuildRequest) (string, error) {
 	logger := logging.FromContext(ctx)
 	backoff := c.newBackoff()
 
+	var buildID string
 	if err := goretry.Do(ctx, backoff, func(ctx context.Context) error {
-		if _, err := c.client.CreateBuild(ctx, req); err != nil {
+		op, err := c.client.CreateBuild(ctx, req)
+		if err != nil {
 			logger.WarnContext(ctx, "retrying due to CreateBuild failure", "error", err)
 			return goretry.RetryableError(fmt.Errorf("failed to create Cloud Build build: %w", err))
 		}
+		meta, err := op.Metadata()
+		if err != nil {
+			// Not retryable, as this is an unexpected error.
+			return fmt.Errorf("failed to get build operation metadata: %w", err)
+		}
+		buildID = meta.GetBuild().GetId()
 		return nil
 	}); err != nil {
-		return fmt.Errorf("failed to create Cloud Build build after retries: %w", err)
+		return "", fmt.Errorf("failed to create Cloud Build build after retries: %w", err)
 	}
-	return nil
+	return buildID, nil
 }
 
 // Close closes the client.

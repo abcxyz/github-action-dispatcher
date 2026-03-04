@@ -56,6 +56,7 @@ type apiResponse struct {
 type runnersResponse struct {
 	Message     string   `json:"message"`
 	RunnerNames []string `json:"runnerNames"`
+	GCBBuildIDs []string `json:"gcbBuildIDs,omitempty"`
 }
 
 // handleWebhook returns an http.Handler that processes incoming GitHub webhook requests.
@@ -182,11 +183,12 @@ func validateGitHubPayload(r *http.Request, webhookSecret []byte) (*github.Workf
 // startRunnersForJob contains the core logic for spawning runners for a given
 // queued job. It returns the names of the runners it successfully started and
 // an error if anything went wrong.
-func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJobEvent, jobOriginalRunnerLabel, jobResolvedRunnerLabel string) ([]string, error) {
+func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJobEvent, jobOriginalRunnerLabel, jobResolvedRunnerLabel string) ([]string, []string, error) {
 	logger := logging.FromContext(ctx)
 
-	// This slice will hold the names of runners we successfully create.
+	// These slices will hold the names and build IDs of runners we successfully create.
 	var startedRunnerNames []string
+	var gcbBuildIDs []string
 
 	for i := 1; i <= 1+s.extraRunnerCount; i++ {
 		runnerID := uuid.New().String()
@@ -198,17 +200,20 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 
 		runnerCtx := logging.WithLogger(ctx, runnerLogger)
 
-		responseText, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, s.runnerImageTag, jobOriginalRunnerLabel, jobResolvedRunnerLabel)
+		buildID, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, s.runnerImageTag, jobOriginalRunnerLabel, jobResolvedRunnerLabel)
 		if err != nil {
 			// If one fails, return the error and the list of any that succeeded before it.
-			return startedRunnerNames, fmt.Errorf("failed on runner %s: %w. response: %s", runnerID, err, responseText)
+			return startedRunnerNames, gcbBuildIDs, fmt.Errorf("failed on runner %s: %w", runnerID, err)
 		}
 
-		runnerLogger.InfoContext(ctx, runnerStartedMsg, slog.Any(githubWebhookEventKey, event))
+		runnerLogger.InfoContext(ctx, runnerStartedMsg,
+			slog.Any(githubWebhookEventKey, event),
+			slog.String("gcb_build_id", buildID))
 		startedRunnerNames = append(startedRunnerNames, runnerID)
+		gcbBuildIDs = append(gcbBuildIDs, buildID)
 	}
 
-	return startedRunnerNames, nil
+	return startedRunnerNames, gcbBuildIDs, nil
 }
 
 func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJobEvent, jobID string) *apiResponse {
@@ -239,7 +244,7 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		return &apiResponse{http.StatusBadRequest, "unexpected event payload struture", err}
 	}
 
-	runnerNames, err := s.startRunnersForJob(ctx, event, jobOriginalRunnerLabel, jobResolvedRunnerLabel)
+	runnerNames, gcbBuildIDs, err := s.startRunnersForJob(ctx, event, jobOriginalRunnerLabel, jobResolvedRunnerLabel)
 	if err != nil {
 		return &apiResponse{http.StatusInternalServerError, err.Error(), err}
 	}
@@ -247,6 +252,7 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 	responsePayload := &runnersResponse{
 		Message:     runnerStartedMsg,
 		RunnerNames: runnerNames,
+		GCBBuildIDs: gcbBuildIDs,
 	}
 
 	// Marshal the struct into a JSON string.
@@ -385,7 +391,7 @@ func compressAndBase64EncodeString(input string) (string, error) {
 // startGitHubRunner generates a JIT config and creates a Cloud Build job to start a GitHub runner.
 //
 // It takes the GitHub WorkflowJobEvent, a unique runner ID, logger, image tag, and runner labels.
-// It returns an empty string on success, or an error if the JIT config generation or Cloud Build
+// It returns the build ID on success, or an error if the JIT config generation or Cloud Build
 // job creation fails.
 func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageTag, jobOriginalRunnerLabel, jobResolvedRunnerLabel string) (string, error) {
 	compressedJIT, err := s.generateAndCompressJITConfig(ctx, event, runnerID, jobOriginalRunnerLabel)
@@ -397,10 +403,11 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 
 	buildReq := s.buildCloudBuildRequest(ctx, compressedJIT, imageTag, pool)
 
-	if err := s.cbc.CreateBuild(ctx, buildReq); err != nil {
+	buildID, err := s.cbc.CreateBuild(ctx, buildReq)
+	if err != nil {
 		return "", fmt.Errorf("failed to create build: %w", err)
 	}
-	return "", nil
+	return buildID, nil
 }
 
 // generateAndCompressJITConfig handles the logic of generating and compressing the JIT config.
