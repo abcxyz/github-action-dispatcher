@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redismock/v8"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-github/v69/github"
 
 	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
@@ -44,6 +45,7 @@ const (
 	ContentTypeHeader                 = "Content-Type"
 	SelfHostedRunnerLabel             = "self-hosted"
 	SelfHostedUbuntuLatestRunnerLabel = "sh-ubuntu-latest"
+	testGCBBuildID                    = "test-build-id"
 	//nolint:gosec // this is a test value
 	serverGitHubWebhookSecret = "test-github-webhook-secret"
 	testEnv                   = "test"
@@ -81,6 +83,7 @@ func TestHandleWebhook(t *testing.T) {
 		expStatusCode        int
 		expRespBody          string // This is now only for plain text responses.
 		expectBuildCount     int
+		expGCBBuildIDs       []string
 
 		runnerExecutionTimeoutSeconds  int
 		runnerIdleTimeoutSeconds       int
@@ -105,6 +108,7 @@ func TestHandleWebhook(t *testing.T) {
 			expStatusCode:        200,
 			expRespBody:          "",
 			expectBuildCount:     1,
+			expGCBBuildIDs:       []string{testGCBBuildID},
 
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
@@ -126,6 +130,7 @@ func TestHandleWebhook(t *testing.T) {
 			expStatusCode:        200,
 			expRespBody:          "",
 			expectBuildCount:     1,
+			expGCBBuildIDs:       []string{testGCBBuildID},
 
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
@@ -147,6 +152,7 @@ func TestHandleWebhook(t *testing.T) {
 			expStatusCode:        200,
 			expRespBody:          "",
 			expectBuildCount:     1,
+			expGCBBuildIDs:       []string{testGCBBuildID},
 
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
@@ -172,6 +178,7 @@ func TestHandleWebhook(t *testing.T) {
 			expStatusCode:        200,
 			expRespBody:          "",
 			expectBuildCount:     3,
+			expGCBBuildIDs:       []string{testGCBBuildID, testGCBBuildID, testGCBBuildID},
 
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
@@ -268,6 +275,7 @@ func TestHandleWebhook(t *testing.T) {
 			expStatusCode:        200,
 			expRespBody:          "",
 			expectBuildCount:     1,
+			expGCBBuildIDs:       []string{testGCBBuildID},
 
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
@@ -289,6 +297,7 @@ func TestHandleWebhook(t *testing.T) {
 			expStatusCode:        200,
 			expRespBody:          "",
 			expectBuildCount:     1,
+			expGCBBuildIDs:       []string{testGCBBuildID},
 
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
@@ -310,6 +319,7 @@ func TestHandleWebhook(t *testing.T) {
 			expStatusCode:        200,
 			expRespBody:          "",
 			expectBuildCount:     1,
+			expGCBBuildIDs:       []string{testGCBBuildID},
 
 			runnerExecutionTimeoutSeconds:  7200,
 			runnerIdleTimeoutSeconds:       300,
@@ -337,6 +347,7 @@ func TestHandleWebhook(t *testing.T) {
 			expStatusCode:        200,
 			expRespBody:          "",
 			expectBuildCount:     1,
+			expGCBBuildIDs:       []string{testGCBBuildID},
 
 			runnerExecutionTimeoutSeconds:  7200,
 			runnerIdleTimeoutSeconds:       300,
@@ -418,7 +429,7 @@ func TestHandleWebhook(t *testing.T) {
 				}
 			}
 
-			mockCloudBuildClient := &cloudbuild.MockClient{}
+			mockCloudBuildClient := &cloudbuild.MockClient{CreateBuildID: testGCBBuildID}
 			mockGitHubClient := &gh.MockClient{
 				GenerateRepoJITConfigF: func(ctx context.Context, installationID int64, org, repo, runnerName, runnerLabel string) (*github.JITRunnerConfig, error) {
 					return jit, nil
@@ -491,6 +502,9 @@ func TestHandleWebhook(t *testing.T) {
 
 				if got, want := len(r.RunnerNames), tc.expectBuildCount; got != want {
 					t.Errorf("expected %d runner names in response, but got %d", want, got)
+				}
+				if diff := cmp.Diff(tc.expGCBBuildIDs, r.GCBBuildIDs); diff != "" {
+					t.Errorf("GCBBuildIDs mismatch (-want +got):\n%s", diff)
 				}
 			} else {
 				// For all other cases (e.g., "in_progress", "completed", or errors),
