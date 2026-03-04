@@ -42,6 +42,8 @@ import (
 const (
 	runnerStartedMsg      = "runner started"
 	githubWebhookEventKey = "github_webhook_event"
+	gcbBuildIDKey         = "gcb_build_id"
+	gcbProjectIDKey       = "gcb_project_id"
 )
 
 // apiResponse is a structure that contains a http status code,
@@ -200,7 +202,7 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 
 		runnerCtx := logging.WithLogger(ctx, runnerLogger)
 
-		buildID, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, s.runnerImageTag, jobOriginalRunnerLabel, jobResolvedRunnerLabel)
+		buildID, projectID, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, s.runnerImageTag, jobOriginalRunnerLabel, jobResolvedRunnerLabel)
 		if err != nil {
 			// If one fails, return the error and the list of any that succeeded before it.
 			return startedRunnerNames, gcbBuildIDs, fmt.Errorf("failed on runner %s: %w", runnerID, err)
@@ -208,7 +210,9 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 
 		runnerLogger.InfoContext(ctx, runnerStartedMsg,
 			slog.Any(githubWebhookEventKey, event),
-			slog.String("gcb_build_id", buildID))
+			slog.String(gcbBuildIDKey, buildID),
+			slog.String(gcbProjectIDKey, projectID))
+
 		startedRunnerNames = append(startedRunnerNames, runnerID)
 		gcbBuildIDs = append(gcbBuildIDs, buildID)
 	}
@@ -391,12 +395,12 @@ func compressAndBase64EncodeString(input string) (string, error) {
 // startGitHubRunner generates a JIT config and creates a Cloud Build job to start a GitHub runner.
 //
 // It takes the GitHub WorkflowJobEvent, a unique runner ID, logger, image tag, and runner labels.
-// It returns the build ID on success, or an error if the JIT config generation or Cloud Build
+// It returns the build ID and project ID on success, or an error if the JIT config generation or Cloud Build
 // job creation fails.
-func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageTag, jobOriginalRunnerLabel, jobResolvedRunnerLabel string) (string, error) {
+func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageTag, jobOriginalRunnerLabel, jobResolvedRunnerLabel string) (string, string, error) {
 	compressedJIT, err := s.generateAndCompressJITConfig(ctx, event, runnerID, jobOriginalRunnerLabel)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate and compress JIT config: %w", err)
+		return "", "", fmt.Errorf("failed to generate and compress JIT config: %w", err)
 	}
 
 	pool := s.selectWorkerPool(ctx, jobResolvedRunnerLabel)
@@ -405,9 +409,9 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 
 	buildID, err := s.cbc.CreateBuild(ctx, buildReq)
 	if err != nil {
-		return "", fmt.Errorf("failed to create build: %w", err)
+		return "", "", fmt.Errorf("failed to create build: %w", err)
 	}
-	return buildID, nil
+	return buildID, buildReq.GetProjectId(), nil
 }
 
 // generateAndCompressJITConfig handles the logic of generating and compressing the JIT config.
