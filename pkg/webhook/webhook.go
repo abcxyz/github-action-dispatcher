@@ -318,6 +318,11 @@ func extractLoggedAttributes(event *github.WorkflowJobEvent) (string, []any) {
 		"job_id", jobID,
 	}
 
+	if event.Repo != nil && event.Repo.HTMLURL != nil && event.WorkflowJob != nil && event.WorkflowJob.RunID != nil {
+		workflowRunURL := fmt.Sprintf("%s/actions/runs/%d", *event.Repo.HTMLURL, *event.WorkflowJob.RunID)
+		attributes = append(attributes, "workflow_run_url", workflowRunURL)
+	}
+
 	// Add all available timestamps to logger attributes (they might be nil depending on event action)
 	if event.WorkflowJob.CreatedAt != nil {
 		attributes = append(attributes, "created_at", getTimeString(event.WorkflowJob.CreatedAt))
