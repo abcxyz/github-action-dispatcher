@@ -104,9 +104,11 @@ module "cloud_run" {
   envvars = merge(
     var.envvars,
     {
-      "KMS_APP_PRIVATE_KEY_ID" : "${google_kms_crypto_key.private_key.id}/cryptoKeyVersions/${var.kms_private_key_version_number}"
-      "WEBHOOK_KEY_MOUNT_PATH" : local.key_mount_path
-      "WEBHOOK_KEY_NAME" : local.key_name
+      "REDIS_HOST"             = google_redis_instance.primary.host
+      "REDIS_PORT"             = google_redis_instance.primary.port
+      "KMS_APP_PRIVATE_KEY_ID" = "${google_kms_crypto_key.private_key.id}/cryptoKeyVersions/${var.kms_private_key_version_number}"
+      "WEBHOOK_KEY_MOUNT_PATH" = local.key_mount_path
+      "WEBHOOK_KEY_NAME"       = local.key_name
     }
   )
 
