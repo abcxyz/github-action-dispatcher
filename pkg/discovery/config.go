@@ -29,8 +29,8 @@ const (
 	poolLocationGCPProjectLabelKey     = "pool-location"
 	githubOrgScopeGCPProjectLabelKey   = "gh-org-scope"
 	poolAvailabilityGCPProjectLabelKey = "pool-availability"
-	poolAvailabilityAvailable          = "AVAILABLE"
-	poolAvailabilityUnavailable        = "UNAVAILABLE"
+	poolAvailabilityAvailable          = "available"
+	poolAvailabilityUnavailable        = "unavailable"
 )
 
 // Config defines the set of environment variables required

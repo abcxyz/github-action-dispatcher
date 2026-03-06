@@ -259,7 +259,7 @@ func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, p
 	projectLabels := make(map[string]string)
 
 	for key, values := range rd.gcpRunnerAllowedProjectLabels {
-		labelValue, ok := project.Labels[key]
+		projectLabelValue, ok := project.Labels[key]
 		if !ok {
 			logger.WarnContext(ctx, "project missing required label",
 				"project_id", project.ProjectID,
@@ -267,28 +267,28 @@ func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, p
 			return nil, false
 		}
 
-		if labelValue == "" {
+		if projectLabelValue == "" {
 			logger.WarnContext(ctx, "project has empty label",
 				"project_id", project.ProjectID,
 				"label", key)
 			return nil, false
 		}
 
-		if key == poolAvailabilityGCPProjectLabelKey && labelValue != poolAvailabilityAvailable {
+		if key == poolAvailabilityGCPProjectLabelKey && projectLabelValue != poolAvailabilityAvailable {
 			logger.WarnContext(ctx, "pool is unavailable",
 				"project_id", project.ProjectID,
 				"label", key,
-				"value", labelValue)
+				"project_label_value", projectLabelValue)
 			return nil, false
 		}
 
 		matched := false
 		for _, v := range values {
-			match, err := filepath.Match(v, labelValue)
+			match, err := filepath.Match(v, projectLabelValue)
 			if err != nil {
 				logger.WarnContext(ctx, "invalid wildcard pattern",
 					"pattern", v,
-					"label_value", labelValue,
+					"project_label_value", projectLabelValue,
 					"error", err)
 				continue
 			}
@@ -299,13 +299,13 @@ func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, p
 		}
 
 		if !matched {
-			logger.WarnContext(ctx, fmt.Sprintf("detected unexpected value for label %s, unknown value was %s", key, labelValue),
+			logger.WarnContext(ctx, fmt.Sprintf("detected unexpected value for label %s, unknown value was %s", key, projectLabelValue),
 				"project_id", project.ProjectID,
 				"label", key,
-				"value", labelValue)
+				"value", projectLabelValue)
 			return nil, false
 		}
-		projectLabels[key] = labelValue
+		projectLabels[key] = projectLabelValue
 	}
 
 	// After validating the required labels, iterate through all the project's
