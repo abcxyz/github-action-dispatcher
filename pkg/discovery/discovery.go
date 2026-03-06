@@ -29,18 +29,13 @@ import (
 	"github.com/abcxyz/pkg/logging"
 )
 
-const (
-	runnerLabelGCPProjectLabelKey    = "runner-label"
-	runnerLocationGCPProjectLabelKey = "runner-location"
-	runnerTypeGCPProjectLabelKey     = "runner-type"
-)
-
 // RunnerDiscovery is the main struct for the runner-discovery job.
 type RunnerDiscovery struct {
-	cbc    cloudbuild.Client
-	aic    assetinventory.Client
-	rc     *redisapi.Client
-	config *Config
+	cbc                           cloudbuild.Client
+	aic                           assetinventory.Client
+	rc                            *redisapi.Client
+	config                        *Config
+	gcpRunnerAllowedProjectLabels map[string][]string
 }
 
 func NewRunnerDiscovery(ctx context.Context, config *Config, rc *redisapi.Client) (*RunnerDiscovery, error) {
@@ -54,11 +49,18 @@ func NewRunnerDiscovery(ctx context.Context, config *Config, rc *redisapi.Client
 		return nil, fmt.Errorf("failed to create cloud build client: %w", err)
 	}
 
+	labels := make(map[string][]string)
+	labels[githubOrgScopeGCPProjectLabelKey] = config.AllowedGithubOrgScopes
+	labels[jobRunsOnGCPProjectLabelKey] = config.AllowedJobRunsOn
+	labels[poolLocationGCPProjectLabelKey] = config.AllowedPoolLocations
+	labels[poolAvailabilityGCPProjectLabelKey] = config.AllowedPoolAvailabilities
+
 	return &RunnerDiscovery{
-		cbc:    cbc,
-		aic:    aic,
-		rc:     rc,
-		config: config,
+		cbc:                           cbc,
+		aic:                           aic,
+		rc:                            rc,
+		config:                        config,
+		gcpRunnerAllowedProjectLabels: labels,
 	}, nil
 }
 
@@ -67,7 +69,7 @@ func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 	logger := logging.FromContext(ctx)
 
 	// Fetch all projects in the folder.
-	projects, err := rd.aic.FindProjects(ctx, rd.config.GCPFolderID, rd.config.LabelQuery)
+	projects, err := rd.aic.FindProjects(ctx, rd.config.GCPFolderID, generateLabelQuery(rd.gcpRunnerAllowedProjectLabels))
 	if err != nil {
 		return fmt.Errorf("failed to list projects: %w", err)
 	}
@@ -75,10 +77,9 @@ func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 		"count", len(projects),
 		"projects", projects)
 
-	poolsByRegistryKey, err := rd.discoverAndGroupWorkerPools(ctx, projects)
+	poolsByRegistryKey, err := rd.buildRegistry(ctx, projects)
 	if err != nil {
-		// discoverAndGroupWorkerPools is already logging the error.
-		return fmt.Errorf("failed to discover and group worker pools: %w", err)
+		return fmt.Errorf("failed to build registry: %w", err)
 	}
 
 	if err := rd.updateRegistry(ctx, poolsByRegistryKey); err != nil {
@@ -88,31 +89,28 @@ func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 	return nil
 }
 
-// discoverAndGroupWorkerPools processes the list of projects to find and group worker pools.
-func (rd *RunnerDiscovery) discoverAndGroupWorkerPools(ctx context.Context, projects []*assetinventory.ProjectInfo) (map[string][]registry.WorkerPoolInfo, error) {
+// buildRegistry processes the list of projects to find and group worker pools.
+// The key for Redis should be constructed from gh-org-scope and job-runs-on from project labels.
+// For example, if gh-org-scope is "default" and job-runs-on is "ubuntu-latest",
+// the key will be "default:ubuntu-latest".
+func (rd *RunnerDiscovery) buildRegistry(ctx context.Context, projects []*assetinventory.ProjectInfo) (map[string][]registry.WorkerPoolInfo, error) {
 	logger := logging.FromContext(ctx)
 	poolsByRegistryKey := make(map[string][]registry.WorkerPoolInfo)
 
 	for _, project := range projects {
+		projectLabels, ok := rd.filterAndValidateProjectLabels(ctx, project)
+		if !ok {
+			// A validation error occurred, and the details have been logged. Skip this project.
+			continue
+		}
 		logger.InfoContext(ctx,
 			"Checking project for worker pools",
 			"project_id", project.ProjectID,
-			"project_labels", project.Labels)
+			"project_labels", projectLabels)
 
-		runnerType, ok := rd.validateProjectLabel(ctx, project, runnerTypeGCPProjectLabelKey)
-		if !ok {
-			continue
-		}
-
-		runnerLabel, ok := rd.validateProjectLabel(ctx, project, runnerLabelGCPProjectLabelKey)
-		if !ok {
-			continue
-		}
-
-		location, ok := rd.validateProjectLabel(ctx, project, runnerLocationGCPProjectLabelKey)
-		if !ok {
-			continue
-		}
+		githubOrgScope := projectLabels[githubOrgScopeGCPProjectLabelKey]
+		jobRunsOn := projectLabels[jobRunsOnGCPProjectLabelKey]
+		location := projectLabels[poolLocationGCPProjectLabelKey]
 
 		wps, err := rd.cbc.ListWorkerPools(ctx, project.ProjectID, location)
 		if err != nil {
@@ -148,8 +146,7 @@ func (rd *RunnerDiscovery) discoverAndGroupWorkerPools(ctx context.Context, proj
 				continue
 			}
 
-			// The key for Redis should be constructed from runner-type and runner-label from project labels.
-			registryKey := fmt.Sprintf("%s:%s", runnerType, runnerLabel)
+			registryKey := fmt.Sprintf("%s:%s", githubOrgScope, jobRunsOn)
 
 			// Parse project number and location from the full resource name to ensure accuracy.
 			// Format: projects/{PROJECT_NUMBER}/locations/{LOCATION}/workerPools/{WORKERPOOL}
@@ -252,22 +249,91 @@ func (rd *RunnerDiscovery) updateRegistry(ctx context.Context, poolsByRegistryKe
 	return nil
 }
 
-// validateProjectLabel is a helper method to validate the presence and non-empty value of a project label.
-func (rd *RunnerDiscovery) validateProjectLabel(ctx context.Context, project *assetinventory.ProjectInfo, labelKey string) (string, bool) {
+// filterAndValidateProjectLabels validates that a project has all the required
+// labels and that the label values are in the allowlist. It also logs a
+// warning for any labels that are not in the allowlist. It returns a map of
+// the valid labels.
+func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, project *assetinventory.ProjectInfo) (map[string]string, bool) {
 	logger := logging.FromContext(ctx)
+	projectLabels := make(map[string]string)
 
-	value, ok := project.Labels[labelKey]
-	if !ok {
-		logger.WarnContext(ctx, "project missing required label",
-			"project_id", project.ProjectID,
-			"label", labelKey)
-		return "", false
+	for key, values := range rd.gcpRunnerAllowedProjectLabels {
+		labelValue, ok := project.Labels[key]
+		if !ok {
+			logger.WarnContext(ctx, "project missing required label",
+				"project_id", project.ProjectID,
+				"label", key)
+			return nil, false
+		}
+
+		if labelValue == "" {
+			logger.WarnContext(ctx, "project has empty label",
+				"project_id", project.ProjectID,
+				"label", key)
+			return nil, false
+		}
+
+		if key == poolAvailabilityGCPProjectLabelKey && labelValue != poolAvailabilityAvailable {
+			logger.WarnContext(ctx, "pool is unavailable",
+				"project_id", project.ProjectID,
+				"label", key,
+				"value", labelValue)
+			return nil, false
+		}
+
+		matched := false
+		for _, v := range values {
+			if v == labelValue {
+				matched = true
+				break
+			}
+		}
+
+		if !matched {
+			logger.WarnContext(ctx, fmt.Sprintf("detected unexpected value for label %s, unknown value was %s", key, labelValue),
+				"project_id", project.ProjectID,
+				"label", key,
+				"value", labelValue)
+			return nil, false
+		}
+		projectLabels[key] = labelValue
 	}
-	if value == "" {
-		logger.WarnContext(ctx, "project has empty label",
-			"project_id", project.ProjectID,
-			"label", labelKey)
-		return "", false
+
+	// After validating the required labels, iterate through all the project's
+	// labels again to log any that are not in the allowlist. This is to
+	// alert operators of any unexpected labels that may have been added to
+	// a runner project. For example, if a project has a label "foo: bar" and
+	// "foo" is not in the allowlist, a warning will be logged.
+	for key := range project.Labels {
+		if _, ok := rd.gcpRunnerAllowedProjectLabels[key]; !ok {
+			logger.WarnContext(ctx, "project has non-allowlisted label",
+				"project_id", project.ProjectID,
+				"label", key)
+		}
 	}
-	return value, true
+
+	return projectLabels, true
+}
+
+// generateLabelQuery creates a query for the Cloud Asset API to find projects
+// that have all the required labels. The query is a slice of strings, where
+// each string is in the format "label_key:*". This will find all projects
+// that have the given label key, regardless of the value.
+//
+// For example, if the allowlist is:
+//
+//	map[string][]string{
+//		"gh-org-scope":  []string{"default"},
+//		"job-runs-on": []string{"ubuntu-latest"},
+//	}
+//
+// The generated query will be:
+//
+//	[]string{"gh-org-scope:*", "job-runs-on:*"}
+func generateLabelQuery(allowlist map[string][]string) []string {
+	labels := make([]string, 0, len(allowlist))
+	for k := range allowlist {
+		labels = append(labels, fmt.Sprintf("%s:*", k))
+	}
+	return labels
 }

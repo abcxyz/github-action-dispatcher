@@ -15,6 +15,7 @@
 package discovery
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -38,9 +39,9 @@ const (
 	testProjectID3                     = "labeled-project-e2-small"
 	testProjectNumber3                 = "333333-labeled-project-e2-small"
 	testLocation                       = "us-central1"
-	testMachineTypeE2Medium            = "e2-medium"
-	testMachineTypeE2Small             = "e2-small"
-	testMachineTypeE2LargeStale        = "e2-large-stale"
+	testJobRunsOnE2Medium              = "e2-medium"
+	testJobRunsOnE2Small               = "e2-small"
+	testJobRunsOnE2LargeStale          = "e2-large-stale"
 	testWorkerPoolID1                  = "my-worker-pool-e2-medium"
 	testWorkerPoolID2                  = "my-worker-pool-e2-medium-2"
 	testWorkerPoolID3                  = "my-worker-pool-e2-small"
@@ -82,15 +83,18 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		{
 			name: "success_no_cache_read_new_registry_write",
 			config: &Config{
-				LabelQuery:                     []string{"env=test"},
+				AllowedGithubOrgScopes:         []string{"default"},
+				AllowedJobRunsOn:               []string{testJobRunsOnE2Medium, testJobRunsOnE2Small},
+				AllowedPoolLocations:           []string{"us-central1"},
+				AllowedPoolAvailabilities:      []string{poolAvailabilityAvailable, poolAvailabilityUnavailable},
 				GCPFolderID:                    testGCPFolderID,
 				RunnerRegistryDefaultKeyPrefix: testRunnerRegistryDefaultKeyPrefix,
 			},
 			cloudbuildMock: &cloudbuild.MockClient{
 				WorkerPools: []*cloudbuildpb.WorkerPool{
-					newMockWorkerPool(testProjectNumber1, testLocation, testWorkerPoolID1, testMachineTypeE2Medium),
-					newMockWorkerPool(testProjectNumber2, testLocation, testWorkerPoolID2, testMachineTypeE2Medium),
-					newMockWorkerPool(testProjectNumber3, testLocation, testWorkerPoolID3, testMachineTypeE2Small),
+					newMockWorkerPool(testProjectNumber1, testLocation, testWorkerPoolID1, testJobRunsOnE2Medium),
+					newMockWorkerPool(testProjectNumber2, testLocation, testWorkerPoolID2, testJobRunsOnE2Medium),
+					newMockWorkerPool(testProjectNumber3, testLocation, testWorkerPoolID3, testJobRunsOnE2Small),
 				},
 			},
 			assetInventoryMock: &assetinventory.MockClient{
@@ -98,40 +102,43 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 					{
 						ProjectID: testProjectID1,
 						Labels: map[string]string{
-							runnerTypeGCPProjectLabelKey:     testRunnerRegistryDefaultKeyPrefix,
-							runnerLabelGCPProjectLabelKey:    testMachineTypeE2Medium,
-							runnerLocationGCPProjectLabelKey: testLocation,
+							githubOrgScopeGCPProjectLabelKey:   testRunnerRegistryDefaultKeyPrefix,
+							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
+							poolLocationGCPProjectLabelKey:     testLocation,
+							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
 						},
 					},
 					{
 						ProjectID: testProjectID2,
 						Labels: map[string]string{
-							runnerTypeGCPProjectLabelKey:     testRunnerRegistryDefaultKeyPrefix,
-							runnerLabelGCPProjectLabelKey:    testMachineTypeE2Medium,
-							runnerLocationGCPProjectLabelKey: testLocation,
+							githubOrgScopeGCPProjectLabelKey:   testRunnerRegistryDefaultKeyPrefix,
+							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
+							poolLocationGCPProjectLabelKey:     testLocation,
+							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
 						},
 					},
 					{
 						ProjectID: testProjectID3,
 						Labels: map[string]string{
-							runnerTypeGCPProjectLabelKey:     testRunnerRegistryDefaultKeyPrefix,
-							runnerLabelGCPProjectLabelKey:    testMachineTypeE2Small,
-							runnerLocationGCPProjectLabelKey: testLocation,
+							githubOrgScopeGCPProjectLabelKey:   testRunnerRegistryDefaultKeyPrefix,
+							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Small,
+							poolLocationGCPProjectLabelKey:     testLocation,
+							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
 						},
 					},
 				},
 			},
 			expRegistrySets: map[string][]registry.WorkerPoolInfo{
-				testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testMachineTypeE2Medium): func() []registry.WorkerPoolInfo {
+				testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testJobRunsOnE2Medium): func() []registry.WorkerPoolInfo {
 					pools := []registry.WorkerPoolInfo{
 						{
-							Name:          newMockWorkerPool(testProjectNumber1, testLocation, testWorkerPoolID1, testMachineTypeE2Medium).GetName(),
+							Name:          newMockWorkerPool(testProjectNumber1, testLocation, testWorkerPoolID1, testJobRunsOnE2Medium).GetName(),
 							ProjectID:     testProjectID1,
 							ProjectNumber: testProjectNumber1,
 							Location:      testLocation,
 						},
 						{
-							Name:          newMockWorkerPool(testProjectNumber2, testLocation, testWorkerPoolID2, testMachineTypeE2Medium).GetName(),
+							Name:          newMockWorkerPool(testProjectNumber2, testLocation, testWorkerPoolID2, testJobRunsOnE2Medium).GetName(),
 							ProjectID:     testProjectID2,
 							ProjectNumber: testProjectNumber2,
 							Location:      testLocation,
@@ -142,9 +149,9 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 					})
 					return pools
 				}(),
-				testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testMachineTypeE2Small): {
+				testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testJobRunsOnE2Small): {
 					{
-						Name:          newMockWorkerPool(testProjectNumber3, testLocation, testWorkerPoolID3, testMachineTypeE2Small).GetName(),
+						Name:          newMockWorkerPool(testProjectNumber3, testLocation, testWorkerPoolID3, testJobRunsOnE2Small).GetName(),
 						ProjectID:     testProjectID3,
 						ProjectNumber: testProjectNumber3,
 						Location:      testLocation,
@@ -153,13 +160,16 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 			},
 			// This test simulates a scenario where a stale worker pool key exists
 			// in the registry and should be deleted because it's no longer discovered.
-			expRegistryDels: []string{testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testMachineTypeE2LargeStale)},
+			expRegistryDels: []string{testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testJobRunsOnE2LargeStale)},
 			expectRedis:     true,
 		},
 		{
 			name: "projects_error",
 			config: &Config{
-				LabelQuery:                     []string{"env=test"},
+				AllowedGithubOrgScopes:         []string{"default"},
+				AllowedJobRunsOn:               []string{"self-hosted"},
+				AllowedPoolLocations:           []string{"us-central1"},
+				AllowedPoolAvailabilities:      []string{poolAvailabilityAvailable, poolAvailabilityUnavailable},
 				GCPFolderID:                    testGCPFolderID,
 				RunnerRegistryDefaultKeyPrefix: testRunnerRegistryDefaultKeyPrefix,
 			},
@@ -173,7 +183,10 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		{
 			name: "list_worker_pools_error",
 			config: &Config{
-				LabelQuery:                     []string{"env=test"},
+				AllowedGithubOrgScopes:         []string{"default"},
+				AllowedJobRunsOn:               []string{testJobRunsOnE2Medium},
+				AllowedPoolLocations:           []string{"us-central1"},
+				AllowedPoolAvailabilities:      []string{poolAvailabilityAvailable, poolAvailabilityUnavailable},
 				GCPFolderID:                    testGCPFolderID,
 				RunnerRegistryDefaultKeyPrefix: testRunnerRegistryDefaultKeyPrefix,
 			},
@@ -185,15 +198,16 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 					{
 						ProjectID: testProjectID1,
 						Labels: map[string]string{
-							runnerTypeGCPProjectLabelKey:     testRunnerRegistryDefaultKeyPrefix,
-							runnerLabelGCPProjectLabelKey:    testMachineTypeE2Medium,
-							runnerLocationGCPProjectLabelKey: testLocation,
+							githubOrgScopeGCPProjectLabelKey:   testRunnerRegistryDefaultKeyPrefix,
+							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
+							poolLocationGCPProjectLabelKey:     testLocation,
+							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
 						},
 					},
 				},
 			},
 			expRegistrySets: map[string][]registry.WorkerPoolInfo{},
-			expErr:          fmt.Sprintf("failed to list worker pools for project %s: failed to list worker pools", testProjectID1),
+			expErr:          `failed to build registry: failed to list worker pools for project my-project: failed to list worker pools`,
 			expectRedis:     false,
 		},
 	}
@@ -202,8 +216,21 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := logging.WithLogger(t.Context(), logging.TestLogger(t))
+			ctx := logging.WithLogger(context.Background(), logging.TestLogger(t))
 			db, mock := redismock.NewClientMock()
+			labels := make(map[string][]string)
+			labels[githubOrgScopeGCPProjectLabelKey] = tc.config.AllowedGithubOrgScopes
+			labels[jobRunsOnGCPProjectLabelKey] = tc.config.AllowedJobRunsOn
+			labels[poolLocationGCPProjectLabelKey] = tc.config.AllowedPoolLocations
+			labels[poolAvailabilityGCPProjectLabelKey] = tc.config.AllowedPoolAvailabilities
+
+			rd := &RunnerDiscovery{
+				cbc:                           tc.cloudbuildMock,
+				aic:                           tc.assetInventoryMock,
+				rc:                            db,
+				config:                        tc.config,
+				gcpRunnerAllowedProjectLabels: labels,
+			}
 
 			if tc.expectRedis {
 				mock.ExpectScan(0, tc.config.RunnerRegistryDefaultKeyPrefix+":*", 0).SetVal(tc.expRegistryDels, 0)
@@ -227,12 +254,6 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 					mock.ExpectSet(registryKey, poolsJSON, 0).SetVal("OK")
 				}
 				mock.ExpectTxPipelineExec()
-			}
-			rd := &RunnerDiscovery{
-				cbc:    tc.cloudbuildMock,
-				aic:    tc.assetInventoryMock,
-				rc:     db,
-				config: tc.config,
 			}
 
 			err := rd.Run(ctx)

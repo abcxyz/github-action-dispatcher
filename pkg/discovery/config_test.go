@@ -22,8 +22,11 @@ import (
 
 func generateValidConfig() *Config {
 	return &Config{
-		LabelQuery:  []string{"env=test"},
-		GCPFolderID: "1234567890",
+		AllowedGithubOrgScopes:    []string{"default"},
+		AllowedJobRunsOn:          []string{"ubuntu-latest"},
+		AllowedPoolLocations:      []string{"us-central1"},
+		AllowedPoolAvailabilities: []string{poolAvailabilityAvailable, poolAvailabilityUnavailable},
+		GCPFolderID:               "1234567890",
 	}
 }
 
@@ -40,18 +43,39 @@ func TestConfig_Validate(t *testing.T) {
 			mutator: nil,
 		},
 		{
-			name: "missing_label_query",
-			mutator: func(c *Config) {
-				c.LabelQuery = nil
-			},
-			expErr: "LABEL_QUERY must be provided",
-		},
-		{
 			name: "missing_gcp_folder_id",
 			mutator: func(c *Config) {
 				c.GCPFolderID = ""
 			},
 			expErr: "GCP_FOLDER_ID must be provided",
+		},
+		{
+			name: "missing_gh_org_scope",
+			mutator: func(c *Config) {
+				c.AllowedGithubOrgScopes = nil
+			},
+			expErr: "GCP_RUNNER_ALLOWED_PROJECT_LABELS_GH_ORG_SCOPE must be provided",
+		},
+		{
+			name: "missing_job_runs_on",
+			mutator: func(c *Config) {
+				c.AllowedJobRunsOn = nil
+			},
+			expErr: "GCP_RUNNER_ALLOWED_PROJECT_LABELS_JOB_RUNS_ON must be provided",
+		},
+		{
+			name: "missing_pool_location",
+			mutator: func(c *Config) {
+				c.AllowedPoolLocations = nil
+			},
+			expErr: "GCP_RUNNER_ALLOWED_PROJECT_LABELS_POOL_LOCATION must be provided",
+		},
+		{
+			name: "missing_pool_availability",
+			mutator: func(c *Config) {
+				c.AllowedPoolAvailabilities = nil
+			},
+			expErr: "GCP_RUNNER_ALLOWED_PROJECT_LABELS_POOL_AVAILABILITY must be provided",
 		},
 	}
 
