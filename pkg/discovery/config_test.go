@@ -54,28 +54,28 @@ func TestConfig_Validate(t *testing.T) {
 			mutator: func(c *Config) {
 				c.AllowedGithubOrgScopes = nil
 			},
-			expErr: "GCP_RUNNER_ALLOWED_PROJECT_LABELS_GH_ORG_SCOPE must be provided",
+			expErr: "GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES must be provided",
 		},
 		{
 			name: "missing_job_runs_on",
 			mutator: func(c *Config) {
 				c.AllowedJobRunsOn = nil
 			},
-			expErr: "GCP_RUNNER_ALLOWED_PROJECT_LABELS_JOB_RUNS_ON must be provided",
+			expErr: "GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES must be provided",
 		},
 		{
 			name: "missing_pool_location",
 			mutator: func(c *Config) {
 				c.AllowedPoolLocations = nil
 			},
-			expErr: "GCP_RUNNER_ALLOWED_PROJECT_LABELS_POOL_LOCATION must be provided",
+			expErr: "GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES must be provided",
 		},
 		{
 			name: "missing_pool_availability",
 			mutator: func(c *Config) {
 				c.AllowedPoolAvailabilities = nil
 			},
-			expErr: "GCP_RUNNER_ALLOWED_PROJECT_LABELS_POOL_AVAILABILITY must be provided",
+			expErr: "GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES must be provided",
 		},
 	}
 

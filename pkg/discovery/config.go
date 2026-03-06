@@ -37,10 +37,10 @@ const (
 // for running the runner-discovery job.
 type Config struct {
 	GCPFolderID                    string        `env:"GCP_FOLDER_ID"`
-	AllowedGithubOrgScopes         []string      `env:"GCP_RUNNER_ALLOWED_PROJECT_LABELS_GH_ORG_SCOPE,delimiter=,"`
-	AllowedJobRunsOn               []string      `env:"GCP_RUNNER_ALLOWED_PROJECT_LABELS_JOB_RUNS_ON,delimiter=,"`
-	AllowedPoolLocations           []string      `env:"GCP_RUNNER_ALLOWED_PROJECT_LABELS_POOL_LOCATION,delimiter=,"`
-	AllowedPoolAvailabilities      []string      `env:"GCP_RUNNER_ALLOWED_PROJECT_LABELS_POOL_AVAILABILITY,delimiter=,"`
+	AllowedGithubOrgScopes         []string      `env:"GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES,delimiter=,"`
+	AllowedJobRunsOn               []string      `env:"GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES,delimiter=,"`
+	AllowedPoolLocations           []string      `env:"GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES,delimiter=,"`
+	AllowedPoolAvailabilities      []string      `env:"GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES,delimiter=,"`
 	MaxRetryAttempts               int           `env:"MAX_RETRY_ATTEMPTS,default=3"`
 	BackoffInitialDelay            time.Duration `env:"BACKOFF_INITIAL_DELAY,default=500ms"`
 	RunnerRegistryDefaultKeyPrefix string        `env:"RUNNER_REGISTRY_DEFAULT_KEY_PREFIX,default=default"`
@@ -52,16 +52,16 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("GCP_FOLDER_ID must be provided")
 	}
 	if len(cfg.AllowedGithubOrgScopes) == 0 {
-		return fmt.Errorf("GCP_RUNNER_ALLOWED_PROJECT_LABELS_GH_ORG_SCOPE must be provided")
+		return fmt.Errorf("GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES must be provided")
 	}
 	if len(cfg.AllowedJobRunsOn) == 0 {
-		return fmt.Errorf("GCP_RUNNER_ALLOWED_PROJECT_LABELS_JOB_RUNS_ON must be provided")
+		return fmt.Errorf("GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES must be provided")
 	}
 	if len(cfg.AllowedPoolLocations) == 0 {
-		return fmt.Errorf("GCP_RUNNER_ALLOWED_PROJECT_LABELS_POOL_LOCATION must be provided")
+		return fmt.Errorf("GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES must be provided")
 	}
 	if len(cfg.AllowedPoolAvailabilities) == 0 {
-		return fmt.Errorf("GCP_RUNNER_ALLOWED_PROJECT_LABELS_POOL_AVAILABILITY must be provided")
+		return fmt.Errorf("GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES must be provided")
 	}
 
 	return nil
@@ -77,6 +77,7 @@ func newConfig(ctx context.Context, lu envconfig.Lookuper) (*Config, error) {
 	if err := cfgloader.Load(ctx, &cfg, cfgloader.WithLookuper(lu)); err != nil {
 		return nil, fmt.Errorf("failed to parse runner-discovery config: %w", err)
 	}
+
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("failed to validate config: %w", err)
 	}

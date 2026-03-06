@@ -118,11 +118,11 @@ variable "runner_discovery" {
   })
   default = {
     envvars = {
-      GCP_RUNNER_ALLOWED_PROJECT_LABELS_GH_ORG_SCOPE      = "default"
-      GCP_RUNNER_ALLOWED_PROJECT_LABELS_JOB_RUNS_ON       = "ubuntu-24-04-amd64-e2-standard-2"
-      GCP_RUNNER_ALLOWED_PROJECT_LABELS_POOL_LOCATION     = "us-central1"
-      GCP_RUNNER_ALLOWED_PROJECT_LABELS_POOL_AVAILABILITY = "AVAILABLE,UNAVAILABLE"
-      GCP_FOLDER_ID                                       = ""
+      GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES      = "default"
+      GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES       = "ubuntu-24-04-amd64-e2-standard-2"
+      GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES     = "us-central1"
+      GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES = "AVAILABLE,UNAVAILABLE"
+      GCP_FOLDER_ID                                      = ""
     }
     job_iam = {
       admins     = []
