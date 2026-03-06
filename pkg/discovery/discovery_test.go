@@ -47,6 +47,8 @@ const (
 	testWorkerPoolID3                  = "my-worker-pool-e2-small"
 	testGCPFolderID                    = "12345"
 	testRunnerRegistryDefaultKeyPrefix = "default"
+	testWildcardOrg                    = "wildcard-org"
+	testSemiWildcardOrg                = "semi-wildcard-org"
 )
 
 // newMockWorkerPool creates a new mock cloudbuildpb.WorkerPool for testing.
@@ -162,6 +164,122 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 			// in the registry and should be deleted because it's no longer discovered.
 			expRegistryDels: []string{testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testJobRunsOnE2LargeStale)},
 			expectRedis:     true,
+		},
+		{
+			name: "success_wildcard",
+			config: &Config{
+				AllowedGithubOrgScopes:         []string{"*"},
+				AllowedJobRunsOn:               []string{testJobRunsOnE2Medium},
+				AllowedPoolLocations:           []string{"us-central1"},
+				AllowedPoolAvailabilities:      []string{poolAvailabilityAvailable, poolAvailabilityUnavailable},
+				GCPFolderID:                    testGCPFolderID,
+				RunnerRegistryDefaultKeyPrefix: testRunnerRegistryDefaultKeyPrefix,
+			},
+			cloudbuildMock: &cloudbuild.MockClient{
+				WorkerPools: []*cloudbuildpb.WorkerPool{
+					newMockWorkerPool(testProjectNumber1, testLocation, testWorkerPoolID1, testJobRunsOnE2Medium),
+				},
+			},
+			assetInventoryMock: &assetinventory.MockClient{
+				StubProjects: []*assetinventory.ProjectInfo{
+					{
+						ProjectID: testProjectID1,
+						Labels: map[string]string{
+							githubOrgScopeGCPProjectLabelKey:   testWildcardOrg,
+							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
+							poolLocationGCPProjectLabelKey:     testLocation,
+							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
+						},
+					},
+				},
+			},
+			expRegistrySets: map[string][]registry.WorkerPoolInfo{
+				testRegistryKey(testWildcardOrg, testJobRunsOnE2Medium): {
+					{
+						Name:          newMockWorkerPool(testProjectNumber1, testLocation, testWorkerPoolID1, testJobRunsOnE2Medium).GetName(),
+						ProjectID:     testProjectID1,
+						ProjectNumber: testProjectNumber1,
+						Location:      testLocation,
+					},
+				},
+			},
+			expectRedis: true,
+		},
+		{
+			name: "success_mixed_wildcard",
+			config: &Config{
+				AllowedGithubOrgScopes:         []string{"default", "semi-*-org", "*"},
+				AllowedJobRunsOn:               []string{testJobRunsOnE2Medium, testJobRunsOnE2Small},
+				AllowedPoolLocations:           []string{"us-central1"},
+				AllowedPoolAvailabilities:      []string{poolAvailabilityAvailable, poolAvailabilityUnavailable},
+				GCPFolderID:                    testGCPFolderID,
+				RunnerRegistryDefaultKeyPrefix: testRunnerRegistryDefaultKeyPrefix,
+			},
+			cloudbuildMock: &cloudbuild.MockClient{
+				WorkerPools: []*cloudbuildpb.WorkerPool{
+					newMockWorkerPool(testProjectNumber1, testLocation, testWorkerPoolID1, testJobRunsOnE2Medium),
+					newMockWorkerPool(testProjectNumber2, testLocation, testWorkerPoolID2, testJobRunsOnE2Medium),
+					newMockWorkerPool(testProjectNumber3, testLocation, testWorkerPoolID3, testJobRunsOnE2Small),
+				},
+			},
+			assetInventoryMock: &assetinventory.MockClient{
+				StubProjects: []*assetinventory.ProjectInfo{
+					{
+						ProjectID: testProjectID1,
+						Labels: map[string]string{
+							githubOrgScopeGCPProjectLabelKey:   testRunnerRegistryDefaultKeyPrefix,
+							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
+							poolLocationGCPProjectLabelKey:     testLocation,
+							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
+						},
+					},
+					{
+						ProjectID: testProjectID2,
+						Labels: map[string]string{
+							githubOrgScopeGCPProjectLabelKey:   testSemiWildcardOrg,
+							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
+							poolLocationGCPProjectLabelKey:     testLocation,
+							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
+						},
+					},
+					{
+						ProjectID: testProjectID3,
+						Labels: map[string]string{
+							githubOrgScopeGCPProjectLabelKey:   testWildcardOrg,
+							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Small,
+							poolLocationGCPProjectLabelKey:     testLocation,
+							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
+						},
+					},
+				},
+			},
+			expRegistrySets: map[string][]registry.WorkerPoolInfo{
+				testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testJobRunsOnE2Medium): {
+					{
+						Name:          newMockWorkerPool(testProjectNumber1, testLocation, testWorkerPoolID1, testJobRunsOnE2Medium).GetName(),
+						ProjectID:     testProjectID1,
+						ProjectNumber: testProjectNumber1,
+						Location:      testLocation,
+					},
+				},
+				testRegistryKey(testSemiWildcardOrg, testJobRunsOnE2Medium): {
+					{
+						Name:          newMockWorkerPool(testProjectNumber2, testLocation, testWorkerPoolID2, testJobRunsOnE2Medium).GetName(),
+						ProjectID:     testProjectID2,
+						ProjectNumber: testProjectNumber2,
+						Location:      testLocation,
+					},
+				},
+				testRegistryKey(testWildcardOrg, testJobRunsOnE2Small): {
+					{
+						Name:          newMockWorkerPool(testProjectNumber3, testLocation, testWorkerPoolID3, testJobRunsOnE2Small).GetName(),
+						ProjectID:     testProjectID3,
+						ProjectNumber: testProjectNumber3,
+						Location:      testLocation,
+					},
+				},
+			},
+			expectRedis: true,
 		},
 		{
 			name: "projects_error",
