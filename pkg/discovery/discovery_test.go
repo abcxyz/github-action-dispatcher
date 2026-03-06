@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"testing"
 
 	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
@@ -85,10 +86,10 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		{
 			name: "success_no_cache_read_new_registry_write",
 			config: &Config{
-				AllowedGithubOrgScopes:         []string{"default"},
-				AllowedJobRunsOn:               []string{testJobRunsOnE2Medium, testJobRunsOnE2Small},
-				AllowedPoolLocations:           []string{"us-central1"},
-				AllowedPoolAvailabilities:      []string{poolAvailabilityAvailable, poolAvailabilityUnavailable},
+				AllowedGithubOrgScopes:         "default",
+				AllowedJobRunsOn:               strings.Join([]string{testJobRunsOnE2Medium, testJobRunsOnE2Small}, ","),
+				AllowedPoolLocations:           "us-central1",
+				AllowedPoolAvailabilities:      strings.Join([]string{poolAvailabilityAvailable, poolAvailabilityUnavailable}, ","),
 				GCPFolderID:                    testGCPFolderID,
 				RunnerRegistryDefaultKeyPrefix: testRunnerRegistryDefaultKeyPrefix,
 			},
@@ -168,10 +169,10 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		{
 			name: "success_wildcard",
 			config: &Config{
-				AllowedGithubOrgScopes:         []string{"*"},
-				AllowedJobRunsOn:               []string{testJobRunsOnE2Medium},
-				AllowedPoolLocations:           []string{"us-central1"},
-				AllowedPoolAvailabilities:      []string{poolAvailabilityAvailable, poolAvailabilityUnavailable},
+				AllowedGithubOrgScopes:         "*",
+				AllowedJobRunsOn:               testJobRunsOnE2Medium,
+				AllowedPoolLocations:           "us-central1",
+				AllowedPoolAvailabilities:      strings.Join([]string{poolAvailabilityAvailable, poolAvailabilityUnavailable}, ","),
 				GCPFolderID:                    testGCPFolderID,
 				RunnerRegistryDefaultKeyPrefix: testRunnerRegistryDefaultKeyPrefix,
 			},
@@ -208,10 +209,10 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		{
 			name: "success_mixed_wildcard",
 			config: &Config{
-				AllowedGithubOrgScopes:         []string{"default", "semi-*-org", "*"},
-				AllowedJobRunsOn:               []string{testJobRunsOnE2Medium, testJobRunsOnE2Small},
-				AllowedPoolLocations:           []string{"us-central1"},
-				AllowedPoolAvailabilities:      []string{poolAvailabilityAvailable, poolAvailabilityUnavailable},
+				AllowedGithubOrgScopes:         "default,semi-*-org,*",
+				AllowedJobRunsOn:               strings.Join([]string{testJobRunsOnE2Medium, testJobRunsOnE2Small}, ","),
+				AllowedPoolLocations:           "us-central1",
+				AllowedPoolAvailabilities:      strings.Join([]string{poolAvailabilityAvailable, poolAvailabilityUnavailable}, ","),
 				GCPFolderID:                    testGCPFolderID,
 				RunnerRegistryDefaultKeyPrefix: testRunnerRegistryDefaultKeyPrefix,
 			},
@@ -284,10 +285,10 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		{
 			name: "projects_error",
 			config: &Config{
-				AllowedGithubOrgScopes:         []string{"default"},
-				AllowedJobRunsOn:               []string{"self-hosted"},
-				AllowedPoolLocations:           []string{"us-central1"},
-				AllowedPoolAvailabilities:      []string{poolAvailabilityAvailable, poolAvailabilityUnavailable},
+				AllowedGithubOrgScopes:         "default",
+				AllowedJobRunsOn:               "self-hosted",
+				AllowedPoolLocations:           "us-central1",
+				AllowedPoolAvailabilities:      strings.Join([]string{poolAvailabilityAvailable, poolAvailabilityUnavailable}, ","),
 				GCPFolderID:                    testGCPFolderID,
 				RunnerRegistryDefaultKeyPrefix: testRunnerRegistryDefaultKeyPrefix,
 			},
@@ -301,10 +302,10 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		{
 			name: "list_worker_pools_error",
 			config: &Config{
-				AllowedGithubOrgScopes:         []string{"default"},
-				AllowedJobRunsOn:               []string{testJobRunsOnE2Medium},
-				AllowedPoolLocations:           []string{"us-central1"},
-				AllowedPoolAvailabilities:      []string{poolAvailabilityAvailable, poolAvailabilityUnavailable},
+				AllowedGithubOrgScopes:         "default",
+				AllowedJobRunsOn:               testJobRunsOnE2Medium,
+				AllowedPoolLocations:           "us-central1",
+				AllowedPoolAvailabilities:      strings.Join([]string{poolAvailabilityAvailable, poolAvailabilityUnavailable}, ","),
 				GCPFolderID:                    testGCPFolderID,
 				RunnerRegistryDefaultKeyPrefix: testRunnerRegistryDefaultKeyPrefix,
 			},
@@ -337,10 +338,10 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 			ctx := logging.WithLogger(context.Background(), logging.TestLogger(t))
 			db, mock := redismock.NewClientMock()
 			labels := make(map[string][]string)
-			labels[githubOrgScopeGCPProjectLabelKey] = tc.config.AllowedGithubOrgScopes
-			labels[jobRunsOnGCPProjectLabelKey] = tc.config.AllowedJobRunsOn
-			labels[poolLocationGCPProjectLabelKey] = tc.config.AllowedPoolLocations
-			labels[poolAvailabilityGCPProjectLabelKey] = tc.config.AllowedPoolAvailabilities
+			labels[githubOrgScopeGCPProjectLabelKey] = tc.config.GetAllowedGithubOrgScopes()
+			labels[jobRunsOnGCPProjectLabelKey] = tc.config.GetAllowedJobRunsOn()
+			labels[poolLocationGCPProjectLabelKey] = tc.config.GetAllowedPoolLocations()
+			labels[poolAvailabilityGCPProjectLabelKey] = tc.config.GetAllowedPoolAvailabilities()
 
 			rd := &RunnerDiscovery{
 				cbc:                           tc.cloudbuildMock,

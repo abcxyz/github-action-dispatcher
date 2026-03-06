@@ -51,10 +51,10 @@ func NewRunnerDiscovery(ctx context.Context, config *Config, rc *redisapi.Client
 	}
 
 	labels := make(map[string][]string)
-	labels[githubOrgScopeGCPProjectLabelKey] = config.AllowedGithubOrgScopes
-	labels[jobRunsOnGCPProjectLabelKey] = config.AllowedJobRunsOn
-	labels[poolLocationGCPProjectLabelKey] = config.AllowedPoolLocations
-	labels[poolAvailabilityGCPProjectLabelKey] = config.AllowedPoolAvailabilities
+	labels[githubOrgScopeGCPProjectLabelKey] = config.GetAllowedGithubOrgScopes()
+	labels[jobRunsOnGCPProjectLabelKey] = config.GetAllowedJobRunsOn()
+	labels[poolLocationGCPProjectLabelKey] = config.GetAllowedPoolLocations()
+	labels[poolAvailabilityGCPProjectLabelKey] = config.GetAllowedPoolAvailabilities()
 
 	return &RunnerDiscovery{
 		cbc:                           cbc,
