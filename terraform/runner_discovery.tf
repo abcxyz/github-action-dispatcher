@@ -68,8 +68,8 @@ resource "google_cloud_run_v2_job" "runner_discovery_job" {
 
   lifecycle {
     precondition {
-      condition     = var.runner_discovery.envvars["GCP_RUNNER_ALLOWED_PROJECT_LABELS_GH_ORG_SCOPE"] != "" && var.runner_discovery.envvars["GCP_RUNNER_ALLOWED_PROJECT_LABELS_JOB_RUNS_ON"] != "" && var.runner_discovery.envvars["GCP_RUNNER_ALLOWED_PROJECT_LABELS_POOL_LOCATION"] != "" && var.runner_discovery.envvars["GCP_RUNNER_ALLOWED_PROJECT_LABELS_POOL_AVAILABILITY"] != "" && var.runner_discovery.envvars["GCP_FOLDER_ID"] != ""
-      error_message = "All GCP_RUNNER_ALLOWED_PROJECT_LABELS_* and GCP_FOLDER_ID must be provided."
+      condition     = var.runner_discovery.envvars["GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES"] != "" && var.runner_discovery.envvars["GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES"] != "" && var.runner_discovery.envvars["GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES"] != "" && var.runner_discovery.envvars["GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES"] != "" && var.runner_discovery.envvars["GCP_FOLDER_ID"] != ""
+      error_message = "All GCP_ALLOWED_PROJECT_LABEL_*_VALUES and GCP_FOLDER_ID must be provided."
     }
     ignore_changes = [
       template[0].template[0].containers[0].image,

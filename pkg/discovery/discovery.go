@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -283,7 +284,15 @@ func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, p
 
 		matched := false
 		for _, v := range values {
-			if v == labelValue {
+			match, err := filepath.Match(v, labelValue)
+			if err != nil {
+				logger.WarnContext(ctx, "invalid wildcard pattern",
+					"pattern", v,
+					"label_value", labelValue,
+					"error", err)
+				continue
+			}
+			if match {
 				matched = true
 				break
 			}
