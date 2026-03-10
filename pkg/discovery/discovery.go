@@ -70,11 +70,13 @@ func (rd *RunnerDiscovery) Run(ctx context.Context) error {
 	logger := logging.FromContext(ctx)
 
 	// Fetch all projects in the folder.
-	projects, err := rd.aic.FindProjects(ctx, rd.config.GCPFolderID, generateLabelQuery(rd.gcpRunnerAllowedProjectLabels))
+	query := generateLabelQuery(rd.gcpRunnerAllowedProjectLabels)
+	projects, err := rd.aic.FindProjects(ctx, rd.config.GCPFolderID, query)
 	if err != nil {
 		return fmt.Errorf("failed to list projects: %w", err)
 	}
 	logger.InfoContext(ctx, "Discovered projects from API",
+		"query", query,
 		"count", len(projects),
 		"projects", projects)
 

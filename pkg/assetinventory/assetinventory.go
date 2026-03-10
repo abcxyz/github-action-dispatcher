@@ -71,6 +71,10 @@ func NewClient(ctx context.Context, backoffInitialDelay time.Duration, maxRetryA
 func (c *assetinventoryClient) FindProjects(ctx context.Context, gcpFolderID string, labelQuery []string) ([]*ProjectInfo, error) {
 	logger := logging.FromContext(ctx)
 	var query strings.Builder
+	query.WriteString(`state="ACTIVE"`)
+	if len(labelQuery) > 0 {
+		query.WriteString(" AND ")
+	}
 	for i, l := range labelQuery {
 		if i > 0 {
 			query.WriteString(" AND ")

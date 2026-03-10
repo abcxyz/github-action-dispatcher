@@ -16,6 +16,7 @@ package assetinventory
 
 import (
 	"context"
+	"strings"
 )
 
 var _ Client = (*MockClient)(nil)
@@ -24,10 +25,24 @@ var _ Client = (*MockClient)(nil)
 type MockClient struct {
 	ListProjectsErr error
 	StubProjects    []*ProjectInfo
+	gotQuery        string
 }
 
 // FindProjects is a mock of the FindProjects method.
 func (m *MockClient) FindProjects(ctx context.Context, folderID string, labelQuery []string) ([]*ProjectInfo, error) {
+	var query strings.Builder
+	query.WriteString(`state="ACTIVE"`)
+	if len(labelQuery) > 0 {
+		query.WriteString(" AND ")
+	}
+	for i, l := range labelQuery {
+		if i > 0 {
+			query.WriteString(" AND ")
+		}
+		query.WriteString("labels.")
+		query.WriteString(l)
+	}
+	m.gotQuery = query.String()
 	if m.ListProjectsErr != nil {
 		return nil, m.ListProjectsErr
 	}
