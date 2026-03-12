@@ -191,6 +191,8 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
+    outputs:
+      labels_json: '${{ steps.labels.outputs.labels_json }}'
     steps:
       - name: 'Checkout'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
@@ -226,6 +228,13 @@ jobs:
             --region="${{ env.INTEGRATION_REGION }}" \
             --env-vars-file=/tmp/env_vars \
             --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.DOCKER_TAG }}-amd64"
+
+      - name: 'Set label outputs'
+        id: 'labels'
+        run: |-
+          labels_json="['${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }}','${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}']"
+          echo "labels_json=${labels_json}"
+          echo "labels_json=${labels_json}" >> "${GITHUB_OUTPUT}"
 
   deploy:
     needs: ['build', 'verify-latest-runner-image']
@@ -293,13 +302,13 @@ jobs:
             --format='value(status.url)'
 
   smoke-tests:
-    needs: ['deploy']
+    needs: ['deploy', 'deploy-runner-discovery-job']
     if: |-
       ${{ github.event_name == 'merge_group' }}
     uses: './.github/workflows/smoke-tests.yml'
     strategy:
       matrix:
-        target_label: ['${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }}', '${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}']
+        target_label: '${{ fromJson(needs.deploy-runner-discovery-job.outputs.labels_json) }}'
     with:
       runs-on: '${{ matrix.target_label }}'
 
