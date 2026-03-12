@@ -19,9 +19,12 @@ env:
   RUNNER_IMAGE_TAG: 'v0.3.0-ubuntu-24-04-amd64'
   RUNNER_IMAGE_NAME: 'github-action-runner'
 
-  INTEGRATION_RUNNER_LABEL: 'github-action-dispatcher-integration' # <repo-name>-<env>
+  INTEGRATION_RUNNER_LABEL_SELF_HOSTED: 'self-hosted'
+  INTEGRATION_RUNNER_LABEL_GAD_1: 'github-action-dispatcher-integration' # <repo-name>-<env>
+  INTEGRATION_RUNNER_LABEL_GAD_2: 'github-action-dispatcher-integration-2' # <repo-name>-<env>
   INTEGRATION_RUNNER_LOCATION: 'us-central1'
   INTEGRATION_RUNNER_PROJECT_ID: 'abcxyz-runner-i-4f'
+  INTEGRATION_RUNNER_FOLDER_ID: '961583394935' # deployments/gcb-runner/integration folder
   INTEGRATION_RUNNER_SERVICE_ACCOUNT: 'projects/abcxyz-runner-i-4f/serviceAccounts/runner-sa@abcxyz-runner-i-4f.iam.gserviceaccount.com'
   INTEGRATION_REDIS_HOST: '172.16.0.3'
   INTEGRATION_REDIS_PORT: '6379'
@@ -210,9 +213,18 @@ jobs:
       - name: 'Deploy to Cloud Run Job'
         id: 'deploy-job'
         run: |-
+          cat > /tmp/env_vars <<EOF
+          GCP_FOLDER_ID: '${{ env.INTEGRATION_RUNNER_FOLDER_ID }}'
+          GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES: 'default'
+          GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES: '${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }},${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}'
+          GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES: '${{ env.INTEGRATION_RUNNER_LOCATION }}'
+          GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES: 'available,unavailable'
+          EOF
+
           gcloud run jobs update "${{ env.INTEGRATION_RUNNER_DISCOVERY_JOB_NAME }}" \
             --project="${{ env.INTEGRATION_PROJECT_ID }}" \
             --region="${{ env.INTEGRATION_REGION }}" \
+            --env-vars-file=/tmp/env_vars \
             --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.DOCKER_TAG }}-amd64"
 
   deploy:
@@ -263,8 +275,8 @@ jobs:
           RUNNER_REPOSITORY_ID: '${{ env.RUNNER_DOCKER_REPO }}'
           RUNNER_SERVICE_ACCOUNT: '${{ env.INTEGRATION_RUNNER_SERVICE_ACCOUNT }}'
           RUNNER_WORKER_POOL_ID: '${{ env.INTEGRATION_WORKER_POOL_ID }}'
-          RUNNER_LABEL_ALIASES: 'self-hosted=${{ env.INTEGRATION_RUNNER_LABEL }}'
-          SUPPORTED_RUNNER_LABELS: '${{ env.INTEGRATION_RUNNER_LABEL }}'
+          RUNNER_LABEL_ALIASES: '${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}=${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }}'
+          SUPPORTED_RUNNER_LABELS: '${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }},${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}'
           WEBHOOK_KEY_MOUNT_PATH: '${WEBHOOK_SECRET_MOUNT_PATH}'
           WEBHOOK_KEY_NAME: '${WEBHOOK_SECRET_NAME}'
           EOF
@@ -287,7 +299,7 @@ jobs:
     uses: './.github/workflows/smoke-tests.yml'
     strategy:
       matrix:
-        target_label: ['github-action-dispatcher-integration', 'self-hosted']
+        target_label: ['${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }}', '${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}']
     with:
       runs-on: '${{ matrix.target_label }}'
 
