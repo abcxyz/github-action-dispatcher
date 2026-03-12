@@ -285,8 +285,11 @@ jobs:
     if: |-
       ${{ github.event_name == 'merge_group' }}
     uses: './.github/workflows/smoke-tests.yml'
+    strategy:
+      matrix:
+        target_label: ['github-action-dispatcher-integration', 'self-hosted']
     with:
-      runs-on: 'github-action-dispatcher-integration'
+      runs-on: '${{ matrix.target_label }}'
 
   smoke-tests-passed:
     needs: ['deploy', 'smoke-tests']
