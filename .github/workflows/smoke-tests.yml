@@ -206,9 +206,7 @@ jobs:
     strategy:
       matrix:
         target_label: '${{ fromJson(needs.deploy-runner-discovery-job.outputs.labels_json) }}'
-    timeout-minutes: 5
-    with:
-      runs-on: '${{ matrix.target_label }}'
+    runs-on: '${{ matrix.target_label }}'
     steps:
       - name: 'Setup Go'
         uses: 'actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b' # ratchet:actions/setup-go@v5
