@@ -166,7 +166,7 @@ func TestWebhookServerCommand(t *testing.T) {
 				"RUNNER_SERVICE_ACCOUNT":             "runner-service-account",
 				"RUNNER_LABEL_ALIASES":               "self-hosted=sh-ubuntu-latest",
 				"RUNNER_WORKER_POOL_ID":              "projects/my-project-number/locations/us-central1/workerPools/my-pool",
-				"SUPPORTED_RUNNER_LABELS":            "sh-ubuntu-latest",
+				"SUPPORTED_RUNNER_LABELS":            "self-hosted,sh-ubuntu-latest",
 				"RUNNER_REGISTRY_DEFAULT_KEY_PREFIX": "default",
 			}, fileMock: &webhook.MockFileReader{
 				ReadFileMock: &webhook.ReadFileResErr{

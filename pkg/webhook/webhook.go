@@ -233,7 +233,11 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 	incomingLabel := event.WorkflowJob.Labels[0]
 	jobOriginalRunnerLabel := incomingLabel // used in jit config request
 
-	jobResolvedRunnerLabel, canHandle := s.resolveAndValidateRunnerLabel(ctx, incomingLabel)
+	jobResolvedRunnerLabel, canHandle, err := s.resolveAndValidateRunnerLabel(ctx, incomingLabel)
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to resolve and validate runner label", "error", err)
+		return &apiResponse{http.StatusInternalServerError, err.Error(), err}
+	}
 
 	if !canHandle {
 		logger.WarnContext(ctx, "no action taken for label",
@@ -270,12 +274,20 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 
 // resolveAndValidateRunnerLabel encapsulates the logic for resolving runner labels
 // and checking if they are provisionable based on the server's configuration.
-func (s *Server) resolveAndValidateRunnerLabel(ctx context.Context, incomingLabel string) (string, bool) {
+func (s *Server) resolveAndValidateRunnerLabel(ctx context.Context, incomingLabel string) (string, bool, error) {
 	logger := logging.FromContext(ctx)
 
 	// Determine the lookup label for the worker pool after resolving aliases.
 	jobResolvedRunnerLabel := incomingLabel
+	visited := make(map[string]bool)
 	for {
+		if visited[jobResolvedRunnerLabel] {
+			err := fmt.Errorf("detected alias cycle for label %q", incomingLabel)
+			logger.ErrorContext(ctx, err.Error(), "label", incomingLabel)
+			return "", false, err
+		}
+		visited[jobResolvedRunnerLabel] = true
+
 		if next, ok := s.config.RunnerLabelAliases[jobResolvedRunnerLabel]; ok {
 			logger.InfoContext(ctx, "resolved runner label alias",
 				"original_label", jobResolvedRunnerLabel,
@@ -289,7 +301,7 @@ func (s *Server) resolveAndValidateRunnerLabel(ctx context.Context, incomingLabe
 	// Check if the jobResolvedRunnerLabel is in the combined allowlist.
 	canHandle := s.allowedLabels[jobResolvedRunnerLabel]
 
-	return jobResolvedRunnerLabel, canHandle
+	return jobResolvedRunnerLabel, canHandle, nil
 }
 
 // getRunnerKey creates a key for the runner in the format that the registry
