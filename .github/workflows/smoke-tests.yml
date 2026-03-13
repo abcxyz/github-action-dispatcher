@@ -132,7 +132,7 @@ jobs:
       - name: 'Set label outputs'
         id: 'labels'
         run: |-
-          labels_json="['${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }}','${{ env.INTEGRATION_RUNNER_LABEL_GAD_2 }}','${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}']"
+          labels_json="['${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }}','${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}']"
           echo "labels_json=${labels_json}"
           echo "labels_json=${labels_json}" >> "${GITHUB_OUTPUT}"
 
