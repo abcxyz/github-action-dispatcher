@@ -126,9 +126,8 @@ jobs:
         run: |-
           gcloud run jobs execute "${{ env.INTEGRATION_RUNNER_DISCOVERY_JOB_NAME }}" \
             --project="${{ env.INTEGRATION_PROJECT_ID }}" \
-            --region="${{ env.INTEGRATION_REGION }}"
-          echo "Executed discovery job. Waiting 60s to complete."
-          sleep 60s
+            --region="${{ env.INTEGRATION_REGION }}" \
+            --wait
 
       - name: 'Set label outputs'
         id: 'labels'
@@ -202,7 +201,7 @@ jobs:
   # We expect test-go-version[github-action-dispatcher-integration-2] not to be
   # initially picked up until deploy-runner-discovery-job-with-runner-2 runs ~1-2 minutes later.
   test-go-version:
-    name: 'test-go-version[${{ github.sha }}]'
+    name: 'test-go-version[${{ matrix.target_label }}][${{ github.sha }}]'
     needs: ['deploy', 'deploy-runner-discovery-job']
     strategy:
       matrix:
@@ -281,9 +280,8 @@ jobs:
         run: |-
           gcloud run jobs execute "${{ env.INTEGRATION_RUNNER_DISCOVERY_JOB_NAME }}" \
             --project="${{ env.INTEGRATION_PROJECT_ID }}" \
-            --region="${{ env.INTEGRATION_REGION }}"
-          echo "Executed discovery job. Waiting 60s to complete."
-          sleep 60s
+            --region="${{ env.INTEGRATION_REGION }}" \
+            --wait
 
       - name: 'Output Deploy time'
         id: 'time'
