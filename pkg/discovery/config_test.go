@@ -29,6 +29,7 @@ func generateValidConfig() *Config {
 		AllowedJobRunsOn:          "ubuntu-latest",
 		AllowedPoolLocations:      "us-central1",
 		AllowedPoolAvailabilities: "available,unavailable",
+		AllowedPoolTypes:          "trusted,private",
 		GCPFolderID:               "1234567890",
 	}
 }
@@ -80,6 +81,13 @@ func TestConfig_Validate(t *testing.T) {
 			},
 			expErr: "GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES must be provided",
 		},
+		{
+			name: "missing_pool_type",
+			mutator: func(c *Config) {
+				c.AllowedPoolTypes = ""
+			},
+			expErr: "GCP_ALLOWED_PROJECT_LABEL_POOL_TYPE_VALUES must be provided",
+		},
 	}
 
 	for _, tc := range cases {
@@ -105,6 +113,7 @@ func TestNewConfig_Parsing(t *testing.T) {
 	t.Setenv("GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES", "ubuntu-latest,windows-latest")
 	t.Setenv("GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES", "us-central1,us-west1")
 	t.Setenv("GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES", "available,unavailable")
+	t.Setenv("GCP_ALLOWED_PROJECT_LABEL_POOL_TYPE_VALUES", "trusted,private")
 	t.Setenv("GCP_FOLDER_ID", "12345")
 
 	cfg, err := NewConfig(ctx)

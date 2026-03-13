@@ -123,6 +123,7 @@ variable "runner_discovery" {
       GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES       = "ubuntu-24-04-amd64-e2-standard-2"
       GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES     = "us-central1"
       GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES = "available,unavailable"
+      GCP_ALLOWED_PROJECT_LABEL_POOL_TYPE_VALUES         = "trusted,private"
       GCP_FOLDER_ID                                      = ""
     }
     job_iam = {

@@ -56,6 +56,7 @@ func NewRunnerDiscovery(ctx context.Context, config *Config, rc *redisapi.Client
 	labels[jobRunsOnGCPProjectLabelKey] = config.GetAllowedJobRunsOn()
 	labels[poolLocationGCPProjectLabelKey] = config.GetAllowedPoolLocations()
 	labels[poolAvailabilityGCPProjectLabelKey] = config.GetAllowedPoolAvailabilities()
+	labels[poolTypeGCPProjectLabelKey] = config.GetAllowedPoolTypes()
 
 	return &RunnerDiscovery{
 		cbc:                           cbc,

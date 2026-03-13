@@ -30,6 +30,7 @@ const (
 	poolLocationGCPProjectLabelKey     = "pool-location"
 	githubOrgScopeGCPProjectLabelKey   = "gh-org-scope"
 	poolAvailabilityGCPProjectLabelKey = "pool-availability"
+	poolTypeGCPProjectLabelKey         = "pool-type"
 	poolAvailabilityAvailable          = "available"
 	poolAvailabilityUnavailable        = "unavailable"
 )
@@ -42,6 +43,7 @@ type Config struct {
 	AllowedJobRunsOn               string        `env:"GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES"`
 	AllowedPoolLocations           string        `env:"GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES"`
 	AllowedPoolAvailabilities      string        `env:"GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES"`
+	AllowedPoolTypes               string        `env:"GCP_ALLOWED_PROJECT_LABEL_POOL_TYPE_VALUES"`
 	IgnoredGCPProjectLabels        string        `env:"GCP_IGNORED_PROJECT_LABELS"`
 	MaxRetryAttempts               int           `env:"MAX_RETRY_ATTEMPTS,default=3"`
 	BackoffInitialDelay            time.Duration `env:"BACKOFF_INITIAL_DELAY,default=500ms"`
@@ -64,6 +66,9 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.AllowedPoolAvailabilities == "" {
 		return fmt.Errorf("GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES must be provided")
+	}
+	if cfg.AllowedPoolTypes == "" {
+		return fmt.Errorf("GCP_ALLOWED_PROJECT_LABEL_POOL_TYPE_VALUES must be provided")
 	}
 
 	return nil
@@ -100,6 +105,10 @@ func (c *Config) GetAllowedPoolLocations() []string {
 
 func (c *Config) GetAllowedPoolAvailabilities() []string {
 	return strings.Split(c.AllowedPoolAvailabilities, ",")
+}
+
+func (c *Config) GetAllowedPoolTypes() []string {
+	return strings.Split(c.AllowedPoolTypes, ",")
 }
 
 func (c *Config) GetIgnoredGCPProjectLabels() []string {
