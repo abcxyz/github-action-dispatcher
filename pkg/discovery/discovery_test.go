@@ -349,6 +349,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 				rc:                            db,
 				config:                        tc.config,
 				gcpRunnerAllowedProjectLabels: labels,
+				gcpRunnerIgnoredProjectLabels: tc.config.GetIgnoredGCPProjectLabelsSet(),
 			}
 
 			if tc.expectRedis {

@@ -42,6 +42,7 @@ type Config struct {
 	AllowedJobRunsOn               string        `env:"GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES"`
 	AllowedPoolLocations           string        `env:"GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES"`
 	AllowedPoolAvailabilities      string        `env:"GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES"`
+	IgnoredGCPProjectLabels        string        `env:"GCP_IGNORED_PROJECT_LABELS"`
 	MaxRetryAttempts               int           `env:"MAX_RETRY_ATTEMPTS,default=3"`
 	BackoffInitialDelay            time.Duration `env:"BACKOFF_INITIAL_DELAY,default=500ms"`
 	RunnerRegistryDefaultKeyPrefix string        `env:"RUNNER_REGISTRY_DEFAULT_KEY_PREFIX,default=default"`
@@ -99,4 +100,23 @@ func (c *Config) GetAllowedPoolLocations() []string {
 
 func (c *Config) GetAllowedPoolAvailabilities() []string {
 	return strings.Split(c.AllowedPoolAvailabilities, ",")
+}
+
+func (c *Config) GetIgnoredGCPProjectLabels() []string {
+	if c.IgnoredGCPProjectLabels == "" {
+		return nil
+	}
+	return strings.Split(c.IgnoredGCPProjectLabels, ",")
+}
+
+func (c *Config) GetIgnoredGCPProjectLabelsSet() map[string]struct{} {
+	if c.IgnoredGCPProjectLabels == "" {
+		return make(map[string]struct{})
+	}
+	labels := strings.Split(c.IgnoredGCPProjectLabels, ",")
+	set := make(map[string]struct{}, len(labels))
+	for _, label := range labels {
+		set[strings.TrimSpace(label)] = struct{}{}
+	}
+	return set
 }
