@@ -97,8 +97,8 @@ jobs:
 
   # Verifies the latest image release of github-action-runner
   verify-latest-runner-image:
-    if: |-
-      ${{ github.event_name == 'merge_group' }}
+    # if: |-
+    #   ${{ github.event_name == 'merge_group' }}
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
@@ -174,19 +174,21 @@ jobs:
       - name: 'Set outputs for smoke-tests'
         id: 'outs'
         run: |
-          echo "docker_repo=${{ env.DOCKER_REPO }}" >> "${GITHUB_OUTPUT}"
-          echo "docker_tag=${{ env.DOCKER_TAG }}" >> "${GITHUB_OUTPUT}"
-          echo "image_name=${{ env.IMAGE_NAME }}" >> "${GITHUB_OUTPUT}"
-          echo "runner_docker_repo=${{ env.RUNNER_DOCKER_REPO }}" >> "${GITHUB_OUTPUT}"
-          echo "runner_image_tag=${{ env.RUNNER_IMAGE_TAG }}" >> "${GITHUB_OUTPUT}"
-          echo "runner_image_name=${{ env.RUNNER_IMAGE_NAME }}" >> "${GITHUB_OUTPUT}"
-          echo "integration_wif_provider=${{ env.INTEGRATION_WIF_PROVIDER }}" >> "${GITHUB_OUTPUT}"
-          echo "integration_wif_service_account=${{ env.INTEGRATION_WIF_SERVICE_ACCOUNT }}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "docker_repo=${{ env.DOCKER_REPO }}"
+            echo "docker_tag=${{ env.DOCKER_TAG }}"
+            echo "image_name=${{ env.IMAGE_NAME }}"
+            echo "runner_docker_repo=${{ env.RUNNER_DOCKER_REPO }}"
+            echo "runner_image_tag=${{ env.RUNNER_IMAGE_TAG }}"
+            echo "runner_image_name=${{ env.RUNNER_IMAGE_NAME }}"
+            echo "integration_wif_provider=${{ env.INTEGRATION_WIF_PROVIDER }}"
+            echo "integration_wif_service_account=${{ env.INTEGRATION_WIF_SERVICE_ACCOUNT }}"
+          } >> "${GITHUB_OUTPUT}"
 
   smoke-tests:
     needs: ['go_test', 'build', 'verify-latest-runner-image']
-    if: |-
-      ${{ github.event_name == 'merge_group' }}
+    # if: |-
+    #   ${{ github.event_name == 'merge_group' }}
     uses: './.github/workflows/smoke-tests.yml'
     permissions:
       contents: 'read'
