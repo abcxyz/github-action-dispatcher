@@ -109,7 +109,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
-							poolTypeGCPProjectLabelKey:         "trusted",
+							poolTypeGCPProjectLabelKey:         poolTypeTrusted,
 						},
 					},
 					{
@@ -119,7 +119,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
-							poolTypeGCPProjectLabelKey:         "trusted",
+							poolTypeGCPProjectLabelKey:         poolTypeTrusted,
 						},
 					},
 					{
@@ -129,7 +129,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Small,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
-							poolTypeGCPProjectLabelKey:         "trusted",
+							poolTypeGCPProjectLabelKey:         poolTypeTrusted,
 						},
 					},
 				},
@@ -170,6 +170,80 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 			expectRedis:     true,
 		},
 		{
+			name: "success_with_remote_config",
+			config: &Config{
+				AllowedGithubOrgScopes:         "default",
+				AllowedJobRunsOn:               strings.Join([]string{testJobRunsOnE2Medium, testJobRunsOnE2Small}, ","),
+				AllowedPoolLocations:           "us-central1",
+				AllowedPoolAvailabilities:      strings.Join([]string{poolAvailabilityAvailable, poolAvailabilityUnavailable}, ","),
+				AllowedPoolTypes:               "trusted,private",
+				GCPFolderID:                    testGCPFolderID,
+				RunnerRegistryDefaultKeyPrefix: testRunnerRegistryDefaultKeyPrefix,
+			},
+			cloudbuildMock: &cloudbuild.MockClient{
+				WorkerPools: []*cloudbuildpb.WorkerPool{
+					newMockWorkerPool(testProjectNumber1, testLocation, testWorkerPoolID1, testJobRunsOnE2Medium),
+					newMockWorkerPool(testProjectNumber3, testLocation, testWorkerPoolID3, testJobRunsOnE2Small),
+				},
+			},
+			assetInventoryMock: &assetinventory.MockClient{
+				StubProjects: []*assetinventory.ProjectInfo{
+					{
+						ProjectID: testProjectID1,
+						Labels: map[string]string{
+							githubOrgScopeGCPProjectLabelKey:      testRunnerRegistryDefaultKeyPrefix,
+							jobRunsOnGCPProjectLabelKey:           testJobRunsOnE2Medium,
+							poolLocationGCPProjectLabelKey:        testLocation,
+							poolAvailabilityGCPProjectLabelKey:    poolAvailabilityAvailable,
+							poolTypeGCPProjectLabelKey:            poolTypeTrusted,
+							trustedRemoteConfigGCPProjectLabelKey: "remote/path/to/config/file",
+						},
+					},
+					{
+						// This project should be filtered out because it's trusted but doesn't have the remote-config label.
+						ProjectID: testProjectID2,
+						Labels: map[string]string{
+							githubOrgScopeGCPProjectLabelKey:   testRunnerRegistryDefaultKeyPrefix,
+							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
+							poolLocationGCPProjectLabelKey:     testLocation,
+							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
+							poolTypeGCPProjectLabelKey:         poolTypeTrusted,
+						},
+					},
+					{
+						ProjectID: testProjectID3,
+						Labels: map[string]string{
+							githubOrgScopeGCPProjectLabelKey:   testRunnerRegistryDefaultKeyPrefix,
+							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Small,
+							poolLocationGCPProjectLabelKey:     testLocation,
+							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
+							poolTypeGCPProjectLabelKey:         poolTypePrivate, // not trusted, so remote-config is not required
+						},
+					},
+				},
+			},
+			expRegistrySets: map[string][]registry.WorkerPoolInfo{
+				testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testJobRunsOnE2Medium): {
+					{
+						Name:          newMockWorkerPool(testProjectNumber1, testLocation, testWorkerPoolID1, testJobRunsOnE2Medium).GetName(),
+						ProjectID:     testProjectID1,
+						ProjectNumber: testProjectNumber1,
+						Location:      testLocation,
+						RemoteConfig:  "remote/path/to/config/file",
+					},
+				},
+				testRegistryKey(testRunnerRegistryDefaultKeyPrefix, testJobRunsOnE2Small): {
+					{
+						Name:          newMockWorkerPool(testProjectNumber3, testLocation, testWorkerPoolID3, testJobRunsOnE2Small).GetName(),
+						ProjectID:     testProjectID3,
+						ProjectNumber: testProjectNumber3,
+						Location:      testLocation,
+					},
+				},
+			},
+			expectRedis: true,
+		},
+		{
 			name: "success_wildcard",
 			config: &Config{
 				AllowedGithubOrgScopes:         "*",
@@ -193,7 +267,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
-							poolTypeGCPProjectLabelKey:         "trusted",
+							poolTypeGCPProjectLabelKey:         poolTypeTrusted,
 						},
 					},
 				},
@@ -236,7 +310,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
-							poolTypeGCPProjectLabelKey:         "trusted",
+							poolTypeGCPProjectLabelKey:         poolTypeTrusted,
 						},
 					},
 					{
@@ -246,7 +320,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
-							poolTypeGCPProjectLabelKey:         "trusted",
+							poolTypeGCPProjectLabelKey:         poolTypeTrusted,
 						},
 					},
 					{
@@ -256,7 +330,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Small,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
-							poolTypeGCPProjectLabelKey:         "trusted",
+							poolTypeGCPProjectLabelKey:         poolTypeTrusted,
 						},
 					},
 				},
@@ -328,7 +402,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
-							poolTypeGCPProjectLabelKey:         "trusted",
+							poolTypeGCPProjectLabelKey:         poolTypeTrusted,
 						},
 					},
 				},
@@ -352,12 +426,13 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 			labels[poolAvailabilityGCPProjectLabelKey] = tc.config.GetAllowedPoolAvailabilities()
 
 			rd := &RunnerDiscovery{
-				cbc:                           tc.cloudbuildMock,
-				aic:                           tc.assetInventoryMock,
-				rc:                            db,
-				config:                        tc.config,
-				gcpRunnerAllowedProjectLabels: labels,
-				gcpRunnerIgnoredProjectLabels: tc.config.GetIgnoredGCPProjectLabelsSet(),
+				cbc:                            tc.cloudbuildMock,
+				aic:                            tc.assetInventoryMock,
+				rc:                             db,
+				config:                         tc.config,
+				gcpRunnerAllowedProjectLabels:  labels,
+				gcpRunnerIgnoredProjectLabels:  tc.config.GetIgnoredGCPProjectLabelsSet(),
+				gcpRunnerOptionalProjectLabels: tc.config.GetOptionalGCPProjectLabelsSet(),
 			}
 
 			if tc.expectRedis {

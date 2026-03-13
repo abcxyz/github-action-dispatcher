@@ -32,12 +32,13 @@ import (
 
 // RunnerDiscovery is the main struct for the runner-discovery job.
 type RunnerDiscovery struct {
-	cbc                           cloudbuild.Client
-	aic                           assetinventory.Client
-	rc                            *redisapi.Client
-	config                        *Config
-	gcpRunnerAllowedProjectLabels map[string][]string
-	gcpRunnerIgnoredProjectLabels map[string]struct{}
+	cbc                            cloudbuild.Client
+	aic                            assetinventory.Client
+	rc                             *redisapi.Client
+	config                         *Config
+	gcpRunnerAllowedProjectLabels  map[string][]string
+	gcpRunnerIgnoredProjectLabels  map[string]struct{}
+	gcpRunnerOptionalProjectLabels map[string]struct{}
 }
 
 func NewRunnerDiscovery(ctx context.Context, config *Config, rc *redisapi.Client) (*RunnerDiscovery, error) {
@@ -59,12 +60,13 @@ func NewRunnerDiscovery(ctx context.Context, config *Config, rc *redisapi.Client
 	labels[poolTypeGCPProjectLabelKey] = config.GetAllowedPoolTypes()
 
 	return &RunnerDiscovery{
-		cbc:                           cbc,
-		aic:                           aic,
-		rc:                            rc,
-		config:                        config,
-		gcpRunnerAllowedProjectLabels: labels,
-		gcpRunnerIgnoredProjectLabels: config.GetIgnoredGCPProjectLabelsSet(),
+		cbc:                            cbc,
+		aic:                            aic,
+		rc:                             rc,
+		config:                         config,
+		gcpRunnerAllowedProjectLabels:  labels,
+		gcpRunnerIgnoredProjectLabels:  config.GetIgnoredGCPProjectLabelsSet(),
+		gcpRunnerOptionalProjectLabels: config.GetOptionalGCPProjectLabelsSet(),
 	}, nil
 }
 
@@ -171,6 +173,9 @@ func (rd *RunnerDiscovery) buildRegistry(ctx context.Context, projects []*asseti
 				ProjectID:     project.ProjectID,
 				ProjectNumber: poolProjectNumber,
 				Location:      poolLocation,
+			}
+			if val, ok := project.Labels[trustedRemoteConfigGCPProjectLabelKey]; ok {
+				poolInfo.RemoteConfig = val
 			}
 			poolsByRegistryKey[registryKey] = append(poolsByRegistryKey[registryKey], poolInfo)
 		}
@@ -313,18 +318,28 @@ func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, p
 		projectLabels[key] = projectLabelValue
 	}
 
+	if projectLabels[poolTypeGCPProjectLabelKey] == poolTypeTrusted {
+		if _, ok := project.Labels[trustedRemoteConfigGCPProjectLabelKey]; !ok {
+			logger.WarnContext(ctx, "project missing required label because pool-type is trusted",
+				"project_id", project.ProjectID,
+				"label", trustedRemoteConfigGCPProjectLabelKey)
+			return nil, false
+		}
+	}
+
 	// After validating the required labels, iterate through all the project's
 	// labels again to log any that are not in the allowlist. This is to
 	// alert operators of any unexpected labels that may have been added to
 	// a runner project. For example, if a project has a label "foo: bar" and
 	// "foo" is not in the allowlist, a warning will be logged.
 	for key := range project.Labels {
-		if _, ok := rd.gcpRunnerAllowedProjectLabels[key]; !ok {
-			if _, ignored := rd.gcpRunnerIgnoredProjectLabels[key]; !ignored {
-				logger.WarnContext(ctx, "project has non-allowlisted label",
-					"project_id", project.ProjectID,
-					"label", key)
-			}
+		_, allowed := rd.gcpRunnerAllowedProjectLabels[key]
+		_, optional := rd.gcpRunnerOptionalProjectLabels[key]
+		_, ignored := rd.gcpRunnerIgnoredProjectLabels[key]
+		if !allowed && !optional && !ignored {
+			logger.WarnContext(ctx, "project has non-allowlisted label",
+				"project_id", project.ProjectID,
+				"label", key)
 		}
 	}
 
