@@ -19,27 +19,8 @@ env:
   RUNNER_IMAGE_TAG: 'v0.3.0-ubuntu-24-04-amd64'
   RUNNER_IMAGE_NAME: 'github-action-runner'
 
-  INTEGRATION_RUNNER_LABEL_SELF_HOSTED: 'self-hosted'
-  INTEGRATION_RUNNER_LABEL_GAD_1: 'github-action-dispatcher-integration' # <repo-name>-<env>
-  INTEGRATION_RUNNER_LABEL_GAD_2: 'github-action-dispatcher-integration-2' # <repo-name>-<env>
-  INTEGRATION_RUNNER_LOCATION: 'us-central1'
-  INTEGRATION_RUNNER_PROJECT_ID: 'abcxyz-runner-i-4f'
-  INTEGRATION_RUNNER_FOLDER_ID: '961583394935' # deployments/gcb-runner/integration folder
-  INTEGRATION_RUNNER_SERVICE_ACCOUNT: 'projects/abcxyz-runner-i-4f/serviceAccounts/runner-sa@abcxyz-runner-i-4f.iam.gserviceaccount.com'
-  INTEGRATION_REDIS_HOST: '172.16.0.3'
-  INTEGRATION_REDIS_PORT: '6379'
-
-  INTEGRATION_GH_APP_INSTALLATION_ID: '2320897'
-  INTEGRATION_PROJECT_ID: 'github-action-dispatcher-i-e3'
-  INTEGRATION_REGION: 'us-central1'
-  INTEGRATION_SERVICE_NAME: 'github-action-dispatcher-8aa2'
-  INTEGRATION_SERVICE_ACCOUNT: 'gad-webhook-sa@github-action-dispatcher-i-e3.iam.gserviceaccount.com'
   INTEGRATION_WIF_PROVIDER: 'projects/643301186155/locations/global/workloadIdentityPools/github-automation/providers/gad-ci-i'
   INTEGRATION_WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-gad-ci-i-832939.iam.gserviceaccount.com'
-  INTEGRATION_WORKER_POOL_ID: 'projects/abcxyz-runner-i-4f/locations/us-central1/workerPools/abcxyz-n2d-standard-2'
-
-  INTEGRATION_RUNNER_DISCOVERY_JOB_NAME: 'runner-discovery'
-  INTEGRATION_RUNNER_DISCOVERY_JOB_SA: 'runner-discovery-job-sa@github-action-dispatcher-i-e3.iam.gserviceaccount.com'
 
   AUTOPUSH_RUNNER_LABEL: 'github-action-dispatcher-autopush' # <repo-name>-<env>
   AUTOPUSH_RUNNER_LOCATION: 'us-central1'
@@ -64,7 +45,6 @@ jobs:
       directory: 'pkg/'
 
   build:
-    needs: ['go_test']
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
@@ -117,7 +97,6 @@ jobs:
 
   # Verifies the latest image release of github-action-runner
   verify-latest-runner-image:
-    needs: ['build']
     if: |-
       ${{ github.event_name == 'merge_group' }}
     runs-on: 'ubuntu-latest'
@@ -183,155 +162,39 @@ jobs:
             echo "Confirmed RUNNER_IMAGE_TAG (${{ env.RUNNER_IMAGE_TAG }}) points to the latest release."
           fi
 
-  deploy-runner-discovery-job:
-    needs: ['verify-latest-runner-image']
-    if: |-
-      ${{ github.event_name == 'merge_group' }}
-    runs-on: 'ubuntu-latest'
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-    outputs:
-      labels_json: '${{ steps.labels.outputs.labels_json }}'
-    steps:
-      - name: 'Checkout'
-        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
-        with:
-          workload_identity_provider: '${{ env.INTEGRATION_WIF_PROVIDER }}'
-          service_account: '${{ env.INTEGRATION_WIF_SERVICE_ACCOUNT }}'
-          token_format: 'access_token'
-
-      - name: 'Setup gcloud'
-        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
-        with:
-          version: '529.0.0'
-
-      - name: 'Deploy to Cloud Run Job'
-        id: 'deploy-job'
-        run: |-
-          cat > /tmp/env_vars <<EOF
-          GCP_FOLDER_ID: '${{ env.INTEGRATION_RUNNER_FOLDER_ID }}'
-          GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES: 'default'
-          GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES: '${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }},${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}'
-          GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES: '${{ env.INTEGRATION_RUNNER_LOCATION }}'
-          GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES: 'available,unavailable'
-          REDIS_HOST: '${{ env.INTEGRATION_REDIS_HOST }}'
-          REDIS_PORT: '${{ env.INTEGRATION_REDIS_PORT }}'
-          EOF
-
-          gcloud run jobs update "${{ env.INTEGRATION_RUNNER_DISCOVERY_JOB_NAME }}" \
-            --project="${{ env.INTEGRATION_PROJECT_ID }}" \
-            --region="${{ env.INTEGRATION_REGION }}" \
-            --env-vars-file=/tmp/env_vars \
-            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.DOCKER_TAG }}-amd64"
-
-      - name: 'Set label outputs'
-        id: 'labels'
-        run: |-
-          labels_json="['${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }}','${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}']"
-          echo "labels_json=${labels_json}"
-          echo "labels_json=${labels_json}" >> "${GITHUB_OUTPUT}"
-
-  deploy:
-    needs: ['build', 'verify-latest-runner-image']
-    if: |-
-      ${{ github.event_name == 'merge_group' }}
-    runs-on: 'ubuntu-latest'
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-    env:
-      GITHUB_APP_ID: '2320897'
-      KMS_APP_PRIVATE_KEY_ID: 'projects/github-action-dispatcher-i-e3/locations/us-central1/keyRings/gad-71-key-ring/cryptoKeys/gad-71-pk/cryptoKeyVersions/1'
-    steps:
-      - name: 'Checkout'
-        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
-
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
-        with:
-          workload_identity_provider: '${{ env.INTEGRATION_WIF_PROVIDER }}'
-          service_account: '${{ env.INTEGRATION_WIF_SERVICE_ACCOUNT }}'
-          token_format: 'access_token'
-
-      - name: 'Setup gcloud'
-        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
-        with:
-          version: '529.0.0'
-
-      - name: 'Deploy to Cloud Run'
-        id: 'deploy'
-        run: |-
-          WEBHOOK_SECRET_MOUNT_PATH="/etc/secrets/webhook/key"
-          WEBHOOK_SECRET_NAME="webhook-key"
-          WEBHOOK_SECRET_VERSION="latest"
-
-          cat > /tmp/env_vars <<EOF
-          REDIS_HOST: '${{ env.INTEGRATION_REDIS_HOST }}'
-          REDIS_PORT: '${{ env.INTEGRATION_REDIS_PORT }}'
-          EXTRA_RUNNER_COUNT: '0'
-          GITHUB_APP_ID: '${{ env.GITHUB_APP_ID }}'
-          KMS_APP_PRIVATE_KEY_ID: '${{ env.KMS_APP_PRIVATE_KEY_ID }}'
-          RUNNER_IMAGE_NAME: '${{ env.RUNNER_IMAGE_NAME }}'
-          RUNNER_IMAGE_TAG: '${{ env.RUNNER_IMAGE_TAG }}'
-          RUNNER_LOCATION: '${{ env.INTEGRATION_RUNNER_LOCATION }}'
-          RUNNER_PROJECT_ID: '${{ env.INTEGRATION_RUNNER_PROJECT_ID }}'
-          RUNNER_REPOSITORY_ID: '${{ env.RUNNER_DOCKER_REPO }}'
-          RUNNER_SERVICE_ACCOUNT: '${{ env.INTEGRATION_RUNNER_SERVICE_ACCOUNT }}'
-          RUNNER_WORKER_POOL_ID: '${{ env.INTEGRATION_WORKER_POOL_ID }}'
-          RUNNER_LABEL_ALIASES: '${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}=${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }}'
-          SUPPORTED_RUNNER_LABELS: '${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }},${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}'
-          WEBHOOK_KEY_MOUNT_PATH: '${WEBHOOK_SECRET_MOUNT_PATH}'
-          WEBHOOK_KEY_NAME: '${WEBHOOK_SECRET_NAME}'
-          EOF
-
-          gcloud run deploy "${{ env.INTEGRATION_SERVICE_NAME }}" \
-            --project="${{ env.INTEGRATION_PROJECT_ID }}" \
-            --region="${{ env.INTEGRATION_REGION }}" \
-            --service-account="${{ env.INTEGRATION_SERVICE_ACCOUNT }}" \
-            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.DOCKER_TAG }}-amd64" \
-            --ingress=internal-and-cloud-load-balancing \
-            --no-allow-unauthenticated \
-            --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=${WEBHOOK_SECRET_NAME}:${WEBHOOK_SECRET_VERSION}" \
-            --env-vars-file=/tmp/env_vars \
-            --format='value(status.url)'
-
   smoke-tests:
-    needs: ['deploy', 'deploy-runner-discovery-job']
+    needs: ['go_test', 'build', 'verify-latest-runner-image']
     if: |-
       ${{ github.event_name == 'merge_group' }}
     uses: './.github/workflows/smoke-tests.yml'
-    strategy:
-      matrix:
-        target_label: '${{ fromJson(needs.deploy-runner-discovery-job.outputs.labels_json) }}'
     with:
-      runs-on: '${{ matrix.target_label }}'
+      docker_repo: '${{ env.DOCKER_REPO }}'
+      docker_tag: '${{ env.DOCKER_TAG }}'
+      image_name: '${{ env.IMAGE_NAME }}'
+      runner_docker_repo: '${{ env.RUNNER_DOCKER_REPO }}'
+      runner_image_tag: '${{ env.RUNNER_IMAGE_TAG }}'
+      runner_image_name: '${{ env.RUNNER_IMAGE_NAME }}'
+      integration_wif_provider: '${{ env.INTEGRATION_WIF_PROVIDER }}'
+      integration_wif_service_account: '${{ env.INTEGRATION_WIF_SERVICE_ACCOUNT }}'
 
   smoke-tests-passed:
-    needs: ['deploy', 'smoke-tests']
+    needs: ['smoke-tests']
     if: |-
       ${{ always() && github.event_name == 'merge_group' }}
     runs-on: 'ubuntu-latest'
     steps:
-      - name: 'Check Deployment and Tests Status'
+      - name: 'Check Smoke Test Status'
         if: |-
-          ${{ needs.deploy.result != 'success' || needs.smoke-tests.result != 'success' }}
+          ${{ needs.smoke-tests.result != 'success' }}
         run: |
-          echo "::error::Deployment failed or was skipped. Failing status check to block merge."
+          echo "::error::Smoke Test failed or was skipped. Failing status check to block merge."
           exit 1
 
       - name: 'Confirm smoke tests passed'
         run: 'echo \"All dispatcher tests passed in integration\"'
 
   tag-autopush:
-    needs: ['build']
+    needs: ['go_test', 'build']
     if: |-
       ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: 'ubuntu-latest'
@@ -440,25 +303,3 @@ jobs:
             --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=${WEBHOOK_SECRET_NAME}:${WEBHOOK_SECRET_VERSION}" \
             --env-vars-file=/tmp/env_vars \
             --format='value(status.url)'
-
-  smoke-tests-autopush:
-    needs: ['deploy-autopush']
-    uses: './.github/workflows/smoke-tests.yml'
-    with:
-      runs-on: 'github-action-dispatcher-autopush'
-
-  smoke-tests-passed-autopush:
-    needs: ['deploy-autopush', 'smoke-tests-autopush']
-    if: |-
-      ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    runs-on: 'ubuntu-latest'
-    steps:
-      - name: 'Check Deployment and Tests Status'
-        if: |-
-          ${{ needs.deploy-autopush.result != 'success' || needs.smoke-tests-autopush.result != 'success' }}
-        run: |
-          echo "::error::Autopush deployment or smoke tests failed/skipped. Failing status check."
-          exit 1
-
-      - name: 'Confirm smoke tests passed'
-        run: 'echo \"All dispatcher tests passed in autopush\"'
