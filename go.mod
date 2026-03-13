@@ -6,7 +6,7 @@ toolchain go1.24.2
 
 require (
 	cloud.google.com/go/asset v1.22.0
-	cloud.google.com/go/cloudbuild v1.23.1
+	cloud.google.com/go/cloudbuild v1.25.0
 	cloud.google.com/go/kms v1.23.2
 	github.com/abcxyz/pkg v1.5.4
 	github.com/go-redis/redis/v8 v8.11.5
