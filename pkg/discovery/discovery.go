@@ -37,6 +37,7 @@ type RunnerDiscovery struct {
 	rc                            *redisapi.Client
 	config                        *Config
 	gcpRunnerAllowedProjectLabels map[string][]string
+	gcpRunnerIgnoredProjectLabels map[string]struct{}
 }
 
 func NewRunnerDiscovery(ctx context.Context, config *Config, rc *redisapi.Client) (*RunnerDiscovery, error) {
@@ -62,6 +63,7 @@ func NewRunnerDiscovery(ctx context.Context, config *Config, rc *redisapi.Client
 		rc:                            rc,
 		config:                        config,
 		gcpRunnerAllowedProjectLabels: labels,
+		gcpRunnerIgnoredProjectLabels: config.GetIgnoredGCPProjectLabelsSet(),
 	}, nil
 }
 
@@ -317,9 +319,11 @@ func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, p
 	// "foo" is not in the allowlist, a warning will be logged.
 	for key := range project.Labels {
 		if _, ok := rd.gcpRunnerAllowedProjectLabels[key]; !ok {
-			logger.WarnContext(ctx, "project has non-allowlisted label",
-				"project_id", project.ProjectID,
-				"label", key)
+			if _, ignored := rd.gcpRunnerIgnoredProjectLabels[key]; !ignored {
+				logger.WarnContext(ctx, "project has non-allowlisted label",
+					"project_id", project.ProjectID,
+					"label", key)
+			}
 		}
 	}
 
