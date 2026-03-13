@@ -58,7 +58,7 @@ env:
 
   INTEGRATION_RUNNER_LABEL_SELF_HOSTED: 'self-hosted'
   INTEGRATION_RUNNER_LABEL_GAD_1: 'github-action-dispatcher-integration' # <repo-name>-<env>
-  INTEGRATION_RUNNER_LABEL_GAD_2: 'github-action-dispatcher-integration-2' # <repo-name>-<env>
+  INTEGRATION_RUNNER_LABEL_GAD_2: 'github-action-dispatcher-2-integration' # <repo-name>-<env>
   INTEGRATION_RUNNER_LOCATION: 'us-central1'
   INTEGRATION_RUNNER_PROJECT_ID: 'abcxyz-runner-i-4f'
   INTEGRATION_RUNNER_FOLDER_ID: '961583394935' # deployments/gcb-runner/integration folder
@@ -198,7 +198,7 @@ jobs:
             --env-vars-file=/tmp/env_vars \
             --format='value(status.url)'
 
-  # We expect test-go-version[github-action-dispatcher-integration-2] not to be
+  # We expect test-go-version[github-action-dispatcher-2-integration] not to be
   # initially picked up until deploy-runner-discovery-job-with-runner-2 runs ~1-2 minutes later.
   test-go-version:
     name: 'test-go-version[${{ matrix.target_label }}][${{ github.sha }}]'
@@ -294,7 +294,7 @@ jobs:
     needs: ['deploy-runner-discovery-job-with-runner-2', 'test-go-version']
     runs-on: 'ubuntu-latest'
     steps:
-      # TODO: Confirm that the execution time for the test-go-version[github-action-dispatcher-integration-2]
+      # TODO: Confirm that the execution time for the test-go-version[github-action-dispatcher-2-integration]
       #       job was after needs.deploy-runner-discovery-job-with-runner-2.outputs.deploy_time
       - name: 'Echo Success'
         run: |
