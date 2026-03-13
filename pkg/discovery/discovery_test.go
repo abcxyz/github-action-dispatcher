@@ -109,6 +109,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
+							poolTypeGCPProjectLabelKey:         "trusted",
 						},
 					},
 					{
@@ -118,6 +119,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
+							poolTypeGCPProjectLabelKey:         "trusted",
 						},
 					},
 					{
@@ -127,6 +129,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Small,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
+							poolTypeGCPProjectLabelKey:         "trusted",
 						},
 					},
 				},
@@ -190,6 +193,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
+							poolTypeGCPProjectLabelKey:         "trusted",
 						},
 					},
 				},
@@ -232,6 +236,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
+							poolTypeGCPProjectLabelKey:         "trusted",
 						},
 					},
 					{
@@ -241,6 +246,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
+							poolTypeGCPProjectLabelKey:         "trusted",
 						},
 					},
 					{
@@ -250,6 +256,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Small,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
+							poolTypeGCPProjectLabelKey:         "trusted",
 						},
 					},
 				},
@@ -321,6 +328,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 							jobRunsOnGCPProjectLabelKey:        testJobRunsOnE2Medium,
 							poolLocationGCPProjectLabelKey:     testLocation,
 							poolAvailabilityGCPProjectLabelKey: poolAvailabilityAvailable,
+							poolTypeGCPProjectLabelKey:         "trusted",
 						},
 					},
 				},
