@@ -118,6 +118,20 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("SUPPORTED_RUNNER_LABELS must be provided")
 	}
 
+	supportedLabelsMap := make(map[string]bool)
+	for _, label := range cfg.SupportedRunnerLabels {
+		supportedLabelsMap[label] = true
+	}
+
+	for alias, target := range cfg.RunnerLabelAliases {
+		if _, ok := supportedLabelsMap[alias]; !ok {
+			return fmt.Errorf("runner label alias %q is not present in SUPPORTED_RUNNER_LABELS", alias)
+		}
+		if _, ok := supportedLabelsMap[target]; !ok {
+			return fmt.Errorf("runner label alias target %q is not present in SUPPORTED_RUNNER_LABELS", target)
+		}
+	}
+
 	return nil
 }
 

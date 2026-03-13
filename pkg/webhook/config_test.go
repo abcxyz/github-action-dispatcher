@@ -38,6 +38,7 @@ func generateValidConfig() *Config {
 			"self-hosted": "sh-ubuntu-latest",
 		},
 		SupportedRunnerLabels: []string{
+			"self-hosted",
 			"sh-ubuntu-latest",
 			"ubuntu-24.04-n2d-standard-2",
 			"ubuntu-20.04-e2-standard-2",
@@ -56,6 +57,20 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name:    "valid",
 			mutator: nil,
+		},
+		{
+			name: "alias_key_not_in_supported_labels",
+			mutator: func(c *Config) {
+				c.RunnerLabelAliases = map[string]string{"invalid-alias": "sh-ubuntu-latest"}
+			},
+			expErr: "runner label alias \"invalid-alias\" is not present in SUPPORTED_RUNNER_LABELS",
+		},
+		{
+			name: "alias_target_not_in_supported_labels",
+			mutator: func(c *Config) {
+				c.RunnerLabelAliases = map[string]string{"self-hosted": "invalid-target"}
+			},
+			expErr: "runner label alias target \"invalid-target\" is not present in SUPPORTED_RUNNER_LABELS",
 		},
 		{
 			name:    "invalid_environment",
