@@ -294,8 +294,7 @@ jobs:
 
   confirm-test-go-version-ran:
     needs: ['deploy-runner-discovery-job-with-runner-2', 'test-go-version']
-    with:
-      runs-on: 'ubuntu-latest'
+    runs-on: 'ubuntu-latest'
     steps:
       # TODO: Confirm that the execution time for the test-go-version[github-action-dispatcher-integration-2]
       #       job was after needs.deploy-runner-discovery-job-with-runner-2.outputs.deploy_time
