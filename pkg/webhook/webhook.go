@@ -275,15 +275,11 @@ func (s *Server) resolveAndValidateRunnerLabel(ctx context.Context, incomingLabe
 
 	// Determine the lookup label for the worker pool after resolving aliases.
 	jobResolvedRunnerLabel := incomingLabel
-	for {
-		if next, ok := s.config.RunnerLabelAliases[jobResolvedRunnerLabel]; ok {
-			logger.InfoContext(ctx, "resolved runner label alias",
-				"original_label", jobResolvedRunnerLabel,
-				"resolved_label", next)
-			jobResolvedRunnerLabel = next
-		} else {
-			break
-		}
+	if next, ok := s.config.RunnerLabelAliases[jobResolvedRunnerLabel]; ok {
+		logger.InfoContext(ctx, "resolved runner label alias",
+			"original_label", jobResolvedRunnerLabel,
+			"resolved_label", next)
+		jobResolvedRunnerLabel = next
 	}
 
 	// Check if the jobResolvedRunnerLabel is in the combined allowlist.
@@ -403,7 +399,10 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 		return "", "", fmt.Errorf("failed to generate and compress JIT config: %w", err)
 	}
 
-	pool := s.selectWorkerPool(ctx, jobResolvedRunnerLabel)
+	pool, ok := s.selectWorkerPool(ctx, jobResolvedRunnerLabel, jobOriginalRunnerLabel)
+	if !ok {
+		return "", "", fmt.Errorf("no worker pool configured for label %q", jobOriginalRunnerLabel)
+	}
 
 	buildReq := s.buildCloudBuildRequest(ctx, compressedJIT, imageTag, pool)
 
@@ -434,9 +433,8 @@ func (s *Server) generateAndCompressJITConfig(ctx context.Context, event *github
 }
 
 // selectWorkerPool selects a worker pool for the job. It returns a specific
-// *registry.WorkerPoolInfo if a pool is found in the registry, otherwise it
-// returns nil.
-func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel string) *registry.WorkerPoolInfo {
+// *registry.WorkerPoolInfo and a boolean indicating if a pool was selected.
+func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel, jobOriginalRunnerLabel string) (*registry.WorkerPoolInfo, bool) {
 	logger := logging.FromContext(ctx)
 	pools := s.getWorkerPools(ctx, jobResolvedRunnerLabel)
 
@@ -450,16 +448,25 @@ func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel st
 			"worker_pool", selectedPool.Name,
 			"total_worker_pools_found", len(pools),
 		)
-		return &selectedPool
+		return &selectedPool, true
 	}
 
-	// Fallback to default.
-	logger.InfoContext(
+	if jobOriginalRunnerLabel == "self-hosted" {
+		logger.InfoContext(
+			ctx,
+			"no worker pools found in registry for label, using default server configuration",
+			"label", jobOriginalRunnerLabel,
+		)
+		return nil, true
+	}
+
+	logger.WarnContext(
 		ctx,
-		"no worker pools found in registry for label, using default server configuration",
-		"label", jobResolvedRunnerLabel,
+		"no worker pools found in registry for label and not 'self-hosted', no runner will be started",
+		"label", jobOriginalRunnerLabel,
 	)
-	return nil
+
+	return nil, false
 }
 
 // buildCloudBuildRequest creates a cloud build request.
