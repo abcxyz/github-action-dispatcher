@@ -18,21 +18,29 @@ on:
   workflow_call:
     inputs:
       docker_repo:
-        description: ''
+        type: 'string'
+        description: 'The docker repo to deploy from'
       docker_tag:
-        description: ''
+        type: 'string'
+        description: 'The tag to use when deploying images'
       image_name:
-        description: ''
+        type: 'string'
+        description: 'The name of the image to deploy'
       runner_docker_repo:
-        description: ''
+        type: 'string'
+        description: 'The github-action-runner docker repo'
       runner_image_tag:
-        description: ''
+        type: 'string'
+        description: 'The github-action-runner docker image tag'
       runner_image_name:
-        description: ''
+        type: 'string'
+        description: 'The github-action-runner docker image name'
       integration_wif_provider:
-        description: ''
+        type: 'string'
+        description: 'The wif to auth as'
       integration_wif_service_account:
-        description: ''
+        type: 'string'
+        description: 'The wif sa to auth as'
 
 concurrency:
   group: 'smoke-tests'
@@ -188,7 +196,7 @@ jobs:
             --no-allow-unauthenticated \
             --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=${WEBHOOK_SECRET_NAME}:${WEBHOOK_SECRET_VERSION}" \
             --env-vars-file=/tmp/env_vars \
-            --format='value(status.url)'          
+            --format='value(status.url)'
 
   # We expect test-go-version[github-action-dispatcher-integration-2] not to be
   # initially picked up until deploy-runner-discovery-job-with-runner-2 runs ~1-2 minutes later.
