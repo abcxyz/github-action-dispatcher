@@ -188,6 +188,9 @@ jobs:
     if: |-
       ${{ github.event_name == 'merge_group' }}
     uses: './.github/workflows/smoke-tests.yml'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
     with:
       docker_repo: '${{ needs.verify-latest-runner-image.outputs.docker_repo }}'
       docker_tag: '${{ needs.verify-latest-runner-image.outputs.docker_tag }}'
