@@ -110,9 +110,10 @@ variable "runner_discovery" {
     })
     location                  = string
     scheduler_cron            = string
+    scheduler_cron_job_paused = optional(bool, false)
+    scheduler_retry_limit     = number
     time_zone                 = string
     attempt_deadline          = string
-    scheduler_retry_limit     = number
     runner_discovery_job_name = string
     timeout_seconds           = number
   })
@@ -131,9 +132,10 @@ variable "runner_discovery" {
     }
     location                  = "us-central1"
     scheduler_cron            = "*/5 * * * *" // every 5m
+    scheduler_cron_job_paused = false
+    scheduler_retry_limit     = 0
     time_zone                 = "Etc/UTC"
     attempt_deadline          = ""
-    scheduler_retry_limit     = 0
     runner_discovery_job_name = "runner-discovery"
     timeout_seconds           = 3600
   }

@@ -105,6 +105,8 @@ resource "google_folder_iam_member" "runner_discovery_job_project_viewer" {
 resource "google_cloud_scheduler_job" "runner_discovery_scheduler" {
   project = var.project_id
 
+  paused = coalesce(var.runner_discovery.scheduler_cron_job_paused, false)
+
   name             = "${var.runner_discovery.runner_discovery_job_name}-scheduler"
   schedule         = var.runner_discovery.scheduler_cron
   time_zone        = var.runner_discovery.time_zone
@@ -136,10 +138,15 @@ resource "google_service_account" "runner_discovery_scheduler_sa" {
 }
 
 resource "google_cloud_run_v2_job_iam_member" "runner_discovery_job_invoker" {
+  for_each = toset([
+    "serviceAccount:${google_service_account.runner_discovery_scheduler_sa.email}",
+    vars.ci_service_account_member,
+  ])
+
   project = google_cloud_run_v2_job.runner_discovery_job.project
 
   location = google_cloud_run_v2_job.runner_discovery_job.location
   name     = google_cloud_run_v2_job.runner_discovery_job.name
   role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.runner_discovery_scheduler_sa.email}"
+  member   = each.key
 }
