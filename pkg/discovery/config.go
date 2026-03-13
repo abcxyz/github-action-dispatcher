@@ -26,13 +26,16 @@ import (
 )
 
 const (
-	jobRunsOnGCPProjectLabelKey        = "job-runs-on"
-	poolLocationGCPProjectLabelKey     = "pool-location"
-	githubOrgScopeGCPProjectLabelKey   = "gh-org-scope"
-	poolAvailabilityGCPProjectLabelKey = "pool-availability"
-	poolTypeGCPProjectLabelKey         = "pool-type"
-	poolAvailabilityAvailable          = "available"
-	poolAvailabilityUnavailable        = "unavailable"
+	jobRunsOnGCPProjectLabelKey           = "job-runs-on"
+	poolLocationGCPProjectLabelKey        = "pool-location"
+	githubOrgScopeGCPProjectLabelKey      = "gh-org-scope"
+	poolAvailabilityGCPProjectLabelKey    = "pool-availability"
+	poolTypeGCPProjectLabelKey            = "pool-type"
+	trustedRemoteConfigGCPProjectLabelKey = "trusted-remote-config"
+	poolAvailabilityAvailable             = "available"
+	poolAvailabilityUnavailable           = "unavailable"
+	poolTypeTrusted                       = "trusted"
+	poolTypePrivate                       = "private"
 )
 
 // Config defines the set of environment variables required
@@ -128,4 +131,10 @@ func (c *Config) GetIgnoredGCPProjectLabelsSet() map[string]struct{} {
 		set[strings.TrimSpace(label)] = struct{}{}
 	}
 	return set
+}
+
+func (c *Config) GetOptionalGCPProjectLabelsSet() map[string]struct{} {
+	return map[string]struct{}{
+		trustedRemoteConfigGCPProjectLabelKey: {},
+	}
 }

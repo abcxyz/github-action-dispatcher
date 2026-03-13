@@ -108,21 +108,84 @@ func TestConfig_Validate(t *testing.T) {
 }
 
 func TestNewConfig_Parsing(t *testing.T) {
-	ctx := context.Background()
-	t.Setenv("GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES", "default,my-org")
-	t.Setenv("GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES", "ubuntu-latest,windows-latest")
-	t.Setenv("GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES", "us-central1,us-west1")
-	t.Setenv("GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES", "available,unavailable")
-	t.Setenv("GCP_ALLOWED_PROJECT_LABEL_POOL_TYPE_VALUES", "trusted,private")
-	t.Setenv("GCP_FOLDER_ID", "12345")
-
-	cfg, err := NewConfig(ctx)
-	if err != nil {
-		t.Fatalf("failed to create config: %v", err)
+	cases := []struct {
+		name                          string
+		env                           map[string]string
+		expAllowedGithubOrgScopes     []string
+		expAllowedJobRunsOn           []string
+		expAllowedPoolLocations       []string
+		expAllowedPoolAvailabilities  []string
+		expAllowedPoolTypes           []string
+		expIgnoredGCPProjectLabels    []string
+		expIgnoredGCPProjectLabelsSet map[string]struct{}
+	}{
+		{
+			name: "valid_config",
+			env: map[string]string{
+				"GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES":      "default,my-org",
+				"GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES":       "ubuntu-latest,windows-latest",
+				"GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES":     "us-central1,us-west1",
+				"GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES": "available,unavailable",
+				"GCP_ALLOWED_PROJECT_LABEL_POOL_TYPE_VALUES":         "trusted,private",
+				"GCP_IGNORED_PROJECT_LABELS":                         "foo,bar",
+				"GCP_FOLDER_ID":                                      "12345",
+			},
+			expAllowedGithubOrgScopes:     []string{"default", "my-org"},
+			expAllowedJobRunsOn:           []string{"ubuntu-latest", "windows-latest"},
+			expAllowedPoolLocations:       []string{"us-central1", "us-west1"},
+			expAllowedPoolAvailabilities:  []string{"available", "unavailable"},
+			expAllowedPoolTypes:           []string{"trusted", "private"},
+			expIgnoredGCPProjectLabels:    []string{"foo", "bar"},
+			expIgnoredGCPProjectLabelsSet: map[string]struct{}{"foo": {}, "bar": {}},
+		},
 	}
 
-	expAllowedGithubOrgScopes := []string{"default", "my-org"}
-	if diff := cmp.Diff(expAllowedGithubOrgScopes, cfg.GetAllowedGithubOrgScopes()); diff != "" {
-		t.Errorf("AllowedGithubOrgScopes (-want,+got):\n%s", diff)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for k, v := range tc.env {
+				t.Setenv(k, v)
+			}
+
+			ctx := context.Background()
+			cfg, err := NewConfig(ctx)
+			if err != nil {
+				t.Fatalf("failed to create config: %v", err)
+			}
+
+			if diff := cmp.Diff(tc.expAllowedGithubOrgScopes, cfg.GetAllowedGithubOrgScopes()); diff != "" {
+				t.Errorf("AllowedGithubOrgScopes (-want,+got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.expAllowedJobRunsOn, cfg.GetAllowedJobRunsOn()); diff != "" {
+				t.Errorf("AllowedJobRunsOn (-want,+got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.expAllowedPoolLocations, cfg.GetAllowedPoolLocations()); diff != "" {
+				t.Errorf("AllowedPoolLocations (-want,+got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.expAllowedPoolAvailabilities, cfg.GetAllowedPoolAvailabilities()); diff != "" {
+				t.Errorf("AllowedPoolAvailabilities (-want,+got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.expAllowedPoolTypes, cfg.GetAllowedPoolTypes()); diff != "" {
+				t.Errorf("AllowedPoolTypes (-want,+got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.expIgnoredGCPProjectLabels, cfg.GetIgnoredGCPProjectLabels()); diff != "" {
+				t.Errorf("IgnoredGCPProjectLabels (-want,+got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.expIgnoredGCPProjectLabelsSet, cfg.GetIgnoredGCPProjectLabelsSet()); diff != "" {
+				t.Errorf("IgnoredGCPProjectLabelsSet (-want,+got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestConfig_GetOptionalGCPProjectLabelsSet(t *testing.T) {
+	t.Parallel()
+
+	cfg := &Config{}
+	expected := map[string]struct{}{
+		"trusted-remote-config": {},
+	}
+
+	if diff := cmp.Diff(expected, cfg.GetOptionalGCPProjectLabelsSet()); diff != "" {
+		t.Errorf("GetOptionalGCPProjectLabelsSet (-want,+got):\n%s", diff)
 	}
 }
