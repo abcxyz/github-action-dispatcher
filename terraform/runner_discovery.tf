@@ -140,7 +140,7 @@ resource "google_service_account" "runner_discovery_scheduler_sa" {
 resource "google_cloud_run_v2_job_iam_member" "runner_discovery_job_invoker" {
   for_each = toset([
     "serviceAccount:${google_service_account.runner_discovery_scheduler_sa.email}",
-    vars.ci_service_account_member,
+    var.ci_service_account_member,
   ])
 
   project = google_cloud_run_v2_job.runner_discovery_job.project
