@@ -277,6 +277,8 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 func (s *Server) resolveAndValidateRunnerLabel(ctx context.Context, incomingLabel string) (string, bool, error) {
 	logger := logging.FromContext(ctx)
 
+	logger.DebugContext(ctx, "RunnerLabelAliases map content", "aliases", s.config.RunnerLabelAliases)
+
 	// Determine the lookup label for the worker pool after resolving aliases.
 	jobResolvedRunnerLabel := incomingLabel
 	visited := make(map[string]bool)
