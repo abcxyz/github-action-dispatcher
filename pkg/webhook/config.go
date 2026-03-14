@@ -57,8 +57,8 @@ type Config struct {
 	RunnerWorkerPoolID             string            `env:"RUNNER_WORKER_POOL_ID"`
 	E2ETestRunID                   string            `env:"E2ETestRunID"`
 	RunnerRegistryDefaultKeyPrefix string            `env:"RUNNER_REGISTRY_DEFAULT_KEY_PREFIX,default=default"`
-	RunnerLabelAliases             map[string]string `env:"RUNNER_LABEL_ALIASES"`
-	SupportedRunnerLabels          []string          `env:"SUPPORTED_RUNNER_LABELS,required"`
+	RunnerLabelAliases             map[string]string `env:"RUNNER_LABEL_ALIASES,delimiter=,"`
+	SupportedRunnerLabels          []string          `env:"SUPPORTED_RUNNER_LABELS,required,delimiter=,"`
 }
 
 // Validate validates the webhook config after load.
