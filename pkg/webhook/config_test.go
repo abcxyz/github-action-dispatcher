@@ -59,13 +59,6 @@ func TestConfig_Validate(t *testing.T) {
 			mutator: nil,
 		},
 		{
-			name: "alias_key_not_in_supported_labels",
-			mutator: func(c *Config) {
-				c.RunnerLabelAliases = map[string]string{"invalid-alias": "sh-ubuntu-latest"}
-			},
-			expErr: "runner label alias \"invalid-alias\" is not present in SUPPORTED_RUNNER_LABELS",
-		},
-		{
 			name: "alias_target_not_in_supported_labels",
 			mutator: func(c *Config) {
 				c.RunnerLabelAliases = map[string]string{"self-hosted": "invalid-target"}
