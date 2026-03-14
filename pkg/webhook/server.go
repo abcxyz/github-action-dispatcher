@@ -135,8 +135,8 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, rc *redis
 	// Pre-compute the set of allowed labels for efficient lookup.
 	allowedLabels := make(map[string]bool)
 
-	// Add all aliases from the ResolvedRunnerLabelAliases map.
-	for alias, target := range cfg.ResolvedRunnerLabelAliases {
+	// Add all aliases from the RunnerLabelAliases map.
+	for alias, target := range cfg.RunnerLabelAliases {
 		allowedLabels[alias] = true
 		allowedLabels[target] = true
 	}
