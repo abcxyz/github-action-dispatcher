@@ -87,7 +87,7 @@ func TestHandleWebhook(t *testing.T) {
 
 		runnerExecutionTimeoutSeconds  int
 		runnerIdleTimeoutSeconds       int
-		runnerLabelAliases             map[string]string
+		runnerLabelAliases             []string
 		supportedRunnerLabels          []string
 		runnerRegistryDefaultKeyPrefix string
 		registryWorkerPools            map[string][]registry.WorkerPoolInfo
@@ -156,8 +156,8 @@ func TestHandleWebhook(t *testing.T) {
 
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
-			runnerLabelAliases: map[string]string{
-				"old-label": "new-label",
+			runnerLabelAliases: []string{
+				"old-label=new-label",
 			},
 			supportedRunnerLabels: []string{"new-label"},
 		},
@@ -459,6 +459,15 @@ func TestHandleWebhook(t *testing.T) {
 				RunnerRegistryDefaultKeyPrefix: tc.runnerRegistryDefaultKeyPrefix,
 				BackoffInitialDelay:            1 * time.Second,
 				MaxRetryAttempts:               3,
+			}
+
+			// Manually populate ResolvedRunnerLabelAliases for the test.
+			cfg.ResolvedRunnerLabelAliases = make(map[string]string)
+			for _, aliasPair := range cfg.RunnerLabelAliases {
+				parts := strings.Split(aliasPair, "=")
+				if len(parts) == 2 {
+					cfg.ResolvedRunnerLabelAliases[parts[0]] = parts[1]
+				}
 			}
 
 			// Configure WebhookClientOptions

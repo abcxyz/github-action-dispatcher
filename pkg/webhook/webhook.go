@@ -288,7 +288,7 @@ func (s *Server) resolveAndValidateRunnerLabel(ctx context.Context, incomingLabe
 		}
 		visited[jobResolvedRunnerLabel] = true
 
-		if next, ok := s.config.RunnerLabelAliases[jobResolvedRunnerLabel]; ok {
+		if next, ok := s.config.ResolvedRunnerLabelAliases[jobResolvedRunnerLabel]; ok {
 			logger.InfoContext(ctx, "resolved runner label alias",
 				"original_label", jobResolvedRunnerLabel,
 				"resolved_label", next)
