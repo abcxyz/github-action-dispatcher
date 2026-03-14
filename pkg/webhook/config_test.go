@@ -34,8 +34,8 @@ func generateValidConfig() *Config {
 		RunnerProjectID:               "test-project",
 		RunnerRepositoryID:            "test-repo",
 		RunnerServiceAccount:          "test-sa",
-		RunnerLabelAliases: map[string]string{
-			"self-hosted": "sh-ubuntu-latest",
+		RunnerLabelAliasesRaw: []string{
+			"self-hosted=sh-ubuntu-latest",
 		},
 		SupportedRunnerLabels: []string{
 			"self-hosted",
@@ -61,7 +61,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "alias_target_not_in_supported_labels",
 			mutator: func(c *Config) {
-				c.RunnerLabelAliases = map[string]string{"self-hosted": "invalid-target"}
+				c.RunnerLabelAliasesRaw = []string{"self-hosted=invalid-target"}
 			},
 			expErr: "runner label alias target \"invalid-target\" is not present in SUPPORTED_RUNNER_LABELS",
 		},
