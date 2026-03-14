@@ -15,7 +15,6 @@
 package webhook
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/abcxyz/pkg/testutil"
@@ -35,8 +34,8 @@ func generateValidConfig() *Config {
 		RunnerProjectID:               "test-project",
 		RunnerRepositoryID:            "test-repo",
 		RunnerServiceAccount:          "test-sa",
-		RunnerLabelAliases: []string{
-			"self-hosted=sh-ubuntu-latest",
+		RunnerLabelAliases: map[string]string{
+			"self-hosted": "sh-ubuntu-latest",
 		},
 		SupportedRunnerLabels: []string{
 			"self-hosted",
@@ -62,14 +61,14 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "alias_key_not_in_supported_labels",
 			mutator: func(c *Config) {
-				c.RunnerLabelAliases = []string{"invalid-alias=sh-ubuntu-latest"}
+				c.RunnerLabelAliases = map[string]string{"invalid-alias": "sh-ubuntu-latest"}
 			},
 			expErr: "runner label alias \"invalid-alias\" is not present in SUPPORTED_RUNNER_LABELS",
 		},
 		{
 			name: "alias_target_not_in_supported_labels",
 			mutator: func(c *Config) {
-				c.RunnerLabelAliases = []string{"self-hosted=invalid-target"}
+				c.RunnerLabelAliases = map[string]string{"self-hosted": "invalid-target"}
 			},
 			expErr: "runner label alias target \"invalid-target\" is not present in SUPPORTED_RUNNER_LABELS",
 		},
@@ -182,15 +181,6 @@ func TestConfig_Validate(t *testing.T) {
 			cfg := generateValidConfig()
 			if tc.mutator != nil {
 				tc.mutator(cfg)
-			}
-
-			// Manually populate ResolvedRunnerLabelAliases for test validation.
-			cfg.ResolvedRunnerLabelAliases = make(map[string]string)
-			for _, aliasPair := range cfg.RunnerLabelAliases {
-				parts := strings.Split(aliasPair, "=")
-				if len(parts) == 2 {
-					cfg.ResolvedRunnerLabelAliases[parts[0]] = parts[1]
-				}
 			}
 
 			err := cfg.Validate()

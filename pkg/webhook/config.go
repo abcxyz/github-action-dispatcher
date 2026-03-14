@@ -17,7 +17,6 @@ package webhook
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/sethvargo/go-envconfig"
@@ -37,30 +36,29 @@ const (
 // Config defines the set of environment variables required
 // for running the webhook service.
 type Config struct {
-	BackoffInitialDelay            time.Duration `env:"BACKOFF_INITIAL_DELAY,default=500ms"`
-	Environment                    string        `env:"ENVIRONMENT,default=production"`
-	GitHubAPIBaseURL               string        `env:"GITHUB_API_BASE_URL,default=https://api.github.com"`
-	GitHubAppID                    string        `env:"GITHUB_APP_ID,required"`
-	GitHubWebhookKeyMountPath      string        `env:"WEBHOOK_KEY_MOUNT_PATH,required"`
-	GitHubWebhookKeyName           string        `env:"WEBHOOK_KEY_NAME,required"`
-	KMSAppPrivateKeyID             string        `env:"KMS_APP_PRIVATE_KEY_ID,required"`
-	MaxRetryAttempts               int           `env:"MAX_RETRY_ATTEMPTS,default=3"`
-	Port                           string        `env:"PORT,default=8080"`
-	RunnerExecutionTimeoutSeconds  int           `env:"RUNNER_EXECUTION_TIMEOUT_SECONDS,default=3600"`
-	RunnerIdleTimeoutSeconds       int           `env:"RUNNER_IDLE_TIMEOUT_SECONDS,default=300"`
-	RunnerImageName                string        `env:"RUNNER_IMAGE_NAME,default=default-runner"`
-	RunnerImageTag                 string        `env:"RUNNER_IMAGE_TAG,default=latest"`
-	RunnerLocation                 string        `env:"RUNNER_LOCATION,required"`
-	RunnerProjectID                string        `env:"RUNNER_PROJECT_ID,required"`
-	RunnerRepositoryID             string        `env:"RUNNER_REPOSITORY_ID,required"`
-	RunnerServiceAccount           string        `env:"RUNNER_SERVICE_ACCOUNT,required"`
-	ExtraRunnerCount               int           `env:"EXTRA_RUNNER_COUNT,default=0"`
-	RunnerWorkerPoolID             string        `env:"RUNNER_WORKER_POOL_ID"`
-	E2ETestRunID                   string        `env:"E2ETestRunID"`
-	RunnerRegistryDefaultKeyPrefix string        `env:"RUNNER_REGISTRY_DEFAULT_KEY_PREFIX,default=default"`
-	RunnerLabelAliases             []string      `env:"RUNNER_LABEL_ALIASES,delimiter=,"`
-	ResolvedRunnerLabelAliases     map[string]string
-	SupportedRunnerLabels          []string `env:"SUPPORTED_RUNNER_LABELS,required,delimiter=,"`
+	BackoffInitialDelay            time.Duration     `env:"BACKOFF_INITIAL_DELAY,default=500ms"`
+	Environment                    string            `env:"ENVIRONMENT,default=production"`
+	GitHubAPIBaseURL               string            `env:"GITHUB_API_BASE_URL,default=https://api.github.com"`
+	GitHubAppID                    string            `env:"GITHUB_APP_ID,required"`
+	GitHubWebhookKeyMountPath      string            `env:"WEBHOOK_KEY_MOUNT_PATH,required"`
+	GitHubWebhookKeyName           string            `env:"WEBHOOK_KEY_NAME,required"`
+	KMSAppPrivateKeyID             string            `env:"KMS_APP_PRIVATE_KEY_ID,required"`
+	MaxRetryAttempts               int               `env:"MAX_RETRY_ATTEMPTS,default=3"`
+	Port                           string            `env:"PORT,default=8080"`
+	RunnerExecutionTimeoutSeconds  int               `env:"RUNNER_EXECUTION_TIMEOUT_SECONDS,default=3600"`
+	RunnerIdleTimeoutSeconds       int               `env:"RUNNER_IDLE_TIMEOUT_SECONDS,default=300"`
+	RunnerImageName                string            `env:"RUNNER_IMAGE_NAME,default=default-runner"`
+	RunnerImageTag                 string            `env:"RUNNER_IMAGE_TAG,default=latest"`
+	RunnerLocation                 string            `env:"RUNNER_LOCATION,required"`
+	RunnerProjectID                string            `env:"RUNNER_PROJECT_ID,required"`
+	RunnerRepositoryID             string            `env:"RUNNER_REPOSITORY_ID,required"`
+	RunnerServiceAccount           string            `env:"RUNNER_SERVICE_ACCOUNT,required"`
+	ExtraRunnerCount               int               `env:"EXTRA_RUNNER_COUNT,default=0"`
+	RunnerWorkerPoolID             string            `env:"RUNNER_WORKER_POOL_ID"`
+	E2ETestRunID                   string            `env:"E2ETestRunID"`
+	RunnerRegistryDefaultKeyPrefix string            `env:"RUNNER_REGISTRY_DEFAULT_KEY_PREFIX,default=default"`
+	RunnerLabelAliases             map[string]string `env:"RUNNER_LABEL_ALIASES,delimiter=,"`
+	SupportedRunnerLabels          []string          `env:"SUPPORTED_RUNNER_LABELS,required,delimiter=,"`
 }
 
 // Validate validates the webhook config after load.
@@ -125,7 +123,7 @@ func (cfg *Config) Validate() error {
 		supportedLabelsMap[label] = true
 	}
 
-	for alias, target := range cfg.ResolvedRunnerLabelAliases {
+	for alias, target := range cfg.RunnerLabelAliases {
 		if _, ok := supportedLabelsMap[alias]; !ok {
 			return fmt.Errorf("runner label alias %q is not present in SUPPORTED_RUNNER_LABELS", alias)
 		}
@@ -147,16 +145,6 @@ func newConfig(ctx context.Context, lu envconfig.Lookuper) (*Config, error) {
 	if err := cfgloader.Load(ctx, &cfg, cfgloader.WithLookuper(lu)); err != nil {
 		return nil, fmt.Errorf("failed to parse webhook config: %w", err)
 	}
-
-	cfg.ResolvedRunnerLabelAliases = make(map[string]string)
-	for _, aliasPair := range cfg.RunnerLabelAliases {
-		parts := strings.Split(aliasPair, "=")
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid alias format in RUNNER_LABEL_ALIASES: %q, expected 'alias=target'", aliasPair)
-		}
-		cfg.ResolvedRunnerLabelAliases[parts[0]] = parts[1]
-	}
-
 	return &cfg, nil
 }
 
@@ -305,7 +293,7 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Usage:   `The timeout for the entire build in seconds. Must be between 3600 (1 hour) and 86400 (24 hours).`,
 	})
 
-	f.StringSliceVar(&cli.StringSliceVar{
+	f.StringMapVar(&cli.StringMapVar{
 		Name:   "runner-label-aliases",
 		Target: &cfg.RunnerLabelAliases,
 		EnvVar: "RUNNER_LABEL_ALIASES",
