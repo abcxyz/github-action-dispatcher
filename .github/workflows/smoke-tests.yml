@@ -317,8 +317,12 @@ jobs:
     needs: ['sleep_4_min', 'deploy-runner-discovery-job-with-runner-2', 'test-go-version']
     runs-on: 'ubuntu-latest'
     permissions:
+      contents: 'read'
       actions: 'write'
     steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
       - name: 'Echo Success'
         env:
           JOB_NAME: 'test-unknown-label[${{ github.sha }}]'
