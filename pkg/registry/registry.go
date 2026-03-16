@@ -28,6 +28,7 @@ type WorkerPoolInfo struct {
 	ProjectNumber string `json:"project_number"`
 	Location      string `json:"location"`
 	RemoteConfig  string `json:"remote_config,omitempty"`
+	PoolType      string `json:"pool_type,omitempty"`
 }
 
 // NewRunnerRegistry creates and returns a new registry client.

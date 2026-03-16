@@ -119,6 +119,7 @@ func (rd *RunnerDiscovery) buildRegistry(ctx context.Context, projects []*asseti
 		githubOrgScope := projectLabels[githubOrgScopeGCPProjectLabelKey]
 		jobRunsOn := projectLabels[jobRunsOnGCPProjectLabelKey]
 		location := projectLabels[poolLocationGCPProjectLabelKey]
+		poolType := projectLabels[poolTypeGCPProjectLabelKey]
 
 		wps, err := rd.cbc.ListWorkerPools(ctx, project.ProjectID, location)
 		if err != nil {
@@ -173,6 +174,7 @@ func (rd *RunnerDiscovery) buildRegistry(ctx context.Context, projects []*asseti
 				ProjectID:     project.ProjectID,
 				ProjectNumber: poolProjectNumber,
 				Location:      poolLocation,
+				PoolType:      poolType,
 			}
 			if val, ok := project.Labels[trustedRemoteConfigGCPProjectLabelKey]; ok {
 				poolInfo.RemoteConfig = val
@@ -260,6 +262,36 @@ func (rd *RunnerDiscovery) updateRegistry(ctx context.Context, poolsByRegistryKe
 	return nil
 }
 
+// validateLabel validates a single label's value against a list of allowed patterns.
+// It supports wildcard matching in the allowed patterns.
+func (rd *RunnerDiscovery) validateLabel(ctx context.Context, projectID, key, value string, labelAllowedValues []string) bool {
+	logger := logging.FromContext(ctx)
+	matched := false
+	for _, v := range labelAllowedValues {
+		match, err := filepath.Match(v, value)
+		if err != nil {
+			logger.WarnContext(ctx, "invalid wildcard pattern",
+				"pattern", v,
+				"project_label_value", value,
+				"error", err)
+			continue
+		}
+		if match {
+			matched = true
+			break
+		}
+	}
+
+	if !matched {
+		logger.WarnContext(ctx, fmt.Sprintf("detected unexpected value for label %s, unknown value was %s", key, value),
+			"project_id", projectID,
+			"label", key,
+			"value", value)
+		return false
+	}
+	return true
+}
+
 // filterAndValidateProjectLabels validates that a project has all the required
 // labels and that the label values are in the allowlist. It also logs a
 // warning for any labels that are not in the allowlist. It returns a map of
@@ -292,37 +324,30 @@ func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, p
 			return nil, false
 		}
 
-		matched := false
-		for _, v := range values {
-			match, err := filepath.Match(v, projectLabelValue)
-			if err != nil {
-				logger.WarnContext(ctx, "invalid wildcard pattern",
-					"pattern", v,
-					"project_label_value", projectLabelValue,
-					"error", err)
-				continue
-			}
-			if match {
-				matched = true
-				break
-			}
-		}
-
-		if !matched {
-			logger.WarnContext(ctx, fmt.Sprintf("detected unexpected value for label %s, unknown value was %s", key, projectLabelValue),
-				"project_id", project.ProjectID,
-				"label", key,
-				"value", projectLabelValue)
+		if !rd.validateLabel(ctx, project.ProjectID, key, projectLabelValue, values) {
 			return nil, false
 		}
 		projectLabels[key] = projectLabelValue
 	}
 
 	if projectLabels[poolTypeGCPProjectLabelKey] == poolTypeTrusted {
-		if _, ok := project.Labels[trustedRemoteConfigGCPProjectLabelKey]; !ok {
+		projectLabelValue, ok := project.Labels[trustedRemoteConfigGCPProjectLabelKey]
+		if !ok {
 			logger.WarnContext(ctx, "project missing required label because pool-type is trusted",
 				"project_id", project.ProjectID,
 				"label", trustedRemoteConfigGCPProjectLabelKey)
+			return nil, false
+		}
+
+		allowedTrustedRemoteConfigs := rd.config.GetAllowedTrustedRemoteConfigs()
+		if len(allowedTrustedRemoteConfigs) == 0 {
+			logger.WarnContext(ctx, "dispatcher config missing allowed remote config patterns for trusted pools",
+				"project_id", project.ProjectID,
+				"label", trustedRemoteConfigGCPProjectLabelKey)
+			return nil, false
+		}
+
+		if !rd.validateLabel(ctx, project.ProjectID, trustedRemoteConfigGCPProjectLabelKey, projectLabelValue, allowedTrustedRemoteConfigs) {
 			return nil, false
 		}
 	}
