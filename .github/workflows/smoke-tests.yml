@@ -325,7 +325,7 @@ jobs:
 
       - name: 'Echo Success'
         env:
-          JOB_NAME: 'test-unknown-label[${{ github.sha }}]'
+          JOB_NAME: 'smoke-tests / test-unknown-label[${{ github.sha }}]'
           GH_TOKEN: '${{ github.token }}'
           RUN_ID: '${{ github.run_id }}'
         run: |
@@ -340,7 +340,7 @@ jobs:
           fi
 
           echo "Cancelling the workflow run..."
-          curl -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github.v3+json" "${REPO_URL}/actions/runs/${RUN_ID}/cancel"
+          gh run cancel "${RUN_ID}"
           echo "Workflow run cancellation initiated."
 
           if [[ "${FAIL}" == "true" ]]; then
