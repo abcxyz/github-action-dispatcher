@@ -322,19 +322,19 @@ jobs:
       - name: 'Echo Success'
         env:
           JOB_NAME: 'test-unknown-label[${{ github.sha }}]'
-          GH_TOKEN: ${{ env.GITHUB_TOKEN }}
+          GH_TOKEN: '${{ github.token }}'
         run: |
           RUN_ID=$(gh run view --json databaseId -q .databaseId)
-          JOB_STATUS=$(gh run view $RUN_ID --json jobs -q '.jobs[] | select(.name == "${JOB_NAME}") | .status')
+          JOB_STATUS=$(gh run view "${RUN_ID}" --json jobs -q '.jobs[] | select(.name == "${JOB_NAME}") | .status')
 
           if [[ "$JOB_STATUS" == "queued" ]]; then
             echo "Successfully verified that 'label-no-run-me' is queued."
             echo "Cancelling the workflow run..."
-            curl -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github.v3+json" "$REPO_URL/actions/runs/$RUN_ID/cancel"
+            curl -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github.v3+json" "${REPO_URL}/actions/runs/${RUN_ID}/cancel"
             echo "Workflow run cancellation initiated."
             exit 0
           else
-            echo "Error: 'label-no-run-me' is not in the expected 'queued' state. Current status: $JOB_STATUS"
+            echo "Error: 'label-no-run-me' is not in the expected 'queued' state. Current status: ${JOB_STATUS}"
             exit 1
           fi
 
