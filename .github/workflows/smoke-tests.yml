@@ -323,8 +323,8 @@ jobs:
         env:
           JOB_NAME: 'test-unknown-label[${{ github.sha }}]'
           GH_TOKEN: '${{ github.token }}'
+          RUN_ID: '${{ github.run_id }}'
         run: |
-          RUN_ID=$(gh run view --json databaseId -q .databaseId)
           JOB_STATUS=$(gh run view "${RUN_ID}" --json jobs -q '.jobs[] | select(.name == "${JOB_NAME}") | .status')
 
           if [[ "$JOB_STATUS" == "queued" ]]; then
