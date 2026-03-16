@@ -193,6 +193,7 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
+      actions: 'write'
     with:
       docker_repo: '${{ needs.verify-latest-runner-image.outputs.docker_repo }}'
       docker_tag: '${{ needs.verify-latest-runner-image.outputs.docker_tag }}'
@@ -210,10 +211,16 @@ jobs:
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Check Smoke Test Status'
+        # We expect the result of the smoke test to be cancelled - this is
+        # because we test that a job with an unknown label is not executed.
+        # Thus requiring us to cancel the workflow as part of the successful
+        # execution of the smoke tests.
         if: |-
-          ${{ needs.smoke-tests.result != 'success' }}
+          ${{ needs.smoke-tests.result != 'success' && needs.smoke-tests.result != 'cancelled' }}
+        env:
+          RESULT: '${{ needs.smoke-tests.result }}'
         run: |
-          echo "::error::Smoke Test failed or was skipped. Failing status check to block merge."
+          echo "::error::Smoke Test failed or was skipped. Failing status check to block merge. Status: ${RESULT}"
           exit 1
 
       - name: 'Confirm smoke tests passed'
