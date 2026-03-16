@@ -323,13 +323,12 @@ jobs:
       - name: 'Checkout'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
 
-      - name: 'Echo Success'
+      - name: 'Cancel and check status'
         env:
           JOB_NAME: 'smoke-tests / test-unknown-label[${{ github.sha }}]'
           GH_TOKEN: '${{ github.token }}'
           RUN_ID: '${{ github.run_id }}'
         run: |
-          gh run view "${RUN_ID}" --json jobs -q ".jobs[] | select(.name == \"${JOB_NAME}\")"
           JOB_STATUS=$(gh run view "${RUN_ID}" --json jobs -q ".jobs[] | select(.name == \"${JOB_NAME}\") | .status")
 
           if [[ "$JOB_STATUS" == "queued" ]]; then
