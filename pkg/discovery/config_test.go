@@ -25,12 +25,13 @@ import (
 
 func generateValidConfig() *Config {
 	return &Config{
-		AllowedGithubOrgScopes:    "default",
-		AllowedJobRunsOn:          "ubuntu-latest",
-		AllowedPoolLocations:      "us-central1",
-		AllowedPoolAvailabilities: "available,unavailable",
-		AllowedPoolTypes:          "trusted,private",
-		GCPFolderID:               "1234567890",
+		AllowedGithubOrgScopes:      "default",
+		AllowedJobRunsOn:            "ubuntu-latest",
+		AllowedPoolLocations:        "us-central1",
+		AllowedPoolAvailabilities:   "available,unavailable",
+		AllowedPoolTypes:            "trusted,private",
+		AllowedTrustedRemoteConfigs: []string{"some/repo/*"},
+		GCPFolderID:                 "1234567890",
 	}
 }
 
@@ -109,34 +110,37 @@ func TestConfig_Validate(t *testing.T) {
 
 func TestNewConfig_Parsing(t *testing.T) {
 	cases := []struct {
-		name                          string
-		env                           map[string]string
-		expAllowedGithubOrgScopes     []string
-		expAllowedJobRunsOn           []string
-		expAllowedPoolLocations       []string
-		expAllowedPoolAvailabilities  []string
-		expAllowedPoolTypes           []string
-		expIgnoredGCPProjectLabels    []string
-		expIgnoredGCPProjectLabelsSet map[string]struct{}
+		name                           string
+		env                            map[string]string
+		expAllowedGithubOrgScopes      []string
+		expAllowedJobRunsOn            []string
+		expAllowedPoolLocations        []string
+		expAllowedPoolAvailabilities   []string
+		expAllowedPoolTypes            []string
+		expIgnoredGCPProjectLabels     []string
+		expIgnoredGCPProjectLabelsSet  map[string]struct{}
+		expAllowedTrustedRemoteConfigs []string
 	}{
 		{
 			name: "valid_config",
 			env: map[string]string{
-				"GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES":      "default,my-org",
-				"GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES":       "ubuntu-latest,windows-latest",
-				"GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES":     "us-central1,us-west1",
-				"GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES": "available,unavailable",
-				"GCP_ALLOWED_PROJECT_LABEL_POOL_TYPE_VALUES":         "trusted,private",
-				"GCP_IGNORED_PROJECT_LABELS":                         "foo,bar",
-				"GCP_FOLDER_ID":                                      "12345",
+				"GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES":          "default,my-org",
+				"GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES":           "ubuntu-latest,windows-latest",
+				"GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES":         "us-central1,us-west1",
+				"GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES":     "available,unavailable",
+				"GCP_ALLOWED_PROJECT_LABEL_POOL_TYPE_VALUES":             "trusted,private",
+				"GCP_ALLOWED_PROJECT_LABEL_TRUSTED_REMOTE_CONFIG_VALUES": "some/repo/*",
+				"GCP_IGNORED_PROJECT_LABELS":                             "foo,bar",
+				"GCP_FOLDER_ID":                                          "12345",
 			},
-			expAllowedGithubOrgScopes:     []string{"default", "my-org"},
-			expAllowedJobRunsOn:           []string{"ubuntu-latest", "windows-latest"},
-			expAllowedPoolLocations:       []string{"us-central1", "us-west1"},
-			expAllowedPoolAvailabilities:  []string{"available", "unavailable"},
-			expAllowedPoolTypes:           []string{"trusted", "private"},
-			expIgnoredGCPProjectLabels:    []string{"foo", "bar"},
-			expIgnoredGCPProjectLabelsSet: map[string]struct{}{"foo": {}, "bar": {}},
+			expAllowedGithubOrgScopes:      []string{"default", "my-org"},
+			expAllowedJobRunsOn:            []string{"ubuntu-latest", "windows-latest"},
+			expAllowedPoolLocations:        []string{"us-central1", "us-west1"},
+			expAllowedPoolAvailabilities:   []string{"available", "unavailable"},
+			expAllowedPoolTypes:            []string{"trusted", "private"},
+			expIgnoredGCPProjectLabels:     []string{"foo", "bar"},
+			expIgnoredGCPProjectLabelsSet:  map[string]struct{}{"foo": {}, "bar": {}},
+			expAllowedTrustedRemoteConfigs: []string{"some/repo/*"},
 		},
 	}
 
@@ -166,6 +170,9 @@ func TestNewConfig_Parsing(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expAllowedPoolTypes, cfg.GetAllowedPoolTypes()); diff != "" {
 				t.Errorf("AllowedPoolTypes (-want,+got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.expAllowedTrustedRemoteConfigs, cfg.GetAllowedTrustedRemoteConfigs()); diff != "" {
+				t.Errorf("AllowedTrustedRemoteConfigs (-want,+got):\n%s", diff)
 			}
 			if diff := cmp.Diff(tc.expIgnoredGCPProjectLabels, cfg.GetIgnoredGCPProjectLabels()); diff != "" {
 				t.Errorf("IgnoredGCPProjectLabels (-want,+got):\n%s", diff)

@@ -47,6 +47,7 @@ type Config struct {
 	AllowedPoolLocations           string        `env:"GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES"`
 	AllowedPoolAvailabilities      string        `env:"GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES"`
 	AllowedPoolTypes               string        `env:"GCP_ALLOWED_PROJECT_LABEL_POOL_TYPE_VALUES"`
+	AllowedTrustedRemoteConfigs    []string      `env:"GCP_ALLOWED_PROJECT_LABEL_TRUSTED_REMOTE_CONFIG_VALUES"`
 	IgnoredGCPProjectLabels        string        `env:"GCP_IGNORED_PROJECT_LABELS"`
 	MaxRetryAttempts               int           `env:"MAX_RETRY_ATTEMPTS,default=3"`
 	BackoffInitialDelay            time.Duration `env:"BACKOFF_INITIAL_DELAY,default=500ms"`
@@ -112,6 +113,10 @@ func (c *Config) GetAllowedPoolAvailabilities() []string {
 
 func (c *Config) GetAllowedPoolTypes() []string {
 	return strings.Split(c.AllowedPoolTypes, ",")
+}
+
+func (c *Config) GetAllowedTrustedRemoteConfigs() []string {
+	return c.AllowedTrustedRemoteConfigs
 }
 
 func (c *Config) GetIgnoredGCPProjectLabels() []string {
