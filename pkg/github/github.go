@@ -102,6 +102,8 @@ func (g *githubClient) CancelWorkflow(ctx context.Context, installationID int64,
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 			return fmt.Errorf("server responded with non-retryable client error: %d", resp.StatusCode)
 		}
+	}); err != nil {
+		return nil, fmt.Errorf("failed to generate jitconfig after retries: %w", err)
 	}
 }
 
