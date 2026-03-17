@@ -24,10 +24,17 @@ var _ Client = (*MockClient)(nil)
 
 // MockClient is a mock of the GitHub client.
 type MockClient struct {
+	CancelWorkflowF            func(ctx context.Context, installationID int64, org, repo, runnerName, runnerLabel string) (*github.JITRunnerConfig, error)
+	CancelWorkflowCalls        int
 	GenerateRepoJITConfigF     func(ctx context.Context, installationID int64, org, repo, runnerName, runnerLabel string) (*github.JITRunnerConfig, error)
 	GenerateRepoJITConfigCalls int
 	GenerateOrgJITConfigF      func(ctx context.Context, installationID int64, org, runnerName, runnerLabel string) (*github.JITRunnerConfig, error)
 	GenerateOrgJITConfigCalls  int
+}
+
+func (g *githubClient) CancelWorkflow(ctx context.Context, installationID int64, org, repo, workflowRunID string) error {
+	m.GenerateRepoJITConfigCalls++
+	return m.CancelWorkflowF(ctx, installationID, org, repo, workflowRunID)
 }
 
 // GenerateRepoJITConfig is a mock of the GenerateRepoJITConfig method.
