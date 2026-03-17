@@ -239,7 +239,19 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		return &apiResponse{http.StatusInternalServerError, err.Error(), err}
 	}
 
-	if !canHandle {
+	// This assumes that the dispatcher is responsible for enqueuing all
+	// jobs on the GH host. If another service will subscribe to the
+	// webhook and handle jobs then this should not be enabled.
+	if !canHandle && s.config.Enable404OnMissingLabels {
+		if err = s.ghc.CancelWorkflow(ctx, *event.Installation.ID, *event.Org.Login, *event.Repo.Name, *event.WorkflowJob.RunID); err != nil {
+			logger.ErrorContext(ctx, "cannot cancel workflow due to error", "error", err)
+			return &apiResponse{http.StatusInternalServerError, err.Error(), err}
+		}
+		logger.WarnContext(ctx, "job cancelled for label with no associated runners",
+		"original_label", jobOriginalRunnerLabel,
+		"resolved_label", jobResolvedRunnerLabel)
+		return &apiResponse{http.StatusOK, fmt.Sprintf("job cancelled for label with no associated runners: %s", incomingLabel), nil}	
+	} else if !canHandle {
 		logger.WarnContext(ctx, "no action taken for label",
 			"original_label", jobOriginalRunnerLabel,
 			"resolved_label", jobResolvedRunnerLabel)

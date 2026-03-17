@@ -61,6 +61,7 @@ type Config struct {
 	RunnerLabelAliasesRaw          []string      `env:"RUNNER_LABEL_ALIASES"`
 	RunnerLabelAliases             map[string]string
 	SupportedRunnerLabels          []string `env:"SUPPORTED_RUNNER_LABELS,required,delimiter=,"`
+	Enable404OnMissingLabels       bool        `env:"DISPATCHER_ENABLE_404,default=false"`
 }
 
 // Validate validates the webhook config after load.
@@ -313,6 +314,13 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Target: &cfg.SupportedRunnerLabels,
 		EnvVar: "SUPPORTED_RUNNER_LABELS",
 		Usage:  `List of labels that are supported by the dispatcher.`,
+	})
+
+	f.BoolVar(&cli.BoolVar{
+		Name:   "enable-404-on-missing-labels",
+		Target: &cfg.Enable404OnMissingLabels,
+		EnvVar: "DISPATCHER_ENABLE_404",
+		Usage:  `Whether or not to enable 404 - or cancellation of jobs requesting a label that has no matching runners.`,
 	})
 
 	rf := set.NewSection("RETRY OPTIONS")

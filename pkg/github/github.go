@@ -31,6 +31,7 @@ import (
 
 // Client is an interface for mocking the GitHub client.
 type Client interface {
+	CancelWorkflow(ctx context.Context, installationID int64, org, repo string, workflowRunID int64) error
 	GenerateRepoJITConfig(ctx context.Context, installationID int64, org, repo, runnerName, runnerLabel string) (*github.JITRunnerConfig, error)
 	GenerateOrgJITConfig(ctx context.Context, installationID int64, org, runnerName, runnerLabel string) (*github.JITRunnerConfig, error)
 }
@@ -51,6 +52,65 @@ func NewClient(appClient *githubauth.App, ghAPIBaseURL string, backoffInitialDel
 		backoffInitialDelay: backoffInitialDelay,
 		maxRetryAttempts:    maxRetryAttempts,
 	}
+}
+
+// CancelJob cancels a github workflow.
+func (g *githubClient) CancelWorkflow(ctx context.Context, installationID int64, org, repo string, workflowRunID int64) error {
+	logger := logging.FromContext(ctx)
+
+	installation, err := g.appClient.InstallationForID(ctx, fmt.Sprintf("%d", installationID))
+	if err != nil {
+		return fmt.Errorf("failed to setup installation client: %w", err)
+	}
+
+	oauthTransport := &oauth2.Transport{
+		Base: http.DefaultTransport,
+		Source: oauth2.ReuseTokenSource(nil, (*installation).AllReposOAuth2TokenSource(ctx, map[string]string{
+			"administration": "write",
+		})),
+	}
+
+	httpClient := &http.Client{
+		Transport: oauthTransport,
+	}
+
+	gh := github.NewClient(httpClient)
+	backoff := g.newBackoff()
+
+	if err := goretry.Do(ctx, backoff, func(ctx context.Context) error {
+		var resp *github.Response
+		var err error
+		resp, err = gh.Actions.CancelWorkflowRunByID(ctx, org, repo, workflowRunID)
+
+		if err != nil {
+			logger.WarnContext(ctx, "retrying due to GitHub API call failure", "error", err)
+			// Network errors or other client errors from go-github itself are retryable.
+			return goretry.RetryableError(fmt.Errorf("GitHub API call failed: %w", err))
+		}
+
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			// Success, stop retrying.
+			return nil
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			logger.WarnContext(ctx, "retrying due to server error", "status_code", resp.StatusCode)
+			// Retry on 429 and 5xx errors.
+			return goretry.RetryableError(fmt.Errorf("server responded with %d status code", resp.StatusCode))
+		}
+
+		// Other 4xx errors are not retryable. Propagate immediately.
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+			return fmt.Errorf("server responded with non-retryable client error: %d", resp.StatusCode)
+		}
+
+		// Fallback for unexpected status codes, treat as non-retryable.
+		return fmt.Errorf("server responded with unexpected status code: %d", resp.StatusCode)
+	}); err != nil {
+		return fmt.Errorf("failed to cancel worfklow after retries: %w", err)
+	}
+
+	return nil
 }
 
 // GenerateRepoJITConfig creates a JIT config for a repository-level runner.
