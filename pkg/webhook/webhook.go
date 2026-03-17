@@ -192,6 +192,8 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 	var startedRunnerNames []string
 	var gcbBuildIDs []string
 
+	pool := s.selectWorkerPool(ctx, jobResolvedRunnerLabel)
+
 	for i := 1; i <= 1+s.extraRunnerCount; i++ {
 		runnerID := uuid.New().String()
 
@@ -201,8 +203,7 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 		}
 
 		runnerCtx := logging.WithLogger(ctx, runnerLogger)
-
-		buildID, projectID, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, s.runnerImageTag, jobOriginalRunnerLabel, jobResolvedRunnerLabel)
+		buildID, projectID, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, s.runnerImageName, s.runnerImageTag, jobOriginalRunnerLabel, pool)
 		if err != nil {
 			// If one fails, return the error and the list of any that succeeded before it.
 			return startedRunnerNames, gcbBuildIDs, fmt.Errorf("failed on runner %s: %w", runnerID, err)
@@ -218,6 +219,29 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 	}
 
 	return startedRunnerNames, gcbBuildIDs, nil
+}
+
+// start404RunnerForJob starts a runner for the 404 runner.
+func (s *Server) start404RunnerForJob(ctx context.Context, event *github.WorkflowJobEvent, jobOriginalRunnerLabel string) ([]string, []string, error) {
+	logger := logging.FromContext(ctx)
+
+	runnerID := uuid.New().String()
+	runnerLogger := logger.With("runner_id", runnerID)
+	runnerCtx := logging.WithLogger(ctx, runnerLogger)
+
+	// Use the default fallback pool.
+	var noPool *registry.WorkerPoolInfo
+	buildID, projectID, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, s.config.Runner404ImageName, s.config.Runner404ImageTag, jobOriginalRunnerLabel, noPool)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed on runner %s: %w", runnerID, err)
+	}
+
+	runnerLogger.InfoContext(ctx, runnerStartedMsg,
+		slog.Any(githubWebhookEventKey, event),
+		slog.String(gcbBuildIDKey, buildID),
+		slog.String(gcbProjectIDKey, projectID))
+
+	return []string{runnerID}, []string{buildID}, nil
 }
 
 func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJobEvent, jobID string) *apiResponse {
@@ -239,7 +263,7 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		return &apiResponse{http.StatusInternalServerError, err.Error(), err}
 	}
 
-	if !canHandle {
+	if !canHandle && !s.config.Runner404Enabled {
 		logger.WarnContext(ctx, "no action taken for label",
 			"original_label", jobOriginalRunnerLabel,
 			"resolved_label", jobResolvedRunnerLabel)
@@ -252,9 +276,20 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		return &apiResponse{http.StatusBadRequest, "unexpected event payload struture", err}
 	}
 
-	runnerNames, gcbBuildIDs, err := s.startRunnersForJob(ctx, event, jobOriginalRunnerLabel, jobResolvedRunnerLabel)
-	if err != nil {
-		return &apiResponse{http.StatusInternalServerError, err.Error(), err}
+	var runnerNames, gcbBuildIDs []string
+	if !canHandle && s.config.Runner404Enabled {
+		// This assumes that the dispatcher is responsible for enqueuing all
+		// jobs on the GH host. If another service will subscribe to the
+		// webhook and handle jobs then this should not be enabled.
+		runnerNames, gcbBuildIDs, err = s.start404RunnerForJob(ctx, event, jobOriginalRunnerLabel)
+		if err != nil {
+			return &apiResponse{http.StatusInternalServerError, err.Error(), err}
+		}
+	} else {
+		runnerNames, gcbBuildIDs, err = s.startRunnersForJob(ctx, event, jobOriginalRunnerLabel, jobResolvedRunnerLabel)
+		if err != nil {
+			return &apiResponse{http.StatusInternalServerError, err.Error(), err}
+		}
 	}
 
 	responsePayload := &runnersResponse{
@@ -408,18 +443,16 @@ func compressAndBase64EncodeString(input string) (string, error) {
 
 // startGitHubRunner generates a JIT config and creates a Cloud Build job to start a GitHub runner.
 //
-// It takes the GitHub WorkflowJobEvent, a unique runner ID, logger, image tag, and runner labels.
+// It takes the GitHub WorkflowJobEvent, a unique runner ID, logger, image tag, runner label, and pool.
 // It returns the build ID and project ID on success, or an error if the JIT config generation or Cloud Build
 // job creation fails.
-func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageTag, jobOriginalRunnerLabel, jobResolvedRunnerLabel string) (string, string, error) {
+func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageName, imageTag, jobOriginalRunnerLabel string, pool *registry.WorkerPoolInfo) (string, string, error) {
 	compressedJIT, err := s.generateAndCompressJITConfig(ctx, event, runnerID, jobOriginalRunnerLabel)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to generate and compress JIT config: %w", err)
 	}
 
-	pool := s.selectWorkerPool(ctx, jobResolvedRunnerLabel)
-
-	buildReq := s.buildCloudBuildRequest(ctx, compressedJIT, imageTag, pool)
+	buildReq := s.buildCloudBuildRequest(ctx, compressedJIT, imageName, imageTag, pool)
 
 	buildID, err := s.cbc.CreateBuild(ctx, buildReq)
 	if err != nil {
@@ -477,7 +510,7 @@ func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel st
 }
 
 // buildCloudBuildRequest creates a cloud build request.
-func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imageTag string, pool *registry.WorkerPoolInfo) *cloudbuildpb.CreateBuildRequest {
+func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imageName, imageTag string, pool *registry.WorkerPoolInfo) *cloudbuildpb.CreateBuildRequest {
 	logger := logging.FromContext(ctx)
 	build := &cloudbuildpb.Build{
 		Timeout: durationpb.New(time.Duration(s.runnerExecutionTimeoutSeconds) * time.Second),
@@ -499,7 +532,7 @@ func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imag
 			"_ENCODED_JIT_CONFIG":            compressedJIT,
 			"_IDLE_TIMEOUT_SECONDS":          strconv.Itoa(s.runnerIdleTimeoutSeconds),
 			"_REPOSITORY_ID":                 s.runnerRepositoryID,
-			"_IMAGE_NAME":                    s.runnerImageName,
+			"_IMAGE_NAME":                    imageName,
 			"_IMAGE_TAG":                     imageTag,
 			"_CREATE_BUILD_REQUEST_TIME_UTC": time.Now().UTC().Format(time.RFC3339),
 		},

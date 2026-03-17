@@ -185,6 +185,9 @@ jobs:
           SUPPORTED_RUNNER_LABELS: '${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }},${{ env.INTEGRATION_RUNNER_LABEL_GAD_2 }},${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}'
           WEBHOOK_KEY_MOUNT_PATH: '${WEBHOOK_SECRET_MOUNT_PATH}'
           WEBHOOK_KEY_NAME: '${WEBHOOK_SECRET_NAME}'
+          RUNNER_404_ENABLED: 'true'
+          RUNNER_404_IMAGE_TAG: 'latest'
+          RUNNER_404_IMAGE_NAME: 'runner-404'
           EOF
 
           gcloud run deploy "${{ env.INTEGRATION_SERVICE_NAME }}" \
