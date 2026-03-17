@@ -31,6 +31,7 @@ import (
 
 // Client is an interface for mocking the GitHub client.
 type Client interface {
+	CancelWorkflow(ctx context.Context, installationID int64, org, repo string, workflowRunID int64) error
 	GenerateRepoJITConfig(ctx context.Context, installationID int64, org, repo, runnerName, runnerLabel string) (*github.JITRunnerConfig, error)
 	GenerateOrgJITConfig(ctx context.Context, installationID int64, org, runnerName, runnerLabel string) (*github.JITRunnerConfig, error)
 }
@@ -54,12 +55,12 @@ func NewClient(appClient *githubauth.App, ghAPIBaseURL string, backoffInitialDel
 }
 
 // CancelJob cancels a github workflow.
-func (g *githubClient) CancelWorkflow(ctx context.Context, installationID int64, org, repo, workflowRunID string) error {
+func (g *githubClient) CancelWorkflow(ctx context.Context, installationID int64, org, repo string, workflowRunID int64) error {
 	logger := logging.FromContext(ctx)
 
 	installation, err := g.appClient.InstallationForID(ctx, fmt.Sprintf("%d", installationID))
 	if err != nil {
-		return nil, fmt.Errorf("failed to setup installation client: %w", err)
+		return fmt.Errorf("failed to setup installation client: %w", err)
 	}
 
 	oauthTransport := &oauth2.Transport{
@@ -102,9 +103,14 @@ func (g *githubClient) CancelWorkflow(ctx context.Context, installationID int64,
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 			return fmt.Errorf("server responded with non-retryable client error: %d", resp.StatusCode)
 		}
+
+		// Fallback for unexpected status codes, treat as non-retryable.
+		return fmt.Errorf("server responded with unexpected status code: %d", resp.StatusCode)
 	}); err != nil {
-		return nil, fmt.Errorf("failed to generate jitconfig after retries: %w", err)
+		return fmt.Errorf("failed to cancel worfklow after retries: %w", err)
 	}
+
+	return nil
 }
 
 // GenerateRepoJITConfig creates a JIT config for a repository-level runner.
