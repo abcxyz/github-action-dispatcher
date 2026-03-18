@@ -233,6 +233,8 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 	incomingLabel := event.WorkflowJob.Labels[0]
 	jobOriginalRunnerLabel := incomingLabel // used in jit config request
 
+	logger.InfoContext(ctx, "received user requested label", "label", incomingLabel)
+
 	jobResolvedRunnerLabel, canHandle, err := s.resolveAndValidateRunnerLabel(ctx, incomingLabel)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to resolve and validate runner label", "error", err)
