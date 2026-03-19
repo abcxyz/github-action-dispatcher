@@ -57,6 +57,9 @@ type Config struct {
 	ExtraRunnerCount               int           `env:"EXTRA_RUNNER_COUNT,default=0"`
 	RunnerWorkerPoolID             string        `env:"RUNNER_WORKER_POOL_ID"`
 	E2ETestRunID                   string        `env:"E2ETestRunID"`
+	Runner404ImageName             string        `env:"RUNNER_404_IMAGE_NAME,default=runner-404"`
+	Runner404ImageTag              string        `env:"RUNNER_404_IMAGE_TAG,default=latest"`
+	Runner404Enabled               bool          `env:"RUNNER_404_ENABLED,default=false"`
 	RunnerRegistryDefaultKeyPrefix string        `env:"RUNNER_REGISTRY_DEFAULT_KEY_PREFIX,default=default"`
 	RunnerLabelAliasesRaw          []string      `env:"RUNNER_LABEL_ALIASES"`
 	RunnerLabelAliases             map[string]string
@@ -313,6 +316,28 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Target: &cfg.SupportedRunnerLabels,
 		EnvVar: "SUPPORTED_RUNNER_LABELS",
 		Usage:  `List of labels that are supported by the dispatcher.`,
+	})
+
+	f.StringVar(&cli.StringVar{
+		Name:    "runner-404-image-name",
+		Target:  &cfg.Runner404ImageName,
+		EnvVar:  "RUNNER_404_IMAGE_NAME",
+		Default: "runner-404",
+		Usage:   `The runner 404 image name.`,
+	})
+
+	f.StringVar(&cli.StringVar{
+		Name:   "runner-404-image-tag",
+		Target: &cfg.Runner404ImageTag,
+		EnvVar: "RUNNER_404_IMAGE_TAG",
+		Usage:  `The runner 404 image tag to pull`,
+	})
+
+	f.BoolVar(&cli.BoolVar{
+		Name:   "runner-404-enabled",
+		Target: &cfg.Runner404Enabled,
+		EnvVar: "RUNNER_404_ENABLED",
+		Usage:  `Whether or not to enable 404 - or cancellation of jobs requesting a label that has no matching runners.`,
 	})
 
 	rf := set.NewSection("RETRY OPTIONS")
