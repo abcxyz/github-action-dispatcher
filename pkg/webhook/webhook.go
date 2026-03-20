@@ -35,6 +35,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/durationpb"
 
+	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
 	"github.com/abcxyz/github-action-dispatcher/pkg/registry"
 	"github.com/abcxyz/pkg/logging"
 )
@@ -423,7 +424,9 @@ func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJo
 
 	buildReq := s.buildCloudBuildRequest(ctx, compressedJIT, imageTag, pool)
 
-	buildID, err := s.cbc.CreateBuild(ctx, buildReq)
+	builder := cloudbuild.NewBuilder(pool, s.cbc, s.gcbHTTPClient)
+
+	buildID, err := builder.CreateBuild(ctx, buildReq)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create build: %w", err)
 	}

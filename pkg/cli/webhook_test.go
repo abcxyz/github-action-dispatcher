@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2000
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,11 +22,12 @@ import (
 	"time"
 
 	"github.com/sethvargo/go-envconfig"
+	"github.com/sethvargo/go-gcpkms/pkg/gcpkms"
 
-	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
 	"github.com/abcxyz/github-action-dispatcher/pkg/webhook"
 	"github.com/abcxyz/pkg/cli"
 	"github.com/abcxyz/pkg/logging"
+	"github.com/abcxyz/pkg/serving"
 	"github.com/abcxyz/pkg/testutil"
 )
 
@@ -40,7 +41,7 @@ func TestWebhookServerCommand(t *testing.T) {
 		args     []string
 		env      map[string]string
 		expErr   string
-		fileMock *webhook.MockFileReader
+		fileMock *ReadFileResErr
 	}{
 		{
 			name:   "too_many_args",
@@ -144,10 +145,8 @@ func TestWebhookServerCommand(t *testing.T) {
 				"RUNNER_WORKER_POOL_ID":              "projects/my-project-number/locations/us-central1/workerPools/my-pool",
 				"SUPPORTED_RUNNER_LABELS":            "sh-ubuntu-latest",
 				"RUNNER_REGISTRY_DEFAULT_KEY_PREFIX": "default",
-			}, fileMock: &webhook.MockFileReader{
-				ReadFileMock: &webhook.ReadFileResErr{
-					Res: []byte("secret-value"),
-				},
+			}, fileMock: &ReadFileResErr{
+				Res: []byte("secret-value"),
 			},
 		},
 		{
@@ -168,15 +167,14 @@ func TestWebhookServerCommand(t *testing.T) {
 				"RUNNER_WORKER_POOL_ID":              "projects/my-project-number/locations/us-central1/workerPools/my-pool",
 				"SUPPORTED_RUNNER_LABELS":            "self-hosted,sh-ubuntu-latest",
 				"RUNNER_REGISTRY_DEFAULT_KEY_PREFIX": "default",
-			}, fileMock: &webhook.MockFileReader{
-				ReadFileMock: &webhook.ReadFileResErr{
-					Res: []byte("secret-value"),
-				},
+			}, fileMock: &ReadFileResErr{
+				Res: []byte("secret-value"),
 			},
 		},
 	}
 
 	for _, tc := range cases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -192,21 +190,35 @@ func TestWebhookServerCommand(t *testing.T) {
 				}),
 			).Lookup)}
 
-			// Provide mock implementation of dependencies
-			cmd.testOSFileReaderOverride = tc.fileMock
-			cmd.testCloudBuildClientOverride = &cloudbuild.MockClient{}
-			cmd.testKMSClientOverride = &webhook.MockKMSClient{}
-
 			_, _, _ = cmd.Pipe()
 
-			srv, mux, err := cmd.RunUnstarted(ctx, tc.args)
-			if diff := testutil.DiffErrString(err, tc.expErr); diff != "" {
+			// Check if a fileMock is provided for happy path. If so, create and assign webhookClientOptions.
+			if tc.fileMock != nil {
+				cmd.testWebhookClientOptions = &webhook.WebhookClientOptions{
+					OSFileReaderOverride: tc.fileMock,
+					KeyManagementClientOverride: &MockKMSClient{},
+				}
+			}
+
+			var srv *serving.Server
+			var mux http.Handler
+			var runErr error
+
+			// Call RunUnstarted to get the actual error based on the command's internal logic
+			// In happy path cases, this will return the configured server and mux.
+			// In error cases, it will return the error.
+			srv, mux, runErr = cmd.RunUnstarted(ctx, tc.args)
+
+			if diff := testutil.DiffErrString(runErr, tc.expErr); diff != "" {
 				t.Fatal(diff)
 			}
-			if err != nil {
+
+			// If RunUnstarted returned an error, we're done with this test case.
+			if runErr != nil {
 				return
 			}
 
+			// For happy path, proceed with health check using the returned srv and mux.
 			serverCtx, serverDone := context.WithCancel(ctx)
 			defer serverDone()
 			go func() {
@@ -240,4 +252,25 @@ func TestWebhookServerCommand(t *testing.T) {
 			}
 		})
 	}
+// ReadFileResErr is a struct to hold the response and error from a ReadFile call.
+type ReadFileResErr struct {
+	Res []byte
+	Err error
+}
+
+func (m *ReadFileResErr) ReadFile(filename string) ([]byte, error) {
+	return m.Res, m.Err
+}
+
+// MockKMSClient is a mock implementation of the KMS client.
+type MockKMSClient struct {
+	webhook.KeyManagementClient
+}
+
+func (m *MockKMSClient) CreateSigner(ctx context.Context, kmsAppPrivateKeyID string) (*gcpkms.Signer, error) {
+	return nil, nil
+}
+
+func (m *MockKMSClient) Close() error {
+	return nil
 }

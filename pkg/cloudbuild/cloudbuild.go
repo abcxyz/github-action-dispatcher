@@ -29,13 +29,6 @@ import (
 	"github.com/abcxyz/pkg/logging"
 )
 
-// Client is a wrapper around the Google Cloud Build client.
-type Client interface {
-	ListWorkerPools(ctx context.Context, projectID, location string) ([]*cloudbuildpb.WorkerPool, error)
-	CreateBuild(ctx context.Context, req *cloudbuildpb.CreateBuildRequest) (string, error)
-	Close() error
-}
-
 // cloudbuildClient is the implementation of the Client interface.
 type cloudbuildClient struct {
 	client              *cloudbuild.Client

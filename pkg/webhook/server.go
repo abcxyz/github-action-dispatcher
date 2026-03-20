@@ -39,6 +39,7 @@ type Server struct {
 	allowedLabels                  map[string]bool
 	backoffInitialDelay            time.Duration
 	cbc                            cloudbuild.Client
+	gcbHTTPClient                  *http.Client
 	config                         *Config
 	e2eTestRunID                   string // TODO remove this, post refactor it may no longer be needed
 	environment                    string
@@ -80,13 +81,14 @@ type WebhookClientOptions struct {
 
 	OSFileReaderOverride        FileReader
 	CloudBuildClientOverride    cloudbuild.Client
+	GCBHTTPClientOverride       *http.Client
 	GitHubClientOverride        gh.Client
 	KeyManagementClientOverride KeyManagementClient
 }
 
 // NewServer creates a new HTTP server implementation that will handle
 // receiving webhook payloads.
-func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, rc *redis.Client, wco *WebhookClientOptions) (*Server, error) {
+func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, rc *redis.Client, gcbHTTPClient *http.Client, wco *WebhookClientOptions) (*Server, error) {
 	fr := wco.OSFileReaderOverride
 	if fr == nil {
 		fr = NewOSFileReader()
@@ -132,6 +134,11 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, rc *redis
 		cbc = cb
 	}
 
+	httpClient := wco.GCBHTTPClientOverride
+	if httpClient == nil {
+		httpClient = gcbHTTPClient
+	}
+
 	// Pre-compute the set of allowed labels for efficient lookup.
 	allowedLabels := make(map[string]bool)
 
@@ -141,17 +148,20 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, rc *redis
 		allowedLabels[target] = true
 	}
 
-	// Add all explicitly supported runner labels from the config.
-	for _, supportedLabel := range cfg.SupportedRunnerLabels {
-		allowedLabels[supportedLabel] = true
+	// Add all from the static list.
+	for _, label := range cfg.SupportedRunnerLabels {
+		allowedLabels[label] = true
 	}
 
-	return &Server{
+	s := &Server{
+		allowedLabels:                  allowedLabels,
 		backoffInitialDelay:            cfg.BackoffInitialDelay,
 		cbc:                            cbc,
+		gcbHTTPClient:                  httpClient,
 		config:                         cfg,
-		allowedLabels:                  allowedLabels,
+		e2eTestRunID:                   cfg.E2ETestRunID,
 		environment:                    cfg.Environment,
+		extraRunnerCount:               cfg.ExtraRunnerCount,
 		ghAPIBaseURL:                   cfg.GitHubAPIBaseURL,
 		ghc:                            ghc,
 		h:                              h,
@@ -161,17 +171,17 @@ func NewServer(ctx context.Context, h *renderer.Renderer, cfg *Config, rc *redis
 		runnerExecutionTimeoutSeconds:  cfg.RunnerExecutionTimeoutSeconds,
 		runnerIdleTimeoutSeconds:       cfg.RunnerIdleTimeoutSeconds,
 		runnerLocation:                 cfg.RunnerLocation,
+		runnerProjectID:                cfg.RunnerProjectID,
 		runnerImageName:                cfg.RunnerImageName,
 		runnerImageTag:                 cfg.RunnerImageTag,
-		runnerProjectID:                cfg.RunnerProjectID,
+		runnerRegistryDefaultKeyPrefix: cfg.RunnerRegistryDefaultKeyPrefix,
 		runnerRepositoryID:             cfg.RunnerRepositoryID,
 		runnerServiceAccount:           cfg.RunnerServiceAccount,
 		runnerWorkerPoolID:             cfg.RunnerWorkerPoolID,
 		webhookSecret:                  webhookSecret,
-		e2eTestRunID:                   cfg.E2ETestRunID,
-		extraRunnerCount:               cfg.ExtraRunnerCount,
-		runnerRegistryDefaultKeyPrefix: cfg.RunnerRegistryDefaultKeyPrefix,
-	}, nil
+	}
+
+	return s, nil
 }
 
 // Routes creates a ServeMux for all the routes that

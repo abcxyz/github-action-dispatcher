@@ -476,7 +476,7 @@ func TestHandleWebhook(t *testing.T) {
 				KeyManagementClientOverride: &MockKMSClient{},
 			}
 
-			srv, err := NewServer(ctx, nil, cfg, db, wco)
+			srv, err := NewServer(ctx, nil, cfg, db, nil, wco)
 			if err != nil {
 				t.Fatal(err)
 			}

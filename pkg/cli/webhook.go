@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"net/http"
 
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
 
-	"github.com/abcxyz/github-action-dispatcher/pkg/cloudbuild"
 	"github.com/abcxyz/github-action-dispatcher/pkg/registry"
 	"github.com/abcxyz/github-action-dispatcher/pkg/version"
 	"github.com/abcxyz/github-action-dispatcher/pkg/webhook"
@@ -40,16 +40,8 @@ type WebhookServerCommand struct {
 	registryCfg *registry.RegistryConfig
 
 	// only used for testing
-	testFlagSetOpts []cli.Option
-
-	// only used for testing
-	testCloudBuildClientOverride cloudbuild.Client
-
-	// only used for testing
-	testKMSClientOverride webhook.KeyManagementClient
-
-	// only used for testing
-	testOSFileReaderOverride webhook.FileReader
+	testFlagSetOpts          []cli.Option
+	testWebhookClientOptions *webhook.WebhookClientOptions
 }
 
 func (c *WebhookServerCommand) Desc() string {
@@ -79,6 +71,29 @@ func (c *WebhookServerCommand) Run(ctx context.Context, args []string) error {
 	}
 
 	return server.StartHTTPHandler(ctx, mux)
+}
+
+func (c *WebhookServerCommand) Process(
+	ctx context.Context,
+	h *renderer.Renderer,
+	cfg *webhook.Config,
+	registryClient *redis.Client,
+	gcbHTTPClient *http.Client,
+	webhookClientOptions *webhook.WebhookClientOptions,
+) (*serving.Server, http.Handler, error) {
+	webhookServer, err := webhook.NewServer(ctx, h, cfg, registryClient, gcbHTTPClient, webhookClientOptions)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create server: %w", err)
+	}
+
+	mux := webhookServer.Routes(ctx)
+
+	server, err := serving.New(cfg.Port)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create serving infrastructure: %w", err)
+	}
+
+	return server, mux, nil
 }
 
 func (c *WebhookServerCommand) RunUnstarted(ctx context.Context, args []string) (*serving.Server, http.Handler, error) {
@@ -115,38 +130,21 @@ func (c *WebhookServerCommand) RunUnstarted(ctx context.Context, args []string) 
 		logger.ErrorContext(ctx, "failed to create registry client, caching will be disabled", "error", err)
 	}
 
-	agent := fmt.Sprintf("google:github-action-dispatcher/%s", version.Version)
-	opts := []option.ClientOption{option.WithUserAgent(agent)}
-	webhookClientOptions := &webhook.WebhookClientOptions{
-		KeyManagementClientOpts: opts,
-	}
-
-	// expect tests to pass overide
-	if c.testKMSClientOverride != nil {
-		webhookClientOptions.KeyManagementClientOverride = c.testKMSClientOverride
-	}
-
-	// expect tests to pass overide
-	if c.testCloudBuildClientOverride != nil {
-		webhookClientOptions.CloudBuildClientOverride = c.testCloudBuildClientOverride
-	}
-
-	// expect tests to pass overide
-	if c.testOSFileReaderOverride != nil {
-		webhookClientOptions.OSFileReaderOverride = c.testOSFileReaderOverride
-	}
-
-	webhookServer, err := webhook.NewServer(ctx, h, c.cfg, registryClient, webhookClientOptions)
+	gcbHTTPClient, err := google.DefaultClient(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create server: %w", err)
+		return nil, nil, fmt.Errorf("failed to create default google client: %w", err)
 	}
 
-	mux := webhookServer.Routes(ctx)
-
-	server, err := serving.New(c.cfg.Port)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create serving infrastructure: %w", err)
+	var webhookClientOptions *webhook.WebhookClientOptions
+	if c.testWebhookClientOptions != nil {
+		webhookClientOptions = c.testWebhookClientOptions
+	} else {
+		agent := fmt.Sprintf("google:github-action-dispatcher/%s", version.Version)
+		opts := []option.ClientOption{option.WithUserAgent(agent)}
+		webhookClientOptions = &webhook.WebhookClientOptions{
+			KeyManagementClientOpts: opts,
+		}
 	}
 
-	return server, mux, nil
+	return c.Process(ctx, h, c.cfg, registryClient, gcbHTTPClient, webhookClientOptions)
 }
