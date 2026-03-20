@@ -1,0 +1,507 @@
+{
+  "schema": "1.0",
+  "comment": "This file maps proto services/RPCs to the corresponding library clients/methods.",
+  "language": "go",
+  "protoPackage": "google.devtools.cloudbuild.v1",
+  "libraryPackage": "cloud.google.com/go/cloudbuild/apiv1/v2",
+  "services": {
+    "CloudBuild": {
+      "clients": {
+        "grpc": {
+          "libraryClient": "Client",
+          "rpcs": {
+            "ApproveBuild": {
+              "methods": [
+                "ApproveBuild"
+              ]
+            },
+            "BatchCreateBitbucketServerConnectedRepositories": {
+              "methods": [
+                "BatchCreateBitbucketServerConnectedRepositories"
+              ]
+            },
+            "BatchCreateGitLabConnectedRepositories": {
+              "methods": [
+                "BatchCreateGitLabConnectedRepositories"
+              ]
+            },
+            "CancelBuild": {
+              "methods": [
+                "CancelBuild"
+              ]
+            },
+            "CancelOperation": {
+              "methods": [
+                "CancelOperation"
+              ]
+            },
+            "CreateBitbucketServerConfig": {
+              "methods": [
+                "CreateBitbucketServerConfig"
+              ]
+            },
+            "CreateBuild": {
+              "methods": [
+                "CreateBuild"
+              ]
+            },
+            "CreateBuildTrigger": {
+              "methods": [
+                "CreateBuildTrigger"
+              ]
+            },
+            "CreateGitHubEnterpriseConfig": {
+              "methods": [
+                "CreateGitHubEnterpriseConfig"
+              ]
+            },
+            "CreateGitLabConfig": {
+              "methods": [
+                "CreateGitLabConfig"
+              ]
+            },
+            "CreateWorkerPool": {
+              "methods": [
+                "CreateWorkerPool"
+              ]
+            },
+            "DeleteBitbucketServerConfig": {
+              "methods": [
+                "DeleteBitbucketServerConfig"
+              ]
+            },
+            "DeleteBuildTrigger": {
+              "methods": [
+                "DeleteBuildTrigger"
+              ]
+            },
+            "DeleteGitHubEnterpriseConfig": {
+              "methods": [
+                "DeleteGitHubEnterpriseConfig"
+              ]
+            },
+            "DeleteGitLabConfig": {
+              "methods": [
+                "DeleteGitLabConfig"
+              ]
+            },
+            "DeleteWorkerPool": {
+              "methods": [
+                "DeleteWorkerPool"
+              ]
+            },
+            "GetBitbucketServerConfig": {
+              "methods": [
+                "GetBitbucketServerConfig"
+              ]
+            },
+            "GetBuild": {
+              "methods": [
+                "GetBuild"
+              ]
+            },
+            "GetBuildTrigger": {
+              "methods": [
+                "GetBuildTrigger"
+              ]
+            },
+            "GetDefaultServiceAccount": {
+              "methods": [
+                "GetDefaultServiceAccount"
+              ]
+            },
+            "GetGitHubEnterpriseConfig": {
+              "methods": [
+                "GetGitHubEnterpriseConfig"
+              ]
+            },
+            "GetGitLabConfig": {
+              "methods": [
+                "GetGitLabConfig"
+              ]
+            },
+            "GetOperation": {
+              "methods": [
+                "GetOperation"
+              ]
+            },
+            "GetWorkerPool": {
+              "methods": [
+                "GetWorkerPool"
+              ]
+            },
+            "ListBitbucketServerConfigs": {
+              "methods": [
+                "ListBitbucketServerConfigs"
+              ]
+            },
+            "ListBitbucketServerRepositories": {
+              "methods": [
+                "ListBitbucketServerRepositories"
+              ]
+            },
+            "ListBranches": {
+              "methods": [
+                "ListBranches"
+              ]
+            },
+            "ListBuildTriggers": {
+              "methods": [
+                "ListBuildTriggers"
+              ]
+            },
+            "ListBuilds": {
+              "methods": [
+                "ListBuilds"
+              ]
+            },
+            "ListGitHubEnterpriseConfigs": {
+              "methods": [
+                "ListGitHubEnterpriseConfigs"
+              ]
+            },
+            "ListGitLabConfigs": {
+              "methods": [
+                "ListGitLabConfigs"
+              ]
+            },
+            "ListGitLabRepositories": {
+              "methods": [
+                "ListGitLabRepositories"
+              ]
+            },
+            "ListTags": {
+              "methods": [
+                "ListTags"
+              ]
+            },
+            "ListWorkerPools": {
+              "methods": [
+                "ListWorkerPools"
+              ]
+            },
+            "ReceiveGitHubDotComWebhook": {
+              "methods": [
+                "ReceiveGitHubDotComWebhook"
+              ]
+            },
+            "ReceiveTriggerWebhook": {
+              "methods": [
+                "ReceiveTriggerWebhook"
+              ]
+            },
+            "ReceiveWebhook": {
+              "methods": [
+                "ReceiveWebhook"
+              ]
+            },
+            "RemoveBitbucketServerConnectedRepository": {
+              "methods": [
+                "RemoveBitbucketServerConnectedRepository"
+              ]
+            },
+            "RemoveGitLabConnectedRepository": {
+              "methods": [
+                "RemoveGitLabConnectedRepository"
+              ]
+            },
+            "RetryBuild": {
+              "methods": [
+                "RetryBuild"
+              ]
+            },
+            "RunBuildTrigger": {
+              "methods": [
+                "RunBuildTrigger"
+              ]
+            },
+            "UpdateBitbucketServerConfig": {
+              "methods": [
+                "UpdateBitbucketServerConfig"
+              ]
+            },
+            "UpdateBuildTrigger": {
+              "methods": [
+                "UpdateBuildTrigger"
+              ]
+            },
+            "UpdateGitHubEnterpriseConfig": {
+              "methods": [
+                "UpdateGitHubEnterpriseConfig"
+              ]
+            },
+            "UpdateGitLabConfig": {
+              "methods": [
+                "UpdateGitLabConfig"
+              ]
+            },
+            "UpdateWorkerPool": {
+              "methods": [
+                "UpdateWorkerPool"
+              ]
+            }
+          }
+        },
+        "rest": {
+          "libraryClient": "Client",
+          "rpcs": {
+            "ApproveBuild": {
+              "methods": [
+                "ApproveBuild"
+              ]
+            },
+            "BatchCreateBitbucketServerConnectedRepositories": {
+              "methods": [
+                "BatchCreateBitbucketServerConnectedRepositories"
+              ]
+            },
+            "BatchCreateGitLabConnectedRepositories": {
+              "methods": [
+                "BatchCreateGitLabConnectedRepositories"
+              ]
+            },
+            "CancelBuild": {
+              "methods": [
+                "CancelBuild"
+              ]
+            },
+            "CancelOperation": {
+              "methods": [
+                "CancelOperation"
+              ]
+            },
+            "CreateBitbucketServerConfig": {
+              "methods": [
+                "CreateBitbucketServerConfig"
+              ]
+            },
+            "CreateBuild": {
+              "methods": [
+                "CreateBuild"
+              ]
+            },
+            "CreateBuildTrigger": {
+              "methods": [
+                "CreateBuildTrigger"
+              ]
+            },
+            "CreateGitHubEnterpriseConfig": {
+              "methods": [
+                "CreateGitHubEnterpriseConfig"
+              ]
+            },
+            "CreateGitLabConfig": {
+              "methods": [
+                "CreateGitLabConfig"
+              ]
+            },
+            "CreateWorkerPool": {
+              "methods": [
+                "CreateWorkerPool"
+              ]
+            },
+            "DeleteBitbucketServerConfig": {
+              "methods": [
+                "DeleteBitbucketServerConfig"
+              ]
+            },
+            "DeleteBuildTrigger": {
+              "methods": [
+                "DeleteBuildTrigger"
+              ]
+            },
+            "DeleteGitHubEnterpriseConfig": {
+              "methods": [
+                "DeleteGitHubEnterpriseConfig"
+              ]
+            },
+            "DeleteGitLabConfig": {
+              "methods": [
+                "DeleteGitLabConfig"
+              ]
+            },
+            "DeleteWorkerPool": {
+              "methods": [
+                "DeleteWorkerPool"
+              ]
+            },
+            "GetBitbucketServerConfig": {
+              "methods": [
+                "GetBitbucketServerConfig"
+              ]
+            },
+            "GetBuild": {
+              "methods": [
+                "GetBuild"
+              ]
+            },
+            "GetBuildTrigger": {
+              "methods": [
+                "GetBuildTrigger"
+              ]
+            },
+            "GetDefaultServiceAccount": {
+              "methods": [
+                "GetDefaultServiceAccount"
+              ]
+            },
+            "GetGitHubEnterpriseConfig": {
+              "methods": [
+                "GetGitHubEnterpriseConfig"
+              ]
+            },
+            "GetGitLabConfig": {
+              "methods": [
+                "GetGitLabConfig"
+              ]
+            },
+            "GetOperation": {
+              "methods": [
+                "GetOperation"
+              ]
+            },
+            "GetWorkerPool": {
+              "methods": [
+                "GetWorkerPool"
+              ]
+            },
+            "ListBitbucketServerConfigs": {
+              "methods": [
+                "ListBitbucketServerConfigs"
+              ]
+            },
+            "ListBitbucketServerRepositories": {
+              "methods": [
+                "ListBitbucketServerRepositories"
+              ]
+            },
+            "ListBranches": {
+              "methods": [
+                "ListBranches"
+              ]
+            },
+            "ListBuildTriggers": {
+              "methods": [
+                "ListBuildTriggers"
+              ]
+            },
+            "ListBuilds": {
+              "methods": [
+                "ListBuilds"
+              ]
+            },
+            "ListGitHubEnterpriseConfigs": {
+              "methods": [
+                "ListGitHubEnterpriseConfigs"
+              ]
+            },
+            "ListGitLabConfigs": {
+              "methods": [
+                "ListGitLabConfigs"
+              ]
+            },
+            "ListGitLabRepositories": {
+              "methods": [
+                "ListGitLabRepositories"
+              ]
+            },
+            "ListTags": {
+              "methods": [
+                "ListTags"
+              ]
+            },
+            "ListWorkerPools": {
+              "methods": [
+                "ListWorkerPools"
+              ]
+            },
+            "ReceiveGitHubDotComWebhook": {
+              "methods": [
+                "ReceiveGitHubDotComWebhook"
+              ]
+            },
+            "ReceiveTriggerWebhook": {
+              "methods": [
+                "ReceiveTriggerWebhook"
+              ]
+            },
+            "ReceiveWebhook": {
+              "methods": [
+                "ReceiveWebhook"
+              ]
+            },
+            "RemoveBitbucketServerConnectedRepository": {
+              "methods": [
+                "RemoveBitbucketServerConnectedRepository"
+              ]
+            },
+            "RemoveGitLabConnectedRepository": {
+              "methods": [
+                "RemoveGitLabConnectedRepository"
+              ]
+            },
+            "RetryBuild": {
+              "methods": [
+                "RetryBuild"
+              ]
+            },
+            "RunBuildTrigger": {
+              "methods": [
+                "RunBuildTrigger"
+              ]
+            },
+            "UpdateBitbucketServerConfig": {
+              "methods": [
+                "UpdateBitbucketServerConfig"
+              ]
+            },
+            "UpdateBuildTrigger": {
+              "methods": [
+                "UpdateBuildTrigger"
+              ]
+            },
+            "UpdateGitHubEnterpriseConfig": {
+              "methods": [
+                "UpdateGitHubEnterpriseConfig"
+              ]
+            },
+            "UpdateGitLabConfig": {
+              "methods": [
+                "UpdateGitLabConfig"
+              ]
+            },
+            "UpdateWorkerPool": {
+              "methods": [
+                "UpdateWorkerPool"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "CloudBuildInternalCCFE": {
+      "clients": {
+        "grpc": {
+          "libraryClient": "CloudBuildInternalCCFEClient",
+          "rpcs": {
+            "CancelOperation": {
+              "methods": [
+                "CancelOperation"
+              ]
+            },
+            "CreateBuildConsumer": {
+              "methods": [
+                "CreateBuildConsumer"
+              ]
+            },
+            "GetOperation": {
+              "methods": [
+                "GetOperation"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
