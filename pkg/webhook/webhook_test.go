@@ -360,6 +360,40 @@ func TestHandleWebhook(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:                 "Workflow Job Queued - Trusted Pool With Remote Config",
+			payloadType:          payloadType,
+			action:               queuedAction,
+			runnerLabels:         []string{"trusted-label"},
+			payloadWebhookSecret: serverGitHubWebhookSecret,
+			contentType:          contentType,
+			createdAt:            &queuedTime,
+			startedAt:            nil,
+			completedAt:          nil,
+			runID:                &runID,
+			jobID:                &jobID,
+			jobName:              &jobName,
+			expStatusCode:        200,
+			expRespBody:          "",
+			expectBuildCount:     1,
+			expGCBBuildIDs:       []string{testGCBBuildID},
+
+			runnerExecutionTimeoutSeconds:  7200,
+			runnerIdleTimeoutSeconds:       300,
+			supportedRunnerLabels:          []string{"trusted-label"},
+			runnerRegistryDefaultKeyPrefix: "runner",
+			registryWorkerPools: map[string][]registry.WorkerPoolInfo{
+				"runner:trusted-label": {
+					{
+						Name:          "projects/12345-test-project-1/locations/us-west1/workerPools/wp1",
+						ProjectID:     "test-project-1",
+						ProjectNumber: "12345-test-project-1",
+						PoolType:      "trusted",
+						RemoteConfig:  `{"project_id":"trusted-project","location":"trusted-location","service_account":"trusted-sa@trusted-project.iam.gserviceaccount.com","pool_name":"trusted-pool-name"}`,
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range cases {

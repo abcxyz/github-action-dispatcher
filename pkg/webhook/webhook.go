@@ -480,23 +480,24 @@ func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel st
 
 // buildCloudBuildRequest creates a cloud build request.
 func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imageTag string, pool *registry.WorkerPoolInfo) *cloudbuildpb.CreateBuildRequest {
-	logger := logging.FromContext(ctx)
+	// Determine common variables
+	var projectID, location, serviceAccount string
+	if pool != nil && pool.ProjectID != "" {
+		projectID = pool.ProjectID
+		location = pool.Location
+		if location == "" {
+			location = s.runnerLocation
+		}
+		serviceAccount = fmt.Sprintf("runner-sa@%s.iam.gserviceaccount.com", pool.ProjectID)
+	} else {
+		projectID = s.runnerProjectID
+		location = s.runnerLocation
+		serviceAccount = s.runnerServiceAccount
+	}
+
+	// 1. Initialize the Build object
 	build := &cloudbuildpb.Build{
 		Timeout: durationpb.New(time.Duration(s.runnerExecutionTimeoutSeconds) * time.Second),
-		Steps: []*cloudbuildpb.BuildStep{
-			{
-				Id:   "run",
-				Name: "$_REPOSITORY_ID/$_IMAGE_NAME:$_IMAGE_TAG",
-				Env: []string{
-					"ENCODED_JIT_CONFIG=${_ENCODED_JIT_CONFIG}",
-					"IDLE_TIMEOUT_SECONDS=${_IDLE_TIMEOUT_SECONDS}",
-					"CREATE_BUILD_REQUEST_TIME_UTC=${_CREATE_BUILD_REQUEST_TIME_UTC}",
-				},
-			},
-		},
-		Options: &cloudbuildpb.BuildOptions{
-			Logging: cloudbuildpb.BuildOptions_CLOUD_LOGGING_ONLY,
-		},
 		Substitutions: map[string]string{
 			"_ENCODED_JIT_CONFIG":            compressedJIT,
 			"_IDLE_TIMEOUT_SECONDS":          strconv.Itoa(s.runnerIdleTimeoutSeconds),
@@ -507,44 +508,46 @@ func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imag
 		},
 	}
 
-	// Check if this is an E2E test run and add appropriate tags.
-	if s.e2eTestRunID != "" {
-		build.Tags = []string{"e2e-test", fmt.Sprintf("e2e-run-id-%s", s.e2eTestRunID)}
-	}
+	// 2. Branch for Trusted Pools vs Private Pools
+	if pool != nil && pool.PoolType == "trusted" && pool.RemoteConfig != "" {
+		// --- TRUSTED POOL LOGIC ---
+		// In Trusted Pools, the config is remote, so we don't define Steps locally.
+		build.RemoteConfig = pool.RemoteConfig
 
-	var projectID, location, serviceAccount string
-
-	if pool != nil && pool.ProjectID != "" {
-		// Use configuration from the registry.
-		projectID = pool.ProjectID
-		// Use location from pool, but fall back to server default if it's missing
-		// for safety during transitions.
-		location = pool.Location
-		if location == "" {
-			location = s.runnerLocation
-			logger.WarnContext(ctx, "worker pool from registry is missing location, falling back to default",
-				"pool_name", pool.Name,
-				"default_location", location)
+		// Ensure it's in full resource name format: projects/-/serviceAccounts/{email}
+		if serviceAccount != "" && !strings.HasPrefix(serviceAccount, "projects/") {
+			serviceAccount = fmt.Sprintf("projects/%s/serviceAccounts/%s", projectID, serviceAccount)
+		}
+		build.ServiceAccount = serviceAccount
+	} else {
+		// Private pool flow
+		build.Steps = []*cloudbuildpb.BuildStep{
+			{
+				Id:   "run",
+				Name: "$_REPOSITORY_ID/$_IMAGE_NAME:$_IMAGE_TAG",
+				Env: []string{
+					"ENCODED_JIT_CONFIG=${_ENCODED_JIT_CONFIG}",
+					"IDLE_TIMEOUT_SECONDS=${_IDLE_TIMEOUT_SECONDS}",
+					"CREATE_BUILD_REQUEST_TIME_UTC=${_CREATE_BUILD_REQUEST_TIME_UTC}",
+				},
+			},
+		}
+		build.Options = &cloudbuildpb.BuildOptions{
+			Logging: cloudbuildpb.BuildOptions_CLOUD_LOGGING_ONLY,
 		}
 
-		serviceAccount = fmt.Sprintf("runner-sa@%s.iam.gserviceaccount.com", pool.ProjectID)
-		build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: pool.Name}
-	} else {
-		// Otherwise, use the default server configuration.
-		projectID = s.runnerProjectID
-		location = s.runnerLocation
-		serviceAccount = s.runnerServiceAccount
-		if s.runnerWorkerPoolID != "" {
+		if pool != nil && pool.Name != "" {
+			build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: pool.Name}
+		} else if s.runnerWorkerPoolID != "" {
 			build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: s.runnerWorkerPoolID}
 		}
-	}
 
-	// Ensure the service account is in the full resource name format.
-	if serviceAccount != "" && !strings.HasPrefix(serviceAccount, "projects/") {
-		serviceAccount = fmt.Sprintf("projects/%s/serviceAccounts/%s", projectID, serviceAccount)
+		// Ensure the service account is in the full resource name format.
+		if serviceAccount != "" && !strings.HasPrefix(serviceAccount, "projects/") {
+			serviceAccount = fmt.Sprintf("projects/%s/serviceAccounts/%s", projectID, serviceAccount)
+		}
+		build.ServiceAccount = serviceAccount
 	}
-
-	build.ServiceAccount = serviceAccount
 
 	return &cloudbuildpb.CreateBuildRequest{
 		Parent:    fmt.Sprintf("projects/%s/locations/%s", projectID, location),
