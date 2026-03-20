@@ -16,7 +16,7 @@ env:
   IMAGE_NAME: 'github-action-dispatcher'
 
   RUNNER_DOCKER_REPO: 'us-docker.pkg.dev/abcxyz-artifacts/docker-images'
-  RUNNER_IMAGE_TAG: 'v0.3.0-ubuntu-24-04-amd64'
+  RUNNER_IMAGE_TAG: 'v0.4.0-ubuntu-24-04-amd64'
   RUNNER_IMAGE_NAME: 'github-action-runner'
 
   INTEGRATION_WIF_PROVIDER: 'projects/643301186155/locations/global/workloadIdentityPools/github-automation/providers/gad-ci-i'
