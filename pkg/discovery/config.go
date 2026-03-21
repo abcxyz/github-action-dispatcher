@@ -26,16 +26,15 @@ import (
 )
 
 const (
-	jobRunsOnGCPProjectLabelKey           = "job-runs-on"
-	poolLocationGCPProjectLabelKey        = "pool-location"
-	githubOrgScopeGCPProjectLabelKey      = "gh-org-scope"
-	poolAvailabilityGCPProjectLabelKey    = "pool-availability"
-	poolTypeGCPProjectLabelKey            = "pool-type"
-	trustedRemoteConfigGCPProjectLabelKey = "trusted-remote-config"
-	poolAvailabilityAvailable             = "available"
-	poolAvailabilityUnavailable           = "unavailable"
-	poolTypeTrusted                       = "trusted"
-	poolTypePrivate                       = "private"
+	jobRunsOnGCPProjectLabelKey        = "job-runs-on"
+	poolLocationGCPProjectLabelKey     = "pool-location"
+	githubOrgScopeGCPProjectLabelKey   = "gh-org-scope"
+	poolAvailabilityGCPProjectLabelKey = "pool-availability"
+	poolTypeGCPProjectLabelKey         = "pool-type"
+	poolAvailabilityAvailable          = "available"
+	poolAvailabilityUnavailable        = "unavailable"
+	poolTypeTrusted                    = "trusted"
+	poolTypePrivate                    = "private"
 )
 
 // Config defines the set of environment variables required
@@ -47,7 +46,6 @@ type Config struct {
 	AllowedPoolLocations           string        `env:"GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES"`
 	AllowedPoolAvailabilities      string        `env:"GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES"`
 	AllowedPoolTypes               string        `env:"GCP_ALLOWED_PROJECT_LABEL_POOL_TYPE_VALUES"`
-	AllowedTrustedRemoteConfigs    []string      `env:"GCP_ALLOWED_PROJECT_LABEL_TRUSTED_REMOTE_CONFIG_VALUES"`
 	IgnoredGCPProjectLabels        string        `env:"GCP_IGNORED_PROJECT_LABELS"`
 	MaxRetryAttempts               int           `env:"MAX_RETRY_ATTEMPTS,default=3"`
 	BackoffInitialDelay            time.Duration `env:"BACKOFF_INITIAL_DELAY,default=500ms"`
@@ -115,10 +113,6 @@ func (c *Config) GetAllowedPoolTypes() []string {
 	return strings.Split(c.AllowedPoolTypes, ",")
 }
 
-func (c *Config) GetAllowedTrustedRemoteConfigs() []string {
-	return c.AllowedTrustedRemoteConfigs
-}
-
 func (c *Config) GetIgnoredGCPProjectLabels() []string {
 	if c.IgnoredGCPProjectLabels == "" {
 		return nil
@@ -139,7 +133,5 @@ func (c *Config) GetIgnoredGCPProjectLabelsSet() map[string]struct{} {
 }
 
 func (c *Config) GetOptionalGCPProjectLabelsSet() map[string]struct{} {
-	return map[string]struct{}{
-		trustedRemoteConfigGCPProjectLabelKey: {},
-	}
+	return map[string]struct{}{}
 }
