@@ -509,10 +509,10 @@ func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imag
 	}
 
 	// 2. Branch for Trusted Pools vs Private Pools
-	if pool != nil && pool.PoolType == "trusted" && pool.RemoteConfig != "" {
+	if pool != nil && pool.PoolType == "trusted" {
 		// --- TRUSTED POOL LOGIC ---
 		// In Trusted Pools, the config is remote, so we don't define Steps locally.
-		build.RemoteConfig = pool.RemoteConfig
+		build.RemoteConfig = "gob:github-on-prem-depot-mirror/abcxyz/runner-test@main#cloudbuild.yaml"
 
 		// Ensure it's in full resource name format: projects/-/serviceAccounts/{email}
 		if serviceAccount != "" && !strings.HasPrefix(serviceAccount, "projects/") {

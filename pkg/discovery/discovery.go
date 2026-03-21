@@ -176,9 +176,6 @@ func (rd *RunnerDiscovery) buildRegistry(ctx context.Context, projects []*asseti
 				Location:      poolLocation,
 				PoolType:      poolType,
 			}
-			if val, ok := project.Labels[trustedRemoteConfigGCPProjectLabelKey]; ok {
-				poolInfo.RemoteConfig = val
-			}
 			poolsByRegistryKey[registryKey] = append(poolsByRegistryKey[registryKey], poolInfo)
 		}
 	}
@@ -328,28 +325,6 @@ func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, p
 			return nil, false
 		}
 		projectLabels[key] = projectLabelValue
-	}
-
-	if projectLabels[poolTypeGCPProjectLabelKey] == poolTypeTrusted {
-		projectLabelValue, ok := project.Labels[trustedRemoteConfigGCPProjectLabelKey]
-		if !ok {
-			logger.WarnContext(ctx, "project missing required label because pool-type is trusted",
-				"project_id", project.ProjectID,
-				"label", trustedRemoteConfigGCPProjectLabelKey)
-			return nil, false
-		}
-
-		allowedTrustedRemoteConfigs := rd.config.GetAllowedTrustedRemoteConfigs()
-		if len(allowedTrustedRemoteConfigs) == 0 {
-			logger.WarnContext(ctx, "dispatcher config missing allowed remote config patterns for trusted pools",
-				"project_id", project.ProjectID,
-				"label", trustedRemoteConfigGCPProjectLabelKey)
-			return nil, false
-		}
-
-		if !rd.validateLabel(ctx, project.ProjectID, trustedRemoteConfigGCPProjectLabelKey, projectLabelValue, allowedTrustedRemoteConfigs) {
-			return nil, false
-		}
 	}
 
 	// After validating the required labels, iterate through all the project's

@@ -389,7 +389,6 @@ func TestHandleWebhook(t *testing.T) {
 						ProjectID:     "test-project-1",
 						ProjectNumber: "12345-test-project-1",
 						PoolType:      "trusted",
-						RemoteConfig:  `{"project_id":"trusted-project","location":"trusted-location","service_account":"trusted-sa@trusted-project.iam.gserviceaccount.com","pool_name":"trusted-pool-name"}`,
 					},
 				},
 			},
