@@ -180,9 +180,6 @@ func (rd *RunnerDiscovery) buildRegistry(ctx context.Context, projects []*asseti
 				Location:      poolLocation,
 				PoolType:      poolType,
 			}
-			if val, ok := project.Labels[trustedRemoteConfigGCPProjectLabelKey]; ok {
-				poolInfo.RemoteConfig = val
-			}
 			poolsByRegistryKey[registryKey] = append(poolsByRegistryKey[registryKey], poolInfo)
 		}
 	}
