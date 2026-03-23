@@ -35,6 +35,12 @@ on:
       runner_image_name:
         type: 'string'
         description: 'The github-action-runner docker image name'
+      runner_404_image_tag:
+        type: 'string'
+        description: 'The github-action-runner docker image tag for 404 runner'
+      runner_404_image_name:
+        type: 'string'
+        description: 'The github-action-runner docker image name for 404 runner'
       integration_wif_provider:
         type: 'string'
         description: 'The wif to auth as'
@@ -66,6 +72,12 @@ env:
   INTEGRATION_REDIS_HOST: '172.16.0.3'
   INTEGRATION_REDIS_PORT: '6379'
 
+  RUNNER_404_IMAGE_TAG: '${{ inputs.runner_404_image_tag }}'
+  RUNNER_404_IMAGE_NAME: '${{ inputs.runner_404_image_name }}'
+  RUNNER_404_LOCATION: 'us-central1'
+  RUNNER_404_PROJECT_ID: 'abcxyz-runner-i-4f'
+  RUNNER_404_SERVICE_ACCOUNT: 'projects/abcxyz-runner-i-4f/serviceAccounts/runner-sa@abcxyz-runner-i-4f.iam.gserviceaccount.com'
+  
   INTEGRATION_GH_APP_INSTALLATION_ID: '2320897'
   INTEGRATION_PROJECT_ID: 'github-action-dispatcher-i-e3'
   INTEGRATION_REGION: 'us-central1'
@@ -186,8 +198,11 @@ jobs:
           WEBHOOK_KEY_MOUNT_PATH: '${WEBHOOK_SECRET_MOUNT_PATH}'
           WEBHOOK_KEY_NAME: '${WEBHOOK_SECRET_NAME}'
           RUNNER_404_ENABLED: 'true'
-          RUNNER_404_IMAGE_TAG: 'latest'
-          RUNNER_404_IMAGE_NAME: 'runner-404'
+          RUNNER_404_IMAGE_TAG: '${{ env.RUNNER_404_IMAGE_TAG }}'
+          RUNNER_404_IMAGE_NAME: '${{ env.RUNNER_404_IMAGE_NAME }}'
+          RUNNER_404_LOCATION: '${{ env.RUNNER_404_LOCATION }}'
+          RUNNER_404_PROJECT_ID: '${{ env.RUNNER_404_PROJECT_ID }}'
+          RUNNER_404_SERVICE_ACCOUNT: '${{ env.RUNNER_404_SERVICE_ACCOUNT }}'
           EOF
 
           gcloud run deploy "${{ env.INTEGRATION_SERVICE_NAME }}" \

@@ -57,9 +57,13 @@ type Config struct {
 	ExtraRunnerCount               int           `env:"EXTRA_RUNNER_COUNT,default=0"`
 	RunnerWorkerPoolID             string        `env:"RUNNER_WORKER_POOL_ID"`
 	E2ETestRunID                   string        `env:"E2ETestRunID"`
+	Runner404Enabled               bool          `env:"RUNNER_404_ENABLED,default=false"`
 	Runner404ImageName             string        `env:"RUNNER_404_IMAGE_NAME,default=runner-404"`
 	Runner404ImageTag              string        `env:"RUNNER_404_IMAGE_TAG,default=latest"`
-	Runner404Enabled               bool          `env:"RUNNER_404_ENABLED,default=false"`
+	Runner404Location              string        `env:"RUNNER_404_LOCATION,required"`
+	Runner404ProjectID             string        `env:"RUNNER_404_PROJECT_ID,required"`
+	Runner404ServiceAccount        string        `env:"RUNNER_404_SERVICE_ACCOUNT,required"`
+	Runner404WorkerPoolID          string        `env:"RUNNER_404_WORKER_POOL_ID"`
 	RunnerRegistryDefaultKeyPrefix string        `env:"RUNNER_REGISTRY_DEFAULT_KEY_PREFIX,default=default"`
 	RunnerLabelAliasesRaw          []string      `env:"RUNNER_LABEL_ALIASES"`
 	RunnerLabelAliases             map[string]string
@@ -102,6 +106,28 @@ func (cfg *Config) Validate() error {
 
 	if cfg.RunnerServiceAccount == "" {
 		return fmt.Errorf("RUNNER_SERVICE_ACCOUNT is required")
+	}
+
+	if cfg.Runner404Enabled {
+		if cfg.Runner404ImageName == "" {
+			return fmt.Errorf("RUNNER_404_IMAGE_NAME is required in order to enable 404 runner")
+		}
+
+		if cfg.Runner404ImageTag == "" {
+			return fmt.Errorf("RUNNER_404_IMAGE_TAG is required in order to enable 404 runner")
+		}
+
+		if cfg.Runner404Location == "" {
+			return fmt.Errorf("RUNNER_404_LOCATION is required in order to enable 404 runner")
+		}
+
+		if cfg.Runner404ProjectID == "" {
+			return fmt.Errorf("RUNNER_404_PROJECT_ID is required in order to enable 404 runner")
+		}
+
+		if cfg.Runner404ServiceAccount == "" {
+			return fmt.Errorf("RUNNER_404_SERVICE_ACCOUNT is required in order to enable 404 runner")
+		}
 	}
 
 	// Validate ExtraRunnerCount
@@ -318,6 +344,13 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Usage:  `List of labels that are supported by the dispatcher.`,
 	})
 
+	f.BoolVar(&cli.BoolVar{
+		Name:   "runner-404-enabled",
+		Target: &cfg.Runner404Enabled,
+		EnvVar: "RUNNER_404_ENABLED",
+		Usage:  `Whether or not to enable 404 - or cancellation of jobs requesting a label that has no matching runners.`,
+	})
+
 	f.StringVar(&cli.StringVar{
 		Name:    "runner-404-image-name",
 		Target:  &cfg.Runner404ImageName,
@@ -333,11 +366,32 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Usage:  `The runner 404 image tag to pull`,
 	})
 
-	f.BoolVar(&cli.BoolVar{
-		Name:   "runner-404-enabled",
-		Target: &cfg.Runner404Enabled,
-		EnvVar: "RUNNER_404_ENABLED",
-		Usage:  `Whether or not to enable 404 - or cancellation of jobs requesting a label that has no matching runners.`,
+	f.StringVar(&cli.StringVar{
+		Name:   "runner-404-location",
+		Target: &cfg.Runner404Location,
+		EnvVar: "RUNNER_404_LOCATION",
+		Usage:  `The location used for the Cloud Build 404 build.`,
+	})
+
+	f.StringVar(&cli.StringVar{
+		Name:   "runner-404-project-id",
+		Target: &cfg.Runner404ProjectID,
+		EnvVar: "RUNNER_404_PROJECT_ID",
+		Usage:  `Google Cloud project ID where the runner 404 will execute.`,
+	})
+
+	f.StringVar(&cli.StringVar{
+		Name:   "runner-404-service-account",
+		Target: &cfg.Runner404ServiceAccount,
+		EnvVar: "RUNNER_404_SERVICE_ACCOUNT",
+		Usage:  `The service account the runner 404 should execute as`,
+	})
+
+	f.StringVar(&cli.StringVar{
+		Name:   "runner-404-worker-pool-id",
+		Target: &cfg.Runner404WorkerPoolID,
+		EnvVar: "RUNNER_404_WORKER_POOL_ID",
+		Usage:  `The private runner worker pool ID`,
 	})
 
 	rf := set.NewSection("RETRY OPTIONS")

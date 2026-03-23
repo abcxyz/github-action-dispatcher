@@ -18,6 +18,8 @@ env:
   RUNNER_DOCKER_REPO: 'us-docker.pkg.dev/abcxyz-artifacts/docker-images'
   RUNNER_IMAGE_TAG: 'v0.4.0-ubuntu-24-04-amd64'
   RUNNER_IMAGE_NAME: 'github-action-runner'
+  RUNNER_404_IMAGE_TAG: 'v0.4.0-runner-404-amd64'
+  RUNNER_404_IMAGE_NAME: 'github-action-runner'
 
   INTEGRATION_WIF_PROVIDER: 'projects/643301186155/locations/global/workloadIdentityPools/github-automation/providers/gad-ci-i'
   INTEGRATION_WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-gad-ci-i-832939.iam.gserviceaccount.com'
@@ -181,6 +183,8 @@ jobs:
             echo "runner_docker_repo=${{ env.RUNNER_DOCKER_REPO }}"
             echo "runner_image_tag=${{ env.RUNNER_IMAGE_TAG }}"
             echo "runner_image_name=${{ env.RUNNER_IMAGE_NAME }}"
+            echo "runner_404_image_tag=${{ env.runner_404_image_tag }}"
+            echo "runner_404_image_name=${{ env.runner_404_image_name }}"
             echo "integration_wif_provider=${{ env.INTEGRATION_WIF_PROVIDER }}"
             echo "integration_wif_service_account=${{ env.INTEGRATION_WIF_SERVICE_ACCOUNT }}"
           } >> "${GITHUB_OUTPUT}"
@@ -201,6 +205,8 @@ jobs:
       runner_docker_repo: '${{ needs.verify-latest-runner-image.outputs.runner_docker_repo }}'
       runner_image_tag: '${{ needs.verify-latest-runner-image.outputs.runner_image_tag }}'
       runner_image_name: '${{ needs.verify-latest-runner-image.outputs.runner_image_name }}'
+      runner_404_image_tag: '${{ needs.verify-latest-runner-image.outputs.runner_404_image_tag }}'
+      runner_404_image_name: '${{ needs.verify-latest-runner-image.outputs.runner_404_image_name }}'
       integration_wif_provider: '${{ needs.verify-latest-runner-image.outputs.integration_wif_provider }}'
       integration_wif_service_account: '${{ needs.verify-latest-runner-image.outputs.integration_wif_service_account }}'
 

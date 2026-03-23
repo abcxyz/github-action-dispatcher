@@ -562,6 +562,14 @@ func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imag
 
 		serviceAccount = fmt.Sprintf("runner-sa@%s.iam.gserviceaccount.com", pool.ProjectID)
 		build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: pool.Name}
+	} else if s.cfg.Runner404Enabled {
+		// If enabled, use the 404 runner to fail the job with no assigned pool.
+		projectID = s.cfg.Runner404ProjectID
+		location = s.cfg.Runner404Location
+		serviceAccount = s.cfg.Runner404ServiceAccount
+		if s.cfg.Runner404WorkerPoolID != "" {
+			build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: s.Runner404WorkerPoolID}
+		}
 	} else {
 		// Otherwise, use the default server configuration.
 		projectID = s.runnerProjectID
