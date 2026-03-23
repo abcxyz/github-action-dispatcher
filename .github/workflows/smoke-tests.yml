@@ -246,15 +246,15 @@ jobs:
         run: |
           echo "OH NO..."
 
-  check-unknown-label-failed:
+  smoke-tests-passed:
     if: |-
       ${{ always() }}
-    needs: ['test-unknown-label']
+    needs: ['test-go-version', 'test-unknown-label']
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
     steps:
-      - name: 'Check Test Status'
+      - name: 'Check unknown-labal Test Status'
         # We expect the result of the test to be failed.
         if: |-
           ${{ needs.test-unknown-label.result != 'failure' }}
@@ -264,17 +264,15 @@ jobs:
           echo "::error::Smoke Test succeeded or was skipped. Failing status check to block merge. Status: ${RESULT}"
           exit 1
 
-      - name: 'Confirm 404 test passed'
-        run: 'echo \"Unknown lable failed as expected\"'
-
-  confirm-test-go-version-ran:
-    if: |-
-      ${{ always() }}
-    needs: ['test-go-version', 'check-unknown-label-failed']
-    runs-on: 'ubuntu-latest'
-    steps:
-      # TODO: Confirm that the execution time for the test-go-version[github-action-dispatcher-2-integration]
-      #       job was after needs.deploy-runner-discovery-job-with-runner-2.outputs.deploy_time
-      - name: 'Echo Success'
+      - name: 'Check unknown-labal Test Status'
+        # We expect the result of the test to be failed.
+        if: |-
+          ${{ needs.test-go-version.result != 'success' }}
+        env:
+          RESULT: '${{ needs.test-go-version.result }}'
         run: |
-          echo "All expected jobs ran!"
+          echo "::error::Smoke Test failed or was skipped. Failing status check to block merge. Status: ${RESULT}"
+          exit 1
+
+      - name: 'Confirm tests passed'
+        run: 'echo \"Smoke tests succeeded\"'
