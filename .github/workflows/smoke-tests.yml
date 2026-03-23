@@ -75,8 +75,8 @@ env:
   RUNNER_404_IMAGE_TAG: '${{ inputs.runner_404_image_tag }}'
   RUNNER_404_IMAGE_NAME: '${{ inputs.runner_404_image_name }}'
   RUNNER_404_LOCATION: 'us-central1'
-  RUNNER_404_PROJECT_ID: 'abcxyz-runner-i-4f'
-  RUNNER_404_SERVICE_ACCOUNT: 'projects/abcxyz-runner-i-4f/serviceAccounts/runner-sa@abcxyz-runner-i-4f.iam.gserviceaccount.com'
+  RUNNER_404_PROJECT_ID: 'abcxyz-gad-runner-404-i-4f'
+  RUNNER_404_SERVICE_ACCOUNT: 'projects/abcxyz-gad-runner-404-i-4f/serviceAccounts/runner-sa@abcxyz-gad-runner-404-i-4f.iam.gserviceaccount.com'
 
   INTEGRATION_GH_APP_INSTALLATION_ID: '2320897'
   INTEGRATION_PROJECT_ID: 'github-action-dispatcher-i-e3'
