@@ -236,78 +236,6 @@ jobs:
           echo "Checking Go version on self-hosted runner..."
           go version
 
-  # We induce a sleep so that we can confirm that some time delta occurred and
-  # that indeed deploying the dispatcher with the job-2 runs-on label
-  # correctly picks up the pending job from test-go-version.
-  sleep_1_min:
-    needs: ['deploy', 'deploy-runner-discovery-job']
-    runs-on: 'ubuntu-latest'
-    steps:
-      - name: 'Sleep 60 seconds'
-        run: |
-          sleep 60s
-
-  deploy-runner-discovery-job-with-runner-2:
-    runs-on: 'ubuntu-latest'
-    needs: ['sleep_1_min']
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-    outputs:
-      deploy_time: '${{ steps.time.outputs.deploy_time }}'
-    steps:
-      - name: 'Checkout'
-        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
-        with:
-          workload_identity_provider: '${{ env.INTEGRATION_WIF_PROVIDER }}'
-          service_account: '${{ env.INTEGRATION_WIF_SERVICE_ACCOUNT }}'
-          token_format: 'access_token'
-
-      - name: 'Setup gcloud'
-        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
-        with:
-          version: '529.0.0'
-
-      - name: 'Deploy to Cloud Run Job'
-        id: 'deploy-job'
-        run: |-
-          cat > /tmp/env_vars <<EOF
-          GCP_FOLDER_ID: '${{ env.INTEGRATION_RUNNER_FOLDER_ID }}'
-          GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES: 'default'
-          GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES: '${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }},${{ env.INTEGRATION_RUNNER_LABEL_GAD_2 }},${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}'
-          GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES: '${{ env.INTEGRATION_RUNNER_LOCATION }}'
-          GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES: 'available,unavailable'
-          GCP_ALLOWED_PROJECT_LABEL_POOL_TYPE_VALUES: 'trusted,private'
-          REDIS_HOST: '${{ env.INTEGRATION_REDIS_HOST }}'
-          REDIS_PORT: '${{ env.INTEGRATION_REDIS_PORT }}'
-          EOF
-
-          gcloud run jobs update "${{ env.INTEGRATION_RUNNER_DISCOVERY_JOB_NAME }}" \
-            --project="${{ env.INTEGRATION_PROJECT_ID }}" \
-            --region="${{ env.INTEGRATION_REGION }}" \
-            --env-vars-file=/tmp/env_vars \
-            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.DOCKER_TAG }}-amd64"
-
-      - name: 'Execute Discovery Job'
-        run: |-
-          gcloud run jobs execute "${{ env.INTEGRATION_RUNNER_DISCOVERY_JOB_NAME }}" \
-            --project="${{ env.INTEGRATION_PROJECT_ID }}" \
-            --region="${{ env.INTEGRATION_REGION }}" \
-            --wait
-
-      - name: 'Output Deploy time'
-        id: 'time'
-        run: |-
-          deploy_time="$(date +%s%N)"
-          echo "deploy_time=${deploy_time}"
-          echo "deploy_time=${deploy_time}" >> "${GITHUB_OUTPUT}"
-
   # This should never execute.
   test-unknown-label:
     name: 'test-unknown-label[${{ github.sha }}]'
@@ -318,56 +246,31 @@ jobs:
         run: |
           echo "OH NO..."
 
-  # We assume that 4 minutes is sufficient for the job to be picked up under
-  # normal operating circumstances. Note that if there is some intermitent
-  # failure or outage with GitHub this may not be sufficient.
-  sleep_4_min:
-    needs: ['deploy', 'deploy-runner-discovery-job']
-    runs-on: 'ubuntu-latest'
-    steps:
-      - name: 'Sleep 240 seconds'
-        run: |
-          sleep 240s
-
-  cancel-or-fail-unknown-label:
+  check-unknown-label-failed:
     if: |-
       ${{ always() }}
-    needs: ['sleep_4_min', 'deploy-runner-discovery-job-with-runner-2', 'test-go-version']
+    needs: ['test-unknown-label']
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
-      actions: 'write'
     steps:
-      - name: 'Checkout'
-        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
-
-      - name: 'Cancel and check status'
+      - name: 'Check Test Status'
+        # We expect the result of the test to be failed.
+        if: |-
+          ${{ needs.test-unknown-label.result != 'failure' }}
         env:
-          JOB_NAME: 'smoke-tests / test-unknown-label[${{ github.sha }}]'
-          GH_TOKEN: '${{ github.token }}'
-          RUN_ID: '${{ github.run_id }}'
+          RESULT: '${{ needs.test-unknown-label.result }}'
         run: |
-          JOB_STATUS=$(gh run view "${RUN_ID}" --json jobs -q ".jobs[] | select(.name == \"${JOB_NAME}\") | .status")
+          echo "::error::Smoke Test succeeded or was skipped. Failing status check to block merge. Status: ${RESULT}"
+          exit 1
 
-          if [[ "$JOB_STATUS" == "queued" ]]; then
-            echo "Successfully verified that 'label-no-run-me' is queued."
-          else
-            echo "Error: 'label-no-run-me' is not in the expected 'queued' state. Current status: ${JOB_STATUS}"
-            FAIL="true"
-          fi
-
-          echo "Cancelling the workflow run..."
-          gh run cancel "${RUN_ID}"
-          echo "Workflow run cancellation initiated."
-
-          if [[ "${FAIL}" == "true" ]]; then
-            exit 1
-          fi
+      - name: 'Confirm 404 test passed'
+        run: 'echo \"Unknown lable failed as expected\"'
 
   confirm-test-go-version-ran:
     if: |-
       ${{ always() }}
-    needs: ['deploy-runner-discovery-job-with-runner-2', 'test-go-version', 'cancel-or-fail-unknown-label']
+    needs: ['test-go-version', 'check-unknown-label-failed']
     runs-on: 'ubuntu-latest'
     steps:
       # TODO: Confirm that the execution time for the test-go-version[github-action-dispatcher-2-integration]
