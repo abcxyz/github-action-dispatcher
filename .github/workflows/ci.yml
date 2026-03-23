@@ -112,8 +112,8 @@ jobs:
       runner_docker_repo: '${{ steps.outs.outputs.runner_docker_repo }}'
       runner_image_tag: '${{ steps.outs.outputs.runner_image_tag }}'
       runner_image_name: '${{ steps.outs.outputs.runner_image_name }}'
-      runner_404_image_tag: '${{ steps.outs.outputs.RUNNER_404_IMAGE_TAG }}'
-      runner_404_image_name: '${{ steps.outs.outputs.RUNNER_404_IMAGE_NAME }}'
+      runner_404_image_tag: '${{ steps.outs.outputs.runner_404_image_tag }}'
+      runner_404_image_name: '${{ steps.outs.outputs.runner_404_image_name }}'
       integration_wif_provider: '${{ steps.outs.outputs.integration_wif_provider }}'
       integration_wif_service_account: '${{ steps.outs.outputs.integration_wif_service_account }}'
     steps:
@@ -185,8 +185,8 @@ jobs:
             echo "runner_docker_repo=${{ env.RUNNER_DOCKER_REPO }}"
             echo "runner_image_tag=${{ env.RUNNER_IMAGE_TAG }}"
             echo "runner_image_name=${{ env.RUNNER_IMAGE_NAME }}"
-            echo "runner_404_image_tag=${{ env.runner_404_image_tag }}"
-            echo "runner_404_image_name=${{ env.runner_404_image_name }}"
+            echo "runner_404_image_tag=${{ env.RUNNER_404_IMAGE_TAG }}"
+            echo "runner_404_image_name=${{ env.RUNNER_404_IMAGE_NAME }}"
             echo "integration_wif_provider=${{ env.INTEGRATION_WIF_PROVIDER }}"
             echo "integration_wif_service_account=${{ env.INTEGRATION_WIF_SERVICE_ACCOUNT }}"
           } >> "${GITHUB_OUTPUT}"
