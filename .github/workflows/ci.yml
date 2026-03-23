@@ -112,8 +112,8 @@ jobs:
       runner_docker_repo: '${{ steps.outs.outputs.runner_docker_repo }}'
       runner_image_tag: '${{ steps.outs.outputs.runner_image_tag }}'
       runner_image_name: '${{ steps.outs.outputs.runner_image_name }}'
-      runner_404_image_tag: '${{ steps.outs.outputs.runner_404_image_tag }}'
-      runner_404_image_name: '${{ steps.outs.outputs.runner_404_image_name }}'
+      runner_404_image_tag: '${{ steps.outs.outputs.RUNNER_404_IMAGE_TAG }}'
+      runner_404_image_name: '${{ steps.outs.outputs.RUNNER_404_IMAGE_NAME }}'
       integration_wif_provider: '${{ steps.outs.outputs.integration_wif_provider }}'
       integration_wif_service_account: '${{ steps.outs.outputs.integration_wif_service_account }}'
     steps:
