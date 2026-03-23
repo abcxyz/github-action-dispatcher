@@ -568,7 +568,7 @@ func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imag
 		location = s.config.Runner404Location
 		serviceAccount = s.config.Runner404ServiceAccount
 		if s.config.Runner404WorkerPoolID != "" {
-			build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: s.Runner404WorkerPoolID}
+			build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: s.config.Runner404WorkerPoolID}
 		}
 	} else {
 		// Otherwise, use the default server configuration.
