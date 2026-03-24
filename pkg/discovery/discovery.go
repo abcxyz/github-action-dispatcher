@@ -108,6 +108,10 @@ func (rd *RunnerDiscovery) buildRegistry(ctx context.Context, projects []*asseti
 	for _, project := range projects {
 		projectLabels, ok := rd.filterAndValidateProjectLabels(ctx, project)
 		if !ok {
+			logger.DebugContext(ctx,
+			"Skipping project without target labels",
+			"project_id", project.ProjectID,
+			"project_labels", projectLabels)
 			// A validation error occurred, and the details have been logged. Skip this project.
 			continue
 		}
