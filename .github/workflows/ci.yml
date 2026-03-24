@@ -99,8 +99,8 @@ jobs:
 
   # Verifies the latest image release of github-action-runner
   verify-latest-runner-image:
-    # if: |-
-    #   ${{ github.event_name == 'merge_group' }}
+    if: |-
+      ${{ github.event_name == 'merge_group' }}
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
@@ -193,8 +193,8 @@ jobs:
 
   smoke-tests:
     needs: ['go_test', 'build', 'verify-latest-runner-image']
-    # if: |-
-    #   ${{ github.event_name == 'merge_group' }}
+    if: |-
+      ${{ github.event_name == 'merge_group' }}
     uses: './.github/workflows/smoke-tests.yml'
     permissions:
       contents: 'read'
@@ -214,9 +214,7 @@ jobs:
   smoke-tests-passed:
     needs: ['smoke-tests']
     if: |-
-      ${{ always() }}
-    # if: |-
-    #   ${{ always() && github.event_name == 'merge_group' }}
+      ${{ always() && github.event_name == 'merge_group' }}
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Check Smoke Test Status'
