@@ -194,7 +194,8 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 	var gcbBuildIDs []string
 
 	pool := s.selectWorkerPool(ctx, jobResolvedRunnerLabel)
-	if pool == nil && s.config.Runner404NoFallbackEnabled {
+	// If we are running with default disabled send to 404.
+	if pool == nil && s.config.Runner404DefaultDisabled {
 		return s.start404RunnerForJob(ctx, event, jobOriginalRunnerLabel)
 	}
 	if pool == nil {

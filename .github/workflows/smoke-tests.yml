@@ -140,7 +140,7 @@ jobs:
             --region="${{ env.INTEGRATION_REGION }}" \
             --wait
 
-  deploy-dispatcher-with-fallback:
+  deploy-dispatcher-with-default:
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
@@ -191,7 +191,7 @@ jobs:
           WEBHOOK_KEY_MOUNT_PATH: '${WEBHOOK_SECRET_MOUNT_PATH}'
           WEBHOOK_KEY_NAME: '${WEBHOOK_SECRET_NAME}'
           RUNNER_404_ENABLED: 'true'
-          RUNNER_404_NO_FALLBACK_ENABLED: 'false'
+          RUNNER_404_DEFAULT_DISABLED: 'false'
           RUNNER_404_IMAGE_TAG: '${{ env.RUNNER_404_IMAGE_TAG }}'
           RUNNER_404_IMAGE_NAME: '${{ env.RUNNER_404_IMAGE_NAME }}'
           RUNNER_404_LOCATION: '${{ env.RUNNER_404_LOCATION }}'
@@ -211,10 +211,10 @@ jobs:
             --format='value(status.url)'
 
   # This should not fail with 404 on runs-on label because we allow for
-  # fallback to the default runner pool for allowlisted labels without a match.
-  test-fallback-success:
-    name: 'test-fallback-success[${{ github.sha }}]'
-    needs: ['deploy-dispatcher-with-fallback', 'deploy-runner-discovery-job']
+  # default to the default runner pool for allowlisted labels without a match.
+  test-default-success:
+    name: 'test-default-success[${{ github.sha }}]'
+    needs: ['deploy-dispatcher-with-default', 'deploy-runner-discovery-job']
     runs-on: 'github-action-dispatcher-2-integration'
     steps:
       - name: 'I SHOULD RUN'
@@ -224,15 +224,15 @@ jobs:
   # This should fail with 404 on runs-on label.
   test-unknown-label:
     name: 'test-unknown-label[${{ github.sha }}]'
-    needs: ['deploy-dispatcher-with-fallback', 'deploy-runner-discovery-job']
+    needs: ['deploy-dispatcher-with-default', 'deploy-runner-discovery-job']
     runs-on: 'label-no-run-me'
     steps:
       - name: 'I SHOULD NOT RUN'
         run: |
           echo "OH NO..."
 
-  deploy-dispatcher-no-fallback:
-    needs: ['test-fallback-success']
+  deploy-dispatcher-no-default:
+    needs: ['test-default-success']
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
@@ -283,7 +283,7 @@ jobs:
           WEBHOOK_KEY_MOUNT_PATH: '${WEBHOOK_SECRET_MOUNT_PATH}'
           WEBHOOK_KEY_NAME: '${WEBHOOK_SECRET_NAME}'
           RUNNER_404_ENABLED: 'true'
-          RUNNER_404_NO_FALLBACK_ENABLED: 'true'
+          RUNNER_404_DEFAULT_DISABLED: 'true'
           RUNNER_404_IMAGE_TAG: '${{ env.RUNNER_404_IMAGE_TAG }}'
           RUNNER_404_IMAGE_NAME: '${{ env.RUNNER_404_IMAGE_NAME }}'
           RUNNER_404_LOCATION: '${{ env.RUNNER_404_LOCATION }}'
@@ -302,22 +302,22 @@ jobs:
             --env-vars-file=/tmp/env_vars \
             --format='value(status.url)'
 
-  # Now that fallback is disabled, confirm that we still can use a pool that is
+  # Now that default is disabled, confirm that we still can use a pool that is
   # correctly configured.
   test-finds-assigned-pool:
     name: 'test-finds-assigned-pool[${{ github.sha }}]'
-    needs: ['deploy-dispatcher-no-fallback']
+    needs: ['deploy-dispatcher-no-default']
     runs-on: 'github-action-dispatcher-integration'
     steps:
       - name: 'I SHOULD RUN'
         run: |
           echo "OH YEAH..."
 
-  # Now that fallback is disabled, confirm that we can still use a pool that is
+  # Now that default is disabled, confirm that we can still use a pool that is
   # correctly configured via alias.
   test-finds-assigned-pool-with-alias:
     name: 'test-finds-assigned-pool[${{ github.sha }}]'
-    needs: ['deploy-dispatcher-no-fallback']
+    needs: ['deploy-dispatcher-no-default']
     runs-on: 'self-hosted'
     steps:
       - name: 'I SHOULD RUN'
@@ -325,10 +325,10 @@ jobs:
           echo "OH YEAH..."
 
   # This should fail with 404 on runs-on label because the label is allowlisted,
-  # there is no assigned pool, and fallback to default is disabled.
-  test-does-not-fallback:
-    name: 'test-does-not-fallback[${{ github.sha }}]'
-    needs: ['deploy-dispatcher-no-fallback']
+  # there is no assigned pool, and default to default is disabled.
+  test-does-not-default:
+    name: 'test-does-not-default[${{ github.sha }}]'
+    needs: ['deploy-dispatcher-no-default']
     runs-on: 'github-action-dispatcher-2-integration'
     steps:
       - name: 'I SHOULD NOT RUN'
@@ -411,7 +411,7 @@ jobs:
   smoke-tests-passed:
     if: |-
       ${{ always() }}
-    needs: ['test-finds-assigned-pool', 'test-finds-assigned-pool-with-alias', 'test-unknown-label', 'test-does-not-fallback', 'test-found-pool-for-label-after-discovery-updates-with-label']
+    needs: ['test-finds-assigned-pool', 'test-finds-assigned-pool-with-alias', 'test-unknown-label', 'test-does-not-default', 'test-found-pool-for-label-after-discovery-updates-with-label']
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
@@ -419,12 +419,12 @@ jobs:
       - name: 'Check unknown-labal Test Status'
         # We expect the result of the test to be failed.
         if: |-
-          ${{ needs.test-unknown-label.result != 'failure' || needs.test-does-not-fallback.result != 'failure' }}
+          ${{ needs.test-unknown-label.result != 'failure' || needs.test-does-not-default.result != 'failure' }}
         env:
           RESULT_UNKNOWN: '${{ needs.test-unknown-label.result }}'
-          RESULT_NO_FALLBACK: '${{ needs.test-does-not-fallback.result }}'
+          RESULT_NO_DEFAULT: '${{ needs.test-does-not-default.result }}'
         run: |
-          echo "::error::Smoke Test succeeded or was skipped. Failing status check to block merge. Status: ${RESULT_UNKNOWN} ${RESULT_NO_FALLBACK}"
+          echo "::error::Smoke Test succeeded or was skipped. Failing status check to block merge. Status: ${RESULT_UNKNOWN} ${RESULT_NO_DEFAULT}"
           exit 1
 
       - name: 'Check Success Test Status'
