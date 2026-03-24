@@ -202,7 +202,7 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 		pool = &workerPool{
 			projectID:      s.runnerProjectID,
 			location:       s.runnerLocation,
-			serviceAccount: s.runnerServiceAccount
+			serviceAccount: s.runnerServiceAccount,
 		}
 		if s.runnerWorkerPoolID != "" {
 			pool.name = s.runnerWorkerPoolID
