@@ -322,7 +322,7 @@ jobs:
 
   # This should now succeed.
   test-gad-2-label-in-discovery:
-    name: 'test-gad-2-label-not-in-discovery[${{ github.sha }}]'
+    name: 'test-gad-2-label-in-discovery[${{ github.sha }}]'
     needs: ['deploy-runner-discovery-job-with-runner-2']
     runs-on: 'github-action-dispatcher-2-integration'
     steps:

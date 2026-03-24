@@ -268,7 +268,7 @@ func (rd *RunnerDiscovery) updateRegistry(ctx context.Context, poolsByRegistryKe
 
 // validateLabel validates a single label's value against a list of allowed patterns.
 // It supports wildcard matching in the allowed patterns.
-func (rd *RunnerDiscovery) validateLabel(ctx context.Context, projectID, key, value string, labelAllowedValues []string) bool {
+func validateLabel(ctx context.Context, projectID, key, value string, labelAllowedValues []string) bool {
 	logger := logging.FromContext(ctx)
 	matched := false
 	for _, v := range labelAllowedValues {
@@ -328,7 +328,7 @@ func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, p
 			return nil, false
 		}
 
-		if !rd.validateLabel(ctx, project.ProjectID, key, projectLabelValue, values) {
+		if !validateLabel(ctx, project.ProjectID, key, projectLabelValue, values) {
 			return nil, false
 		}
 		projectLabels[key] = projectLabelValue
@@ -351,7 +351,7 @@ func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, p
 			return nil, false
 		}
 
-		if !rd.validateLabel(ctx, project.ProjectID, trustedRemoteConfigGCPProjectLabelKey, projectLabelValue, allowedTrustedRemoteConfigs) {
+		if !validateLabel(ctx, project.ProjectID, trustedRemoteConfigGCPProjectLabelKey, projectLabelValue, allowedTrustedRemoteConfigs) {
 			return nil, false
 		}
 	}
