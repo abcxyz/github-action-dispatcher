@@ -68,7 +68,6 @@ type workerPool struct {
 	location       string
 	serviceAccount string
 	poolType       string
-	remoteConfig   string
 }
 
 // handleWebhook returns an http.Handler that processes incoming GitHub webhook requests.
@@ -553,7 +552,6 @@ func (s *Server) selectWorkerPool(ctx context.Context, orgName, jobResolvedRunne
 			location:       selectedPool.Location,
 			serviceAccount: fmt.Sprintf("runner-sa@%s.iam.gserviceaccount.com", selectedPool.ProjectID),
 			poolType:       selectedPool.PoolType,
-			remoteConfig:   selectedPool.RemoteConfig,
 		}
 	}
 
@@ -570,12 +568,13 @@ func (s *Server) selectWorkerPool(ctx context.Context, orgName, jobResolvedRunne
 func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imageName, imageTag string, pool *workerPool) *cloudbuildpb.CreateBuildRequest {
 	logger := logging.FromContext(ctx)
 
-	var projectID, location, serviceAccount string
+	var projectID, location, serviceAccount, poolName string
 
 	if pool != nil && pool.projectID != "" {
-		// Use configuration from the registry.
 		projectID = pool.projectID
 		location = pool.location
+		poolName = pool.name
+
 		if location == "" {
 			location = s.runnerLocation
 			logger.WarnContext(ctx, "worker pool from registry is missing location, falling back to default",
@@ -587,8 +586,10 @@ func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imag
 		projectID = s.runnerProjectID
 		location = s.runnerLocation
 		serviceAccount = s.runnerServiceAccount
+		poolName = s.runnerWorkerPoolID
 	}
 
+	// 3. Initialize the Build Object
 	build := &cloudbuildpb.Build{
 		Timeout: durationpb.New(time.Duration(s.runnerExecutionTimeoutSeconds) * time.Second),
 		Substitutions: map[string]string{
@@ -599,20 +600,18 @@ func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imag
 			"_IMAGE_TAG":                     imageTag,
 			"_CREATE_BUILD_REQUEST_TIME_UTC": time.Now().UTC().Format(time.RFC3339),
 		},
+		Options: &cloudbuildpb.BuildOptions{
+			Logging: cloudbuildpb.BuildOptions_CLOUD_LOGGING_ONLY,
+			Pool:    &cloudbuildpb.BuildOptions_PoolOption{Name: poolName},
+		},
 	}
 
-	// 2. Branch for Trusted Pools vs Private Pools
-	if pool != nil && pool.PoolType == "trusted" {
+	// 4. Branch for Trusted Pools (Remote) vs Private Pools (Local)
+	if pool != nil && pool.poolType == "trusted" {
 		// --- TRUSTED POOL LOGIC ---
-		// In Trusted Pools, the config is remote, so we don't define Steps locally.
 		build.RemoteConfig = "gob:github-on-prem-depot-mirror/abcxyz/runner-test@main#cloudbuild.yaml"
-
-		if serviceAccount != "" && !strings.HasPrefix(serviceAccount, "projects/") {
-			serviceAccount = fmt.Sprintf("projects/%s/serviceAccounts/%s", projectID, serviceAccount)
-		}
-		build.ServiceAccount = serviceAccount
 	} else {
-		// Private pool flow
+		// --- PRIVATE POOL LOGIC ---
 		build.Steps = []*cloudbuildpb.BuildStep{
 			{
 				Id:   "run",
@@ -624,17 +623,10 @@ func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imag
 				},
 			},
 		}
-		build.Options = &cloudbuildpb.BuildOptions{
-			Logging: cloudbuildpb.BuildOptions_CLOUD_LOGGING_ONLY,
-		}
+	}
 
-		if pool != nil && pool.name != "" {
-			build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: pool.name}
-		} else if s.runnerWorkerPoolID != "" {
-			build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: s.runnerWorkerPoolID}
-		}
-
-		if serviceAccount != "" && !strings.HasPrefix(serviceAccount, "projects/") {
+	if serviceAccount != "" {
+		if !strings.HasPrefix(serviceAccount, "projects/") {
 			serviceAccount = fmt.Sprintf("projects/%s/serviceAccounts/%s", projectID, serviceAccount)
 		}
 		build.ServiceAccount = serviceAccount

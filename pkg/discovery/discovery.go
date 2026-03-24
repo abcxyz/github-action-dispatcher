@@ -148,16 +148,24 @@ func (rd *RunnerDiscovery) buildRegistry(ctx context.Context, projects []*asseti
 				"config", wp.GetConfig())
 
 			privatePoolConfig := wp.GetPrivatePoolV1Config()
-			if privatePoolConfig == nil {
-				logger.InfoContext(ctx, "worker pool is not a private pool, skipping", "worker_pool", wp.GetName())
+			trustedPoolConfig := wp.GetTrustedPoolConfig()
+
+			if privatePoolConfig == nil && trustedPoolConfig == nil {
+				logger.InfoContext(ctx, "worker pool is neither a private pool nor a trusted pool, skipping", "worker_pool", wp.GetName())
 				continue
 			}
 
-			workerConfig := privatePoolConfig.GetWorkerConfig()
-			if workerConfig == nil {
-				logger.InfoContext(ctx, "worker pool has no worker config, skipping", "worker_pool", wp.GetName())
-				continue
+			// For private pools, check its worker config.
+			if privatePoolConfig != nil {
+				workerConfig := privatePoolConfig.GetWorkerConfig()
+				if workerConfig == nil {
+					logger.InfoContext(ctx, "private worker pool has no worker config, skipping", "worker_pool", wp.GetName())
+					continue
+				}
 			}
+
+			// For trusted pools, we assume they are valid if they exist and proceed.
+			// Additional validation for trusted pools once a worker config field is available
 
 			registryKey := fmt.Sprintf("%s:%s", githubOrgScope, jobRunsOn)
 
@@ -223,6 +231,11 @@ func (rd *RunnerDiscovery) updateRegistry(ctx context.Context, poolsByRegistryKe
 		// If we can't scan, we can't safely update the cache. Abort.
 		return fmt.Errorf("failed to scan for stale worker pool keys: %w", err)
 	}
+
+	// Log the number of keys to be deleted and set.
+	logger.InfoContext(ctx, "updating registry",
+		"deletions", len(staleKeys),
+		"insertions", len(marshalledPools))
 
 	// Atomically delete stale keys and set new keys in a transaction.
 	// Only initiate a transaction if there are keys to delete or set.
@@ -329,28 +342,6 @@ func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, p
 			return nil, false
 		}
 		projectLabels[key] = projectLabelValue
-	}
-
-	if projectLabels[poolTypeGCPProjectLabelKey] == poolTypeTrusted {
-		projectLabelValue, ok := project.Labels[trustedRemoteConfigGCPProjectLabelKey]
-		if !ok {
-			logger.WarnContext(ctx, "project missing required label because pool-type is trusted",
-				"project_id", project.ProjectID,
-				"label", trustedRemoteConfigGCPProjectLabelKey)
-			return nil, false
-		}
-
-		allowedTrustedRemoteConfigs := rd.config.GetAllowedTrustedRemoteConfigs()
-		if len(allowedTrustedRemoteConfigs) == 0 {
-			logger.WarnContext(ctx, "dispatcher config missing allowed remote config patterns for trusted pools",
-				"project_id", project.ProjectID,
-				"label", trustedRemoteConfigGCPProjectLabelKey)
-			return nil, false
-		}
-
-		if !validateLabel(ctx, project.ProjectID, trustedRemoteConfigGCPProjectLabelKey, projectLabelValue, allowedTrustedRemoteConfigs) {
-			return nil, false
-		}
 	}
 
 	// After validating the required labels, iterate through all the project's
