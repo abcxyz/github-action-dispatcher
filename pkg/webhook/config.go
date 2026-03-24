@@ -24,6 +24,7 @@ import (
 
 	"github.com/abcxyz/pkg/cfgloader"
 	"github.com/abcxyz/pkg/cli"
+	"github.com/abcxyz/pkg/sets"
 )
 
 const (
@@ -68,6 +69,7 @@ type Config struct {
 	RunnerLabelAliasesRaw          []string      `env:"RUNNER_LABEL_ALIASES"`
 	RunnerLabelAliases             map[string]string
 	SupportedRunnerLabels          []string `env:"SUPPORTED_RUNNER_LABELS,required,delimiter=,"`
+	IgnoredRunnerLabels            []string `env:"IGNORED_RUNNER_LABELS,required,delimiter=,"`
 }
 
 // Validate validates the webhook config after load.
@@ -152,6 +154,10 @@ func (cfg *Config) Validate() error {
 	supportedLabelsMap := make(map[string]bool)
 	for _, label := range cfg.SupportedRunnerLabels {
 		supportedLabelsMap[label] = true
+	}
+
+	if inBoth := sets.Intersect(cfg.SupportedRunnerLabels, cfg.IgnoredRunnerLabels); len(inBoth) > 0 {
+		return fmt.Errorf("cannot have the same label in both SUPPORTED_RUNNER_LABELS and IGNORED_RUNNER_LABELS: %v", inBoth)
 	}
 
 	cfg.RunnerLabelAliases = make(map[string]string)
@@ -342,6 +348,13 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Target: &cfg.SupportedRunnerLabels,
 		EnvVar: "SUPPORTED_RUNNER_LABELS",
 		Usage:  `List of labels that are supported by the dispatcher.`,
+	})
+
+	f.StringSliceVar(&cli.StringSliceVar{
+		Name:   "ignored-runner-labels",
+		Target: &cfg.IgnoredRunnerLabels,
+		EnvVar: "IGNORED_RUNNER_LABELS",
+		Usage:  `List of labels that are ignored by the dispatcher. Use this in conjunction with runner-404-enabled.`,
 	})
 
 	f.BoolVar(&cli.BoolVar{

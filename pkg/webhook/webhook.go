@@ -25,6 +25,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -271,6 +272,12 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 			"resolved_label", jobResolvedRunnerLabel)
 		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken for label: %s", incomingLabel), nil}
 	}
+	if slices.Contains(s.config.IgnoredRunnerLabels, jobOriginalRunnerLabel) {
+		logger.InfoContext(ctx, "no action taken for ignored label",
+			"original_label", jobOriginalRunnerLabel,
+			"resolved_label", jobResolvedRunnerLabel)
+		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken for ignored label: %s", incomingLabel), nil}
+	}
 
 	if event.Installation == nil || event.Installation.ID == nil || event.Org == nil || event.Org.Login == nil || event.Repo == nil || event.Repo.Name == nil {
 		err := fmt.Errorf("event is missing required fields (installation, org, or repo)")
@@ -284,6 +291,9 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		// jobs on the GH host. If another service will subscribe to the
 		// webhook and handle jobs then this should not be enabled.
 		runnerNames, gcbBuildIDs, err = s.start404RunnerForJob(ctx, event, jobOriginalRunnerLabel)
+		logger.WarnContext(ctx, "unable to handle requested label - sending to 404 runner",
+			"original_label", jobOriginalRunnerLabel,
+			"resolved_label", jobResolvedRunnerLabel)
 		if err != nil {
 			return &apiResponse{http.StatusInternalServerError, err.Error(), err}
 		}
@@ -570,6 +580,7 @@ func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imag
 		if s.config.Runner404WorkerPoolID != "" {
 			build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: s.config.Runner404WorkerPoolID}
 		}
+		logger.WarnContext(ctx, "unable to locate pool - sending to 404 runner pool")
 	} else {
 		// Otherwise, use the default server configuration.
 		projectID = s.runnerProjectID
