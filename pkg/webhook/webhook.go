@@ -194,6 +194,20 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 	var gcbBuildIDs []string
 
 	pool := s.selectWorkerPool(ctx, jobResolvedRunnerLabel)
+	if pool == nil && s.config.Runner404NoFallbackEnabled {
+		return s.start404RunnerForJob(ctx, event, jobOriginalRunnerLabel)
+	}
+	if pool == nil {
+		// TODO: Select the "default" pool from the registry that matches the same original label.
+		pool = &workerPool{
+			projectID:      s.runnerProjectID,
+			location:       s.runnerLocation,
+			serviceAccount: s.runnerServiceAccount
+		}
+		if s.runnerWorkerPoolID != "" {
+			pool.name = s.runnerWorkerPoolID
+		}
+	}
 
 	for i := 1; i <= 1+s.extraRunnerCount; i++ {
 		runnerID := uuid.New().String()
@@ -588,14 +602,6 @@ func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imag
 		serviceAccount = pool.serviceAccount
 		if pool.name != "" {
 			build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: pool.name}
-		}
-	} else {
-		// Otherwise, use the default server configuration.
-		projectID = s.runnerProjectID
-		location = s.runnerLocation
-		serviceAccount = s.runnerServiceAccount
-		if s.runnerWorkerPoolID != "" {
-			build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: s.runnerWorkerPoolID}
 		}
 	}
 

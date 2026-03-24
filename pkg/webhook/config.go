@@ -59,6 +59,7 @@ type Config struct {
 	RunnerWorkerPoolID             string        `env:"RUNNER_WORKER_POOL_ID"`
 	E2ETestRunID                   string        `env:"E2ETestRunID"`
 	Runner404Enabled               bool          `env:"RUNNER_404_ENABLED,default=false"`
+	Runner404NoFallbackEnabled     bool          `env:"RUNNER_404_NO_FALLBACK_ENABLED,default=false"`
 	Runner404ImageName             string        `env:"RUNNER_404_IMAGE_NAME,default=runner-404"`
 	Runner404ImageTag              string        `env:"RUNNER_404_IMAGE_TAG,default=latest"`
 	Runner404Location              string        `env:"RUNNER_404_LOCATION,required"`
@@ -362,6 +363,13 @@ func (cfg *Config) ToFlags(set *cli.FlagSet) *cli.FlagSet {
 		Target: &cfg.Runner404Enabled,
 		EnvVar: "RUNNER_404_ENABLED",
 		Usage:  `Whether or not to enable 404 - or cancellation of jobs requesting a label that has no matching runners.`,
+	})
+
+	f.BoolVar(&cli.BoolVar{
+		Name:   "runner-404-no-fallback-enabled",
+		Target: &cfg.Runner404NoFallbackEnabled,
+		EnvVar: "RUNNER_404_NO_FALLBACK_ENABLED",
+		Usage:  `Whether or not to disable fallback to the default runners.`,
 	})
 
 	f.StringVar(&cli.StringVar{
