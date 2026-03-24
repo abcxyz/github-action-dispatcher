@@ -142,7 +142,6 @@ jobs:
 
   deploy-dispatcher-with-fallback:
     runs-on: 'ubuntu-latest'
-    needs: ['test-go-version']
     permissions:
       contents: 'read'
       id-token: 'write'
