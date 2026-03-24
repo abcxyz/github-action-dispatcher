@@ -328,7 +328,8 @@ func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, p
 			return nil, false
 		}
 
-		if !rd.validateLabel(ctx, project.ProjectID, key, projectLabelValue, values) {
+		// We allow for a glob star pattern to accept every label value.
+		if !slices.Contains(values, "*") && !rd.validateLabel(ctx, project.ProjectID, key, projectLabelValue, values) {
 			return nil, false
 		}
 		projectLabels[key] = projectLabelValue
