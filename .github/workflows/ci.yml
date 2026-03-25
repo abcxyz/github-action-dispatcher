@@ -105,17 +105,6 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
-    outputs:
-      docker_repo: '${{ steps.outs.outputs.docker_repo }}'
-      docker_tag: '${{ steps.outs.outputs.docker_tag }}'
-      image_name: '${{ steps.outs.outputs.image_name }}'
-      runner_docker_repo: '${{ steps.outs.outputs.runner_docker_repo }}'
-      runner_image_tag: '${{ steps.outs.outputs.runner_image_tag }}'
-      runner_image_name: '${{ steps.outs.outputs.runner_image_name }}'
-      runner_404_image_tag: '${{ steps.outs.outputs.runner_404_image_tag }}'
-      runner_404_image_name: '${{ steps.outs.outputs.runner_404_image_name }}'
-      integration_wif_provider: '${{ steps.outs.outputs.integration_wif_provider }}'
-      integration_wif_service_account: '${{ steps.outs.outputs.integration_wif_service_account }}'
     steps:
       - name: 'Checkout'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
