@@ -99,8 +99,8 @@ jobs:
 
   # Verifies the latest image release of github-action-runner
   verify-latest-runner-image:
-    if: |-
-      ${{ github.event_name == 'merge_group' }}
+    # if: |-
+    #   ${{ github.event_name == 'merge_group' }}
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
@@ -193,28 +193,19 @@ jobs:
 
   smoke-tests:
     needs: ['go_test', 'build', 'verify-latest-runner-image']
-    if: |-
-      ${{ github.event_name == 'merge_group' }}
+    # if: |-
+    #   ${{ github.event_name == 'merge_group' }}
     uses: './.github/workflows/smoke-tests.yml'
     permissions:
       contents: 'read'
       id-token: 'write'
-    with:
-      docker_repo: '${{ needs.verify-latest-runner-image.outputs.docker_repo }}'
-      docker_tag: '${{ needs.verify-latest-runner-image.outputs.docker_tag }}'
-      image_name: '${{ needs.verify-latest-runner-image.outputs.image_name }}'
-      runner_docker_repo: '${{ needs.verify-latest-runner-image.outputs.runner_docker_repo }}'
-      runner_image_tag: '${{ needs.verify-latest-runner-image.outputs.runner_image_tag }}'
-      runner_image_name: '${{ needs.verify-latest-runner-image.outputs.runner_image_name }}'
-      runner_404_image_tag: '${{ needs.verify-latest-runner-image.outputs.runner_404_image_tag }}'
-      runner_404_image_name: '${{ needs.verify-latest-runner-image.outputs.runner_404_image_name }}'
-      integration_wif_provider: '${{ needs.verify-latest-runner-image.outputs.integration_wif_provider }}'
-      integration_wif_service_account: '${{ needs.verify-latest-runner-image.outputs.integration_wif_service_account }}'
 
   smoke-tests-passed:
     needs: ['smoke-tests']
     if: |-
-      ${{ always() && github.event_name == 'merge_group' }}
+      ${{ always() }}
+    # if: |-
+    #   ${{ always() && github.event_name == 'merge_group' }}
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Check Smoke Test Status'
