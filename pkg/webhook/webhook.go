@@ -200,11 +200,16 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 	var startedRunnerNames []string
 	var gcbBuildIDs []string
 
-	pool := s.selectWorkerPool(ctx, jobResolvedRunnerLabel)
+	pool := s.selectWorkerPool(ctx, *event.Org.Login, jobResolvedRunnerLabel)
 	// If we are running with default disabled send to 404.
 	if pool == nil && s.config.Runner404DefaultDisabled {
 		return s.start404RunnerForJob(ctx, event, jobOriginalRunnerLabel)
 	}
+	// Try to get a matching default runner when default fallback is enabled.
+	if pool == nil {
+		pool = s.selectWorkerPool(ctx, s.runnerRegistryDefaultKeyPrefix, jobResolvedRunnerLabel)
+	}
+	// TODO: Remove this static default that does not support lookup by label type.
 	if pool == nil {
 		// TODO: Select the "default" pool from the registry that matches the same original label.
 		pool = &workerPool{
@@ -283,6 +288,20 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 	incomingLabel := event.WorkflowJob.Labels[0]
 	jobOriginalRunnerLabel := incomingLabel // used in jit config request
 
+	var orgName, repoName string
+	if event.Org != nil && event.Org.Login != nil {
+		orgName = *event.Org.Login
+	}
+	if event.Repo != nil && event.Repo.Name != nil {
+		repoName = *event.Repo.Name
+	}
+
+	logger = logger.With(
+		"original_label", jobOriginalRunnerLabel,
+		"org", orgName,
+		"repo", repoName,
+	)
+
 	logger.InfoContext(ctx, "received user requested label", "label", incomingLabel)
 
 	jobResolvedRunnerLabel, canHandle, err := s.resolveAndValidateRunnerLabel(ctx, incomingLabel)
@@ -291,16 +310,14 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		return &apiResponse{http.StatusInternalServerError, err.Error(), err}
 	}
 
+	logger = logger.With("resolved_label", jobResolvedRunnerLabel)
+
 	if !canHandle && !s.config.Runner404Enabled {
-		logger.WarnContext(ctx, "no action taken for label",
-			"original_label", jobOriginalRunnerLabel,
-			"resolved_label", jobResolvedRunnerLabel)
+		logger.WarnContext(ctx, "no action taken for label")
 		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken for label: %s", incomingLabel), nil}
 	}
 	if slices.Contains(s.config.IgnoredRunnerLabels, jobOriginalRunnerLabel) {
-		logger.InfoContext(ctx, "no action taken for ignored label",
-			"original_label", jobOriginalRunnerLabel,
-			"resolved_label", jobResolvedRunnerLabel)
+		logger.InfoContext(ctx, "no action taken for ignored label")
 		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken for ignored label: %s", incomingLabel), nil}
 	}
 
@@ -316,9 +333,7 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		// jobs on the GH host. If another service will subscribe to the
 		// webhook and handle jobs then this should not be enabled.
 		runnerNames, gcbBuildIDs, err = s.start404RunnerForJob(ctx, event, jobOriginalRunnerLabel)
-		logger.WarnContext(ctx, "unable to handle requested label - sending to 404 runner",
-			"original_label", jobOriginalRunnerLabel,
-			"resolved_label", jobResolvedRunnerLabel)
+		logger.WarnContext(ctx, "unable to handle requested label - sending to 404 runner")
 		if err != nil {
 			return &apiResponse{http.StatusInternalServerError, err.Error(), err}
 		}
@@ -381,10 +396,8 @@ func (s *Server) resolveAndValidateRunnerLabel(ctx context.Context, incomingLabe
 // getRunnerKey creates a key for the runner in the format that the registry
 // expects. This key is used to lookup additional information about the runner,
 // such as the worker pool to use.
-func (s *Server) getRunnerKey(ctx context.Context, label string) string {
-	// TODO(controllers): Add support for org-specific keys.
-	// For now, we only support default runners that are org agnostic.
-	return fmt.Sprintf("%s:%s", s.runnerRegistryDefaultKeyPrefix, label)
+func (s *Server) getRunnerKey(ctx context.Context, orgName, label string) string {
+	return fmt.Sprintf("%s:%s", orgName, label)
 }
 
 // extractLoggedAttributes extracts common logging attributes from a GitHub WorkflowJobEvent.
@@ -520,9 +533,9 @@ func (s *Server) generateAndCompressJITConfig(ctx context.Context, event *github
 // selectWorkerPool selects a worker pool for the job. It returns a specific
 // *registry.WorkerPoolInfo if a pool is found in the registry, otherwise it
 // returns nil.
-func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel string) *workerPool {
+func (s *Server) selectWorkerPool(ctx context.Context, orgName, jobResolvedRunnerLabel string) *workerPool {
 	logger := logging.FromContext(ctx)
-	pools := s.getWorkerPools(ctx, jobResolvedRunnerLabel)
+	pools := s.getWorkerPools(ctx, orgName, jobResolvedRunnerLabel)
 
 	if len(pools) > 0 {
 		// Use random selection to select a pool.
@@ -531,6 +544,8 @@ func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel st
 		logger.InfoContext(
 			ctx,
 			"found worker pool in registry",
+			"org_name", orgName,
+			"label", jobResolvedRunnerLabel,
 			"worker_pool", selectedPool.Name,
 			"total_worker_pools_found", len(pools),
 		)
@@ -546,6 +561,7 @@ func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel st
 	logger.InfoContext(
 		ctx,
 		"no worker pools found in registry for label, using default server configuration",
+		"org_name", orgName,
 		"label", jobResolvedRunnerLabel,
 	)
 	return nil
@@ -621,8 +637,11 @@ func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imag
 }
 
 // getWorkerPools determines the appropriate worker pools for a given runner label.
-func (s *Server) getWorkerPools(ctx context.Context, runnerLabel string) []registry.WorkerPoolInfo {
-	logger := logging.FromContext(ctx)
+func (s *Server) getWorkerPools(ctx context.Context, orgName, runnerLabel string) []registry.WorkerPoolInfo {
+	logger := logging.FromContext(ctx).With(
+		"org_name", orgName,
+		"label", runnerLabel,
+	)
 
 	// Return nil if registry is not configured.
 	if s.rc == nil {
@@ -631,7 +650,7 @@ func (s *Server) getWorkerPools(ctx context.Context, runnerLabel string) []regis
 	}
 
 	// Attempt to get pools from the registry.
-	poolsKey := s.getRunnerKey(ctx, runnerLabel)
+	poolsKey := s.getRunnerKey(ctx, orgName, runnerLabel)
 	logger.DebugContext(ctx, "attempting to get worker pool from registry", "key", poolsKey)
 	val, err := s.rc.Get(ctx, poolsKey).Result()
 	if err != nil {
