@@ -18,6 +18,8 @@ env:
   RUNNER_DOCKER_REPO: 'us-docker.pkg.dev/abcxyz-artifacts/docker-images'
   RUNNER_IMAGE_TAG: 'v0.4.0-ubuntu-24-04-amd64'
   RUNNER_IMAGE_NAME: 'github-action-runner'
+  RUNNER_404_IMAGE_TAG: 'v0.4.0-runner-404-amd64'
+  RUNNER_404_IMAGE_NAME: 'github-action-runner'
 
   INTEGRATION_WIF_PROVIDER: 'projects/643301186155/locations/global/workloadIdentityPools/github-automation/providers/gad-ci-i'
   INTEGRATION_WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-gad-ci-i-832939.iam.gserviceaccount.com'
@@ -110,6 +112,8 @@ jobs:
       runner_docker_repo: '${{ steps.outs.outputs.runner_docker_repo }}'
       runner_image_tag: '${{ steps.outs.outputs.runner_image_tag }}'
       runner_image_name: '${{ steps.outs.outputs.runner_image_name }}'
+      runner_404_image_tag: '${{ steps.outs.outputs.runner_404_image_tag }}'
+      runner_404_image_name: '${{ steps.outs.outputs.runner_404_image_name }}'
       integration_wif_provider: '${{ steps.outs.outputs.integration_wif_provider }}'
       integration_wif_service_account: '${{ steps.outs.outputs.integration_wif_service_account }}'
     steps:
@@ -181,6 +185,8 @@ jobs:
             echo "runner_docker_repo=${{ env.RUNNER_DOCKER_REPO }}"
             echo "runner_image_tag=${{ env.RUNNER_IMAGE_TAG }}"
             echo "runner_image_name=${{ env.RUNNER_IMAGE_NAME }}"
+            echo "runner_404_image_tag=${{ env.RUNNER_404_IMAGE_TAG }}"
+            echo "runner_404_image_name=${{ env.RUNNER_404_IMAGE_NAME }}"
             echo "integration_wif_provider=${{ env.INTEGRATION_WIF_PROVIDER }}"
             echo "integration_wif_service_account=${{ env.INTEGRATION_WIF_SERVICE_ACCOUNT }}"
           } >> "${GITHUB_OUTPUT}"
@@ -193,7 +199,6 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
-      actions: 'write'
     with:
       docker_repo: '${{ needs.verify-latest-runner-image.outputs.docker_repo }}'
       docker_tag: '${{ needs.verify-latest-runner-image.outputs.docker_tag }}'
@@ -201,6 +206,8 @@ jobs:
       runner_docker_repo: '${{ needs.verify-latest-runner-image.outputs.runner_docker_repo }}'
       runner_image_tag: '${{ needs.verify-latest-runner-image.outputs.runner_image_tag }}'
       runner_image_name: '${{ needs.verify-latest-runner-image.outputs.runner_image_name }}'
+      runner_404_image_tag: '${{ needs.verify-latest-runner-image.outputs.runner_404_image_tag }}'
+      runner_404_image_name: '${{ needs.verify-latest-runner-image.outputs.runner_404_image_name }}'
       integration_wif_provider: '${{ needs.verify-latest-runner-image.outputs.integration_wif_provider }}'
       integration_wif_service_account: '${{ needs.verify-latest-runner-image.outputs.integration_wif_service_account }}'
 
@@ -216,11 +223,11 @@ jobs:
         # Thus requiring us to cancel the workflow as part of the successful
         # execution of the smoke tests.
         if: |-
-          ${{ needs.smoke-tests.result != 'success' && needs.smoke-tests.result != 'cancelled' }}
+          ${{ needs.smoke-tests.result != 'failure' }}
         env:
           RESULT: '${{ needs.smoke-tests.result }}'
         run: |
-          echo "::error::Smoke Test failed or was skipped. Failing status check to block merge. Status: ${RESULT}"
+          echo "::error::Smoke Test should end in failure. Failing status check to block merge. Status: ${RESULT}"
           exit 1
 
       - name: 'Confirm smoke tests passed'

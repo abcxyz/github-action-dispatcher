@@ -470,3 +470,50 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateLabel(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name          string
+		value         string
+		allowedValues []string
+		expMatch      bool
+	}{
+		{
+			name:          "exact_match",
+			value:         "self-hosted",
+			allowedValues: []string{"self-hosted"},
+			expMatch:      true,
+		},
+		{
+			name:          "exact_match_missing",
+			value:         "self-hosted",
+			allowedValues: []string{"no-hosted"},
+			expMatch:      false,
+		},
+		{
+			name:          "glob_star_match",
+			value:         "self-hosted-123",
+			allowedValues: []string{"*"},
+			expMatch:      true,
+		},
+		{
+			name:          "glob_star_match_missing",
+			value:         "self-hosted-123",
+			allowedValues: []string{"no-*"},
+			expMatch:      false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := logging.WithLogger(context.Background(), logging.TestLogger(t))
+			if got := validateLabel(ctx, "project-id", "label-key", tc.value, tc.allowedValues); got != tc.expMatch {
+				t.Errorf("validateLabel (-want,+got):\n-%v,+%v", tc.expMatch, got)
+			}
+		})
+	}
+}

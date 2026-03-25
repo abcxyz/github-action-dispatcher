@@ -108,6 +108,10 @@ func (rd *RunnerDiscovery) buildRegistry(ctx context.Context, projects []*asseti
 	for _, project := range projects {
 		projectLabels, ok := rd.filterAndValidateProjectLabels(ctx, project)
 		if !ok {
+			logger.DebugContext(ctx,
+				"Skipping project without target labels",
+				"project_id", project.ProjectID,
+				"project_labels", projectLabels)
 			// A validation error occurred, and the details have been logged. Skip this project.
 			continue
 		}
@@ -264,7 +268,7 @@ func (rd *RunnerDiscovery) updateRegistry(ctx context.Context, poolsByRegistryKe
 
 // validateLabel validates a single label's value against a list of allowed patterns.
 // It supports wildcard matching in the allowed patterns.
-func (rd *RunnerDiscovery) validateLabel(ctx context.Context, projectID, key, value string, labelAllowedValues []string) bool {
+func validateLabel(ctx context.Context, projectID, key, value string, labelAllowedValues []string) bool {
 	logger := logging.FromContext(ctx)
 	matched := false
 	for _, v := range labelAllowedValues {
@@ -324,7 +328,7 @@ func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, p
 			return nil, false
 		}
 
-		if !rd.validateLabel(ctx, project.ProjectID, key, projectLabelValue, values) {
+		if !validateLabel(ctx, project.ProjectID, key, projectLabelValue, values) {
 			return nil, false
 		}
 		projectLabels[key] = projectLabelValue
@@ -347,7 +351,7 @@ func (rd *RunnerDiscovery) filterAndValidateProjectLabels(ctx context.Context, p
 			return nil, false
 		}
 
-		if !rd.validateLabel(ctx, project.ProjectID, trustedRemoteConfigGCPProjectLabelKey, projectLabelValue, allowedTrustedRemoteConfigs) {
+		if !validateLabel(ctx, project.ProjectID, trustedRemoteConfigGCPProjectLabelKey, projectLabelValue, allowedTrustedRemoteConfigs) {
 			return nil, false
 		}
 	}

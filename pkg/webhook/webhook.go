@@ -25,6 +25,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -59,6 +60,13 @@ type runnersResponse struct {
 	Message     string   `json:"message"`
 	RunnerNames []string `json:"runnerNames"`
 	GCBBuildIDs []string `json:"gcbBuildIDs,omitempty"`
+}
+
+type workerPool struct {
+	name           string
+	projectID      string
+	location       string
+	serviceAccount string
 }
 
 // handleWebhook returns an http.Handler that processes incoming GitHub webhook requests.
@@ -192,6 +200,23 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 	var startedRunnerNames []string
 	var gcbBuildIDs []string
 
+	pool := s.selectWorkerPool(ctx, jobResolvedRunnerLabel)
+	// If we are running with default disabled send to 404.
+	if pool == nil && s.config.Runner404DefaultDisabled {
+		return s.start404RunnerForJob(ctx, event, jobOriginalRunnerLabel)
+	}
+	if pool == nil {
+		// TODO: Select the "default" pool from the registry that matches the same original label.
+		pool = &workerPool{
+			projectID:      s.runnerProjectID,
+			location:       s.runnerLocation,
+			serviceAccount: s.runnerServiceAccount,
+		}
+		if s.runnerWorkerPoolID != "" {
+			pool.name = s.runnerWorkerPoolID
+		}
+	}
+
 	for i := 1; i <= 1+s.extraRunnerCount; i++ {
 		runnerID := uuid.New().String()
 
@@ -201,8 +226,7 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 		}
 
 		runnerCtx := logging.WithLogger(ctx, runnerLogger)
-
-		buildID, projectID, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, s.runnerImageTag, jobOriginalRunnerLabel, jobResolvedRunnerLabel)
+		buildID, projectID, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, s.runnerImageName, s.runnerImageTag, jobOriginalRunnerLabel, pool)
 		if err != nil {
 			// If one fails, return the error and the list of any that succeeded before it.
 			return startedRunnerNames, gcbBuildIDs, fmt.Errorf("failed on runner %s: %w", runnerID, err)
@@ -218,6 +242,32 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 	}
 
 	return startedRunnerNames, gcbBuildIDs, nil
+}
+
+// start404RunnerForJob starts a runner for the 404 runner.
+func (s *Server) start404RunnerForJob(ctx context.Context, event *github.WorkflowJobEvent, jobOriginalRunnerLabel string) ([]string, []string, error) {
+	logger := logging.FromContext(ctx)
+
+	runnerID := uuid.New().String()
+	runnerLogger := logger.With("runner_id", runnerID)
+	runnerCtx := logging.WithLogger(ctx, runnerLogger)
+
+	runner404Pool := &workerPool{
+		projectID:      s.config.Runner404ProjectID,
+		location:       s.config.Runner404Location,
+		serviceAccount: s.config.Runner404ServiceAccount,
+	}
+	buildID, projectID, err := s.startGitHubRunner(runnerCtx, event, runnerID, runnerLogger, s.config.Runner404ImageName, s.config.Runner404ImageTag, jobOriginalRunnerLabel, runner404Pool)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed on runner %s: %w", runnerID, err)
+	}
+
+	runnerLogger.InfoContext(ctx, runnerStartedMsg,
+		slog.Any(githubWebhookEventKey, event),
+		slog.String(gcbBuildIDKey, buildID),
+		slog.String(gcbProjectIDKey, projectID))
+
+	return []string{runnerID}, []string{buildID}, nil
 }
 
 func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJobEvent, jobID string) *apiResponse {
@@ -241,11 +291,17 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		return &apiResponse{http.StatusInternalServerError, err.Error(), err}
 	}
 
-	if !canHandle {
+	if !canHandle && !s.config.Runner404Enabled {
 		logger.WarnContext(ctx, "no action taken for label",
 			"original_label", jobOriginalRunnerLabel,
 			"resolved_label", jobResolvedRunnerLabel)
 		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken for label: %s", incomingLabel), nil}
+	}
+	if slices.Contains(s.config.IgnoredRunnerLabels, jobOriginalRunnerLabel) {
+		logger.InfoContext(ctx, "no action taken for ignored label",
+			"original_label", jobOriginalRunnerLabel,
+			"resolved_label", jobResolvedRunnerLabel)
+		return &apiResponse{http.StatusOK, fmt.Sprintf("no action taken for ignored label: %s", incomingLabel), nil}
 	}
 
 	if event.Installation == nil || event.Installation.ID == nil || event.Org == nil || event.Org.Login == nil || event.Repo == nil || event.Repo.Name == nil {
@@ -254,9 +310,23 @@ func (s *Server) handleQueuedEvent(ctx context.Context, event *github.WorkflowJo
 		return &apiResponse{http.StatusBadRequest, "unexpected event payload struture", err}
 	}
 
-	runnerNames, gcbBuildIDs, err := s.startRunnersForJob(ctx, event, jobOriginalRunnerLabel, jobResolvedRunnerLabel)
-	if err != nil {
-		return &apiResponse{http.StatusInternalServerError, err.Error(), err}
+	var runnerNames, gcbBuildIDs []string
+	if !canHandle && s.config.Runner404Enabled {
+		// This assumes that the dispatcher is responsible for enqueuing all
+		// jobs on the GH host. If another service will subscribe to the
+		// webhook and handle jobs then this should not be enabled.
+		runnerNames, gcbBuildIDs, err = s.start404RunnerForJob(ctx, event, jobOriginalRunnerLabel)
+		logger.WarnContext(ctx, "unable to handle requested label - sending to 404 runner",
+			"original_label", jobOriginalRunnerLabel,
+			"resolved_label", jobResolvedRunnerLabel)
+		if err != nil {
+			return &apiResponse{http.StatusInternalServerError, err.Error(), err}
+		}
+	} else {
+		runnerNames, gcbBuildIDs, err = s.startRunnersForJob(ctx, event, jobOriginalRunnerLabel, jobResolvedRunnerLabel)
+		if err != nil {
+			return &apiResponse{http.StatusInternalServerError, err.Error(), err}
+		}
 	}
 
 	responsePayload := &runnersResponse{
@@ -410,18 +480,16 @@ func compressAndBase64EncodeString(input string) (string, error) {
 
 // startGitHubRunner generates a JIT config and creates a Cloud Build job to start a GitHub runner.
 //
-// It takes the GitHub WorkflowJobEvent, a unique runner ID, logger, image tag, and runner labels.
+// It takes the GitHub WorkflowJobEvent, a unique runner ID, logger, image tag, runner label, and pool.
 // It returns the build ID and project ID on success, or an error if the JIT config generation or Cloud Build
 // job creation fails.
-func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageTag, jobOriginalRunnerLabel, jobResolvedRunnerLabel string) (string, string, error) {
+func (s *Server) startGitHubRunner(ctx context.Context, event *github.WorkflowJobEvent, runnerID string, logger *slog.Logger, imageName, imageTag, jobOriginalRunnerLabel string, pool *workerPool) (string, string, error) {
 	compressedJIT, err := s.generateAndCompressJITConfig(ctx, event, runnerID, jobOriginalRunnerLabel)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to generate and compress JIT config: %w", err)
 	}
 
-	pool := s.selectWorkerPool(ctx, jobResolvedRunnerLabel)
-
-	buildReq := s.buildCloudBuildRequest(ctx, compressedJIT, imageTag, pool)
+	buildReq := s.buildCloudBuildRequest(ctx, compressedJIT, imageName, imageTag, pool)
 
 	buildID, err := s.cbc.CreateBuild(ctx, buildReq)
 	if err != nil {
@@ -452,7 +520,7 @@ func (s *Server) generateAndCompressJITConfig(ctx context.Context, event *github
 // selectWorkerPool selects a worker pool for the job. It returns a specific
 // *registry.WorkerPoolInfo if a pool is found in the registry, otherwise it
 // returns nil.
-func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel string) *registry.WorkerPoolInfo {
+func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel string) *workerPool {
 	logger := logging.FromContext(ctx)
 	pools := s.getWorkerPools(ctx, jobResolvedRunnerLabel)
 
@@ -466,7 +534,12 @@ func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel st
 			"worker_pool", selectedPool.Name,
 			"total_worker_pools_found", len(pools),
 		)
-		return &selectedPool
+		return &workerPool{
+			name:           selectedPool.Name,
+			projectID:      selectedPool.ProjectID,
+			location:       selectedPool.Location,
+			serviceAccount: fmt.Sprintf("runner-sa@%s.iam.gserviceaccount.com", selectedPool.ProjectID),
+		}
 	}
 
 	// Fallback to default.
@@ -479,7 +552,7 @@ func (s *Server) selectWorkerPool(ctx context.Context, jobResolvedRunnerLabel st
 }
 
 // buildCloudBuildRequest creates a cloud build request.
-func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imageTag string, pool *registry.WorkerPoolInfo) *cloudbuildpb.CreateBuildRequest {
+func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imageName, imageTag string, pool *workerPool) *cloudbuildpb.CreateBuildRequest {
 	logger := logging.FromContext(ctx)
 	build := &cloudbuildpb.Build{
 		Timeout: durationpb.New(time.Duration(s.runnerExecutionTimeoutSeconds) * time.Second),
@@ -501,7 +574,7 @@ func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imag
 			"_ENCODED_JIT_CONFIG":            compressedJIT,
 			"_IDLE_TIMEOUT_SECONDS":          strconv.Itoa(s.runnerIdleTimeoutSeconds),
 			"_REPOSITORY_ID":                 s.runnerRepositoryID,
-			"_IMAGE_NAME":                    s.runnerImageName,
+			"_IMAGE_NAME":                    imageName,
 			"_IMAGE_TAG":                     imageTag,
 			"_CREATE_BUILD_REQUEST_TIME_UTC": time.Now().UTC().Format(time.RFC3339),
 		},
@@ -514,28 +587,22 @@ func (s *Server) buildCloudBuildRequest(ctx context.Context, compressedJIT, imag
 
 	var projectID, location, serviceAccount string
 
-	if pool != nil && pool.ProjectID != "" {
+	if pool != nil && pool.projectID != "" {
 		// Use configuration from the registry.
-		projectID = pool.ProjectID
+		projectID = pool.projectID
 		// Use location from pool, but fall back to server default if it's missing
 		// for safety during transitions.
-		location = pool.Location
+		location = pool.location
 		if location == "" {
 			location = s.runnerLocation
 			logger.WarnContext(ctx, "worker pool from registry is missing location, falling back to default",
-				"pool_name", pool.Name,
+				"pool_name", pool.name,
 				"default_location", location)
 		}
 
-		serviceAccount = fmt.Sprintf("runner-sa@%s.iam.gserviceaccount.com", pool.ProjectID)
-		build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: pool.Name}
-	} else {
-		// Otherwise, use the default server configuration.
-		projectID = s.runnerProjectID
-		location = s.runnerLocation
-		serviceAccount = s.runnerServiceAccount
-		if s.runnerWorkerPoolID != "" {
-			build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: s.runnerWorkerPoolID}
+		serviceAccount = pool.serviceAccount
+		if pool.name != "" {
+			build.Options.Pool = &cloudbuildpb.BuildOptions_PoolOption{Name: pool.name}
 		}
 	}
 

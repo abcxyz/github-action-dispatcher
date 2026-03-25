@@ -35,6 +35,12 @@ on:
       runner_image_name:
         type: 'string'
         description: 'The github-action-runner docker image name'
+      runner_404_image_tag:
+        type: 'string'
+        description: 'The github-action-runner docker image tag for 404 runner'
+      runner_404_image_name:
+        type: 'string'
+        description: 'The github-action-runner docker image name for 404 runner'
       integration_wif_provider:
         type: 'string'
         description: 'The wif to auth as'
@@ -56,6 +62,7 @@ env:
   INTEGRATION_WIF_PROVIDER: '${{ inputs.integration_wif_provider }}'
   INTEGRATION_WIF_SERVICE_ACCOUNT: '${{ inputs.integration_wif_service_account }}'
 
+  INTEGRATION_IGNORED_LABELS: 'ubuntu-latest'
   INTEGRATION_RUNNER_LABEL_SELF_HOSTED: 'self-hosted'
   INTEGRATION_RUNNER_LABEL_GAD_1: 'github-action-dispatcher-integration' # <repo-name>-<env>
   INTEGRATION_RUNNER_LABEL_GAD_2: 'github-action-dispatcher-2-integration' # <repo-name>-<env>
@@ -65,6 +72,12 @@ env:
   INTEGRATION_RUNNER_SERVICE_ACCOUNT: 'projects/abcxyz-runner-i-4f/serviceAccounts/runner-sa@abcxyz-runner-i-4f.iam.gserviceaccount.com'
   INTEGRATION_REDIS_HOST: '172.16.0.3'
   INTEGRATION_REDIS_PORT: '6379'
+
+  RUNNER_404_IMAGE_TAG: '${{ inputs.runner_404_image_tag }}'
+  RUNNER_404_IMAGE_NAME: '${{ inputs.runner_404_image_name }}'
+  RUNNER_404_LOCATION: 'us-central1'
+  RUNNER_404_PROJECT_ID: 'abcxyz-gad-runner-404-i-4f'
+  RUNNER_404_SERVICE_ACCOUNT: 'projects/abcxyz-gad-runner-404-i-4f/serviceAccounts/runner-sa@abcxyz-gad-runner-404-i-4f.iam.gserviceaccount.com'
 
   INTEGRATION_GH_APP_INSTALLATION_ID: '2320897'
   INTEGRATION_PROJECT_ID: 'github-action-dispatcher-i-e3'
@@ -81,8 +94,6 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
-    outputs:
-      labels_json: '${{ steps.labels.outputs.labels_json }}'
     steps:
       - name: 'Checkout'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
@@ -107,7 +118,7 @@ jobs:
         run: |-
           cat > /tmp/env_vars <<EOF
           GCP_FOLDER_ID: '${{ env.INTEGRATION_RUNNER_FOLDER_ID }}'
-          GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES: 'default'
+          GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES: '*'
           GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES: '${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }},${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}'
           GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES: '${{ env.INTEGRATION_RUNNER_LOCATION }}'
           GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES: 'available,unavailable'
@@ -129,14 +140,7 @@ jobs:
             --region="${{ env.INTEGRATION_REGION }}" \
             --wait
 
-      - name: 'Set label outputs'
-        id: 'labels'
-        run: |-
-          labels_json="['${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }}','${{ env.INTEGRATION_RUNNER_LABEL_GAD_2 }}','${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}']"
-          echo "labels_json=${labels_json}"
-          echo "labels_json=${labels_json}" >> "${GITHUB_OUTPUT}"
-
-  deploy:
+  deploy-dispatcher-with-default:
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
@@ -183,8 +187,16 @@ jobs:
           RUNNER_WORKER_POOL_ID: '${{ env.INTEGRATION_WORKER_POOL_ID }}'
           RUNNER_LABEL_ALIASES: '${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}=${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }}'
           SUPPORTED_RUNNER_LABELS: '${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }},${{ env.INTEGRATION_RUNNER_LABEL_GAD_2 }},${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}'
+          IGNORED_RUNNER_LABELS: '${{ env.INTEGRATION_IGNORED_LABELS }}'
           WEBHOOK_KEY_MOUNT_PATH: '${WEBHOOK_SECRET_MOUNT_PATH}'
           WEBHOOK_KEY_NAME: '${WEBHOOK_SECRET_NAME}'
+          RUNNER_404_ENABLED: 'true'
+          RUNNER_404_DEFAULT_DISABLED: 'false'
+          RUNNER_404_IMAGE_TAG: '${{ env.RUNNER_404_IMAGE_TAG }}'
+          RUNNER_404_IMAGE_NAME: '${{ env.RUNNER_404_IMAGE_NAME }}'
+          RUNNER_404_LOCATION: '${{ env.RUNNER_404_LOCATION }}'
+          RUNNER_404_PROJECT_ID: '${{ env.RUNNER_404_PROJECT_ID }}'
+          RUNNER_404_SERVICE_ACCOUNT: '${{ env.RUNNER_404_SERVICE_ACCOUNT }}'
           EOF
 
           gcloud run deploy "${{ env.INTEGRATION_SERVICE_NAME }}" \
@@ -198,40 +210,134 @@ jobs:
             --env-vars-file=/tmp/env_vars \
             --format='value(status.url)'
 
-  # We expect test-go-version[github-action-dispatcher-2-integration] not to be
-  # initially picked up until deploy-runner-discovery-job-with-runner-2 runs ~1-2 minutes later.
-  test-go-version:
-    name: 'test-go-version[${{ matrix.target_label }}][${{ github.sha }}]'
-    needs: ['deploy', 'deploy-runner-discovery-job']
-    strategy:
-      matrix:
-        target_label: '${{ fromJson(needs.deploy-runner-discovery-job.outputs.labels_json) }}'
-    runs-on: '${{ matrix.target_label }}'
+  # This should not fail with 404 on runs-on label because we allow for
+  # fallback to the default runner pool for allowlisted labels without a match.
+  test-default-success:
+    name: 'test-default-success[SUCCESS_EXPECTED]'
+    needs: ['deploy-dispatcher-with-default', 'deploy-runner-discovery-job']
+    runs-on: 'github-action-dispatcher-2-integration'
     steps:
-      - name: 'Setup Go'
-        uses: 'actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b' # ratchet:actions/setup-go@v5
-        with:
-          go-version: '1.24'
-
-      - name: 'Check Go version'
+      - name: 'I SHOULD RUN'
         run: |
-          echo "Checking Go version on self-hosted runner..."
-          go version
+          echo "OH YEAH..."
 
-  # We induce a sleep so that we can confirm that some time delta occurred and
-  # that indeed deploying the dispatcher with the job-2 runs-on label
-  # correctly picks up the pending job from test-go-version.
-  sleep_1_min:
-    needs: ['deploy', 'deploy-runner-discovery-job']
+  # This should fail with 404 on runs-on label.
+  test-unknown-label:
+    name: 'test-unknown-label[FAILURE_EXPECTED]'
+    needs: ['deploy-dispatcher-with-default', 'deploy-runner-discovery-job']
+    runs-on: 'label-no-run-me'
+    steps:
+      - name: 'I SHOULD NOT RUN'
+        run: |
+          echo "OH NO..."
+
+  deploy-dispatcher-no-default:
+    needs: ['test-default-success']
     runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    env:
+      GITHUB_APP_ID: '2320897'
+      KMS_APP_PRIVATE_KEY_ID: 'projects/github-action-dispatcher-i-e3/locations/us-central1/keyRings/gad-71-key-ring/cryptoKeys/gad-71-pk/cryptoKeyVersions/1'
     steps:
-      - name: 'Sleep 60 seconds'
+      - name: 'Checkout'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f' # ratchet:google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.INTEGRATION_WIF_PROVIDER }}'
+          service_account: '${{ env.INTEGRATION_WIF_SERVICE_ACCOUNT }}'
+          token_format: 'access_token'
+
+      - name: 'Setup gcloud'
+        uses: 'google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a' # ratchet:google-github-actions/setup-gcloud@v2
+        with:
+          version: '529.0.0'
+
+      - name: 'Deploy to Cloud Run'
+        id: 'deploy'
+        run: |-
+          WEBHOOK_SECRET_MOUNT_PATH="/etc/secrets/webhook/key"
+          WEBHOOK_SECRET_NAME="webhook-key"
+          WEBHOOK_SECRET_VERSION="latest"
+
+          cat > /tmp/env_vars <<EOF
+          REDIS_HOST: '${{ env.INTEGRATION_REDIS_HOST }}'
+          REDIS_PORT: '${{ env.INTEGRATION_REDIS_PORT }}'
+          EXTRA_RUNNER_COUNT: '0'
+          GITHUB_APP_ID: '${{ env.GITHUB_APP_ID }}'
+          KMS_APP_PRIVATE_KEY_ID: '${{ env.KMS_APP_PRIVATE_KEY_ID }}'
+          RUNNER_IMAGE_NAME: '${{ env.RUNNER_IMAGE_NAME }}'
+          RUNNER_IMAGE_TAG: '${{ env.RUNNER_IMAGE_TAG }}'
+          RUNNER_LOCATION: '${{ env.INTEGRATION_RUNNER_LOCATION }}'
+          RUNNER_PROJECT_ID: '${{ env.INTEGRATION_RUNNER_PROJECT_ID }}'
+          RUNNER_REPOSITORY_ID: '${{ env.RUNNER_DOCKER_REPO }}'
+          RUNNER_SERVICE_ACCOUNT: '${{ env.INTEGRATION_RUNNER_SERVICE_ACCOUNT }}'
+          RUNNER_WORKER_POOL_ID: '${{ env.INTEGRATION_WORKER_POOL_ID }}'
+          RUNNER_LABEL_ALIASES: '${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}=${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }}'
+          SUPPORTED_RUNNER_LABELS: '${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }},${{ env.INTEGRATION_RUNNER_LABEL_GAD_2 }},${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}'
+          IGNORED_RUNNER_LABELS: '${{ env.INTEGRATION_IGNORED_LABELS }}'
+          WEBHOOK_KEY_MOUNT_PATH: '${WEBHOOK_SECRET_MOUNT_PATH}'
+          WEBHOOK_KEY_NAME: '${WEBHOOK_SECRET_NAME}'
+          RUNNER_404_ENABLED: 'true'
+          RUNNER_404_DEFAULT_DISABLED: 'true'
+          RUNNER_404_IMAGE_TAG: '${{ env.RUNNER_404_IMAGE_TAG }}'
+          RUNNER_404_IMAGE_NAME: '${{ env.RUNNER_404_IMAGE_NAME }}'
+          RUNNER_404_LOCATION: '${{ env.RUNNER_404_LOCATION }}'
+          RUNNER_404_PROJECT_ID: '${{ env.RUNNER_404_PROJECT_ID }}'
+          RUNNER_404_SERVICE_ACCOUNT: '${{ env.RUNNER_404_SERVICE_ACCOUNT }}'
+          EOF
+
+          gcloud run deploy "${{ env.INTEGRATION_SERVICE_NAME }}" \
+            --project="${{ env.INTEGRATION_PROJECT_ID }}" \
+            --region="${{ env.INTEGRATION_REGION }}" \
+            --service-account="${{ env.INTEGRATION_SERVICE_ACCOUNT }}" \
+            --image="${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ env.DOCKER_TAG }}-amd64" \
+            --ingress=internal-and-cloud-load-balancing \
+            --no-allow-unauthenticated \
+            --set-secrets="${WEBHOOK_SECRET_MOUNT_PATH}/${WEBHOOK_SECRET_NAME}=${WEBHOOK_SECRET_NAME}:${WEBHOOK_SECRET_VERSION}" \
+            --env-vars-file=/tmp/env_vars \
+            --format='value(status.url)'
+
+  # Now that default is disabled, confirm that we still can use a pool that is
+  # correctly configured.
+  test-finds-assigned-pool:
+    name: 'test-finds-assigned-pool[SUCCESS_EXPECTED]'
+    needs: ['deploy-dispatcher-no-default']
+    runs-on: 'github-action-dispatcher-integration'
+    steps:
+      - name: 'I SHOULD RUN'
         run: |
-          sleep 60s
+          echo "OH YEAH..."
+
+  # Now that default is disabled, confirm that we can still use a pool that is
+  # correctly configured via alias.
+  test-finds-assigned-pool-with-alias:
+    name: 'test-finds-assigned-pool[SUCCESS_EXPECTED]'
+    needs: ['deploy-dispatcher-no-default']
+    runs-on: 'self-hosted'
+    steps:
+      - name: 'I SHOULD RUN'
+        run: |
+          echo "OH YEAH..."
+
+  # This should fail with 404 on runs-on label because the label is allowlisted,
+  # there is no assigned pool, and fallback to default runners is disabled.
+  test-does-not-default:
+    name: 'test-does-not-default[FAILURE_EXPECETED]'
+    needs: ['deploy-dispatcher-no-default']
+    runs-on: 'github-action-dispatcher-2-integration'
+    steps:
+      - name: 'I SHOULD NOT RUN'
+        run: |
+          echo "OH NO..."
 
   deploy-runner-discovery-job-with-runner-2:
     runs-on: 'ubuntu-latest'
-    needs: ['sleep_1_min']
+    needs: ['test-finds-assigned-pool', 'test-finds-assigned-pool-with-alias']
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -261,7 +367,7 @@ jobs:
         run: |-
           cat > /tmp/env_vars <<EOF
           GCP_FOLDER_ID: '${{ env.INTEGRATION_RUNNER_FOLDER_ID }}'
-          GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES: 'default'
+          GCP_ALLOWED_PROJECT_LABEL_GH_ORG_SCOPE_VALUES: '*'
           GCP_ALLOWED_PROJECT_LABEL_JOB_RUNS_ON_VALUES: '${{ env.INTEGRATION_RUNNER_LABEL_GAD_1 }},${{ env.INTEGRATION_RUNNER_LABEL_GAD_2 }},${{ env.INTEGRATION_RUNNER_LABEL_SELF_HOSTED }}'
           GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES: '${{ env.INTEGRATION_RUNNER_LOCATION }}'
           GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES: 'available,unavailable'
@@ -290,70 +396,73 @@ jobs:
           echo "deploy_time=${deploy_time}"
           echo "deploy_time=${deploy_time}" >> "${GITHUB_OUTPUT}"
 
-  # This should never execute.
-  test-unknown-label:
-    name: 'test-unknown-label[${{ github.sha }}]'
-    needs: ['deploy', 'deploy-runner-discovery-job']
-    runs-on: 'label-no-run-me'
+  # This should now succeed because we have an assigned pool for this.
+  # TODO: Enable once logic for orgs in discovery / dispatcher is implemented.
+  test-found-pool-for-label-after-discovery-updates-with-label:
+    name: 'test-gad-2-label-in-discovery[SUCCESS_EXPECTED]'
+    if: 'false'
+    needs: ['deploy-runner-discovery-job-with-runner-2']
+    runs-on: 'github-action-dispatcher-2-integration'
     steps:
-      - name: 'I SHOULD NOT RUN'
+      - name: 'I SHOULD RUN'
         run: |
-          echo "OH NO..."
+          echo "OH YAY..."
 
-  # We assume that 4 minutes is sufficient for the job to be picked up under
-  # normal operating circumstances. Note that if there is some intermitent
-  # failure or outage with GitHub this may not be sufficient.
-  sleep_4_min:
-    needs: ['deploy', 'deploy-runner-discovery-job']
-    runs-on: 'ubuntu-latest'
-    steps:
-      - name: 'Sleep 240 seconds'
-        run: |
-          sleep 240s
-
-  cancel-or-fail-unknown-label:
+  smoke-tests-passed:
     if: |-
       ${{ always() }}
-    needs: ['sleep_4_min', 'deploy-runner-discovery-job-with-runner-2', 'test-go-version']
+    needs: [
+      'test-finds-assigned-pool',
+      'test-finds-assigned-pool-with-alias',
+      'test-unknown-label',
+      'test-does-not-default',
+      'test-found-pool-for-label-after-discovery-updates-with-label']
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
-      actions: 'write'
     steps:
-      - name: 'Checkout'
-        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
-
-      - name: 'Cancel and check status'
-        env:
-          JOB_NAME: 'smoke-tests / test-unknown-label[${{ github.sha }}]'
-          GH_TOKEN: '${{ github.token }}'
-          RUN_ID: '${{ github.run_id }}'
+      - name: 'Assert test-unknown-labal fails'
+        if: |-
+          ${{ needs.test-unknown-label.result != 'failure' }}
         run: |
-          JOB_STATUS=$(gh run view "${RUN_ID}" --json jobs -q ".jobs[] | select(.name == \"${JOB_NAME}\") | .status")
+          echo "::error::Smoke Test succeeded or was skipped. Expected failure. Failing status check to block merge."
+          echo "::error::Status: ${{ needs.test-unknown-label.result }}"
+          exit 1
 
-          if [[ "$JOB_STATUS" == "queued" ]]; then
-            echo "Successfully verified that 'label-no-run-me' is queued."
-          else
-            echo "Error: 'label-no-run-me' is not in the expected 'queued' state. Current status: ${JOB_STATUS}"
-            FAIL="true"
-          fi
-
-          echo "Cancelling the workflow run..."
-          gh run cancel "${RUN_ID}"
-          echo "Workflow run cancellation initiated."
-
-          if [[ "${FAIL}" == "true" ]]; then
-            exit 1
-          fi
-
-  confirm-test-go-version-ran:
-    if: |-
-      ${{ always() }}
-    needs: ['deploy-runner-discovery-job-with-runner-2', 'test-go-version', 'cancel-or-fail-unknown-label']
-    runs-on: 'ubuntu-latest'
-    steps:
-      # TODO: Confirm that the execution time for the test-go-version[github-action-dispatcher-2-integration]
-      #       job was after needs.deploy-runner-discovery-job-with-runner-2.outputs.deploy_time
-      - name: 'Echo Success'
+      - name: 'Assert test-does-not-default Test fails'
+        if: |-
+          ${{ needs.test-does-not-default.result != 'failure' }}
         run: |
-          echo "All expected jobs ran!"
+          echo "::error::Smoke Test succeeded or was skipped. Expected failure. Failing status check to block merge."
+          echo "::error::Status: ${{ needs.test-does-not-default.result }}"
+          exit 1
+
+      - name: 'Assert test-finds-assigned-pool succeeds'
+        if: |-
+          ${{ needs.test-finds-assigned-pool.result != 'success' }}
+        run: |
+          echo "::error::Smoke Test failed or was skipped. Expected success. Failing status check to block merge."
+          echo "::error::Status: ${{ needs.test-finds-assigned-pool.result }}"
+          exit 1
+
+      - name: 'Assert test-finds-assigned-pool-with-alias succeeds'
+        if: |-
+          ${{ needs.test-finds-assigned-pool-with-alias.result != 'success' }}
+        run: |
+          echo "::error::Smoke Test failed or was skipped. Expected success. Failing status check to block merge."
+          echo "::error::Status: ${{ needs.test-finds-assigned-pool-with-alias.result }}"
+          exit 1
+
+      - name: 'Assert test-found-pool-for-label-after-discovery-updates-with-label succeeds'
+        # TODO: Re-enable test-found-pool-for-label-after-discovery-updates-with-label once org based labels works.
+        # if: |-
+        #   ${{ needs.test-found-pool-for-label-after-discovery-updates-with-label.result != 'success' }}
+        if: |-
+          ${{ needs.test-found-pool-for-label-after-discovery-updates-with-label.result != 'skipped' }}
+        run: |
+          echo "::error::Smoke Test failed or was skipped. Expected success. Failing status check to block merge."
+          echo "::error::Status: ${{ needs.test-found-pool-for-label-after-discovery-updates-with-label.result }}"
+          exit 1
+
+      - name: 'Confirm tests passed'
+        run: 'echo \"Smoke tests succeeded\"'

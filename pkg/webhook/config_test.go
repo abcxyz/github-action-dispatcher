@@ -166,6 +166,11 @@ func TestConfig_Validate(t *testing.T) {
 			mutator: func(c *Config) { c.SupportedRunnerLabels = nil },
 			expErr:  "SUPPORTED_RUNNER_LABELS must be provided",
 		},
+		{
+			name:    "label_in_ignored_and_supported",
+			mutator: func(c *Config) { c.IgnoredRunnerLabels = []string{"self-hosted"} },
+			expErr:  "cannot have the same label in both SUPPORTED_RUNNER_LABELS and IGNORED_RUNNER_LABELS: [self-hosted]",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
