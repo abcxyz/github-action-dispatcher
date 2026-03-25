@@ -40,7 +40,7 @@ jobs:
       deploy_discovery: false
       supported_runner_labels: 'github-action-dispatcher-integration,github-action-dispatcher-2-integration,self-hosted'
       dispatcher_runner_label_aliases: 'self-hosted=github-action-dispatcher-integration'
-      dispatcher_disable_default: 'false'
+      dispatcher_disable_default: false
 
   # This should not fail with 404 on runs-on label because we allow for
   # fallback to the default runner pool for allowlisted labels without a match.
@@ -71,7 +71,7 @@ jobs:
       deploy_discovery: false
       supported_runner_labels: 'github-action-dispatcher-integration,github-action-dispatcher-2-integration,self-hosted'
       dispatcher_runner_label_aliases: 'self-hosted=github-action-dispatcher-integration'
-      dispatcher_disable_default: 'true'
+      dispatcher_disable_default: true
 
   # Now that default is disabled, confirm that we still can use a pool that is
   # correctly configured.
