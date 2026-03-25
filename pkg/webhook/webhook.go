@@ -62,6 +62,13 @@ type runnersResponse struct {
 	GCBBuildIDs []string `json:"gcbBuildIDs,omitempty"`
 }
 
+type workerPool struct {
+	name           string
+	projectID      string
+	location       string
+	serviceAccount string
+}
+
 // handleWebhook returns an http.Handler that processes incoming GitHub webhook requests.
 //
 // It decodes the webhook payload, validates it, and dispatches the event to the appropriate handler
@@ -508,13 +515,6 @@ func (s *Server) generateAndCompressJITConfig(ctx context.Context, event *github
 		return "", fmt.Errorf("failed to compress JIT config: %w", err)
 	}
 	return compressedJIT, nil
-}
-
-type workerPool struct {
-	name           string
-	projectID      string
-	location       string
-	serviceAccount string
 }
 
 // selectWorkerPool selects a worker pool for the job. It returns a specific
