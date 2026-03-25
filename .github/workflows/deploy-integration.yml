@@ -18,10 +18,10 @@ on:
   workflow_call:
     inputs:
       deploy_dispatcher:
-        type: 'bool'
+        type: 'boolean'
         description: 'Whether or not to deploy the dispatcher'
       deploy_discovery:
-        type: 'bool'
+        type: 'boolean'
         description: 'Whether or not to deploy the discovery'
       supported_runner_labels:
         type: 'string'
@@ -30,7 +30,7 @@ on:
         type: 'string'
         description: 'comma delimited map of runner label aliases'
       dispatcher_disable_default:
-        type: 'string'
+        type: 'boolean'
         description: 'whether or not to disable default'
 
 env:
@@ -73,7 +73,6 @@ env:
 jobs:
   deploy-dispatcher-and-or-discovery:
     name: 'deploy[dispatcher=${{ inputs.deploy_dispatcher }}][discovery=${{ inputs.deploy_discovery }}]'
-    needs: ['test-default-success']
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
