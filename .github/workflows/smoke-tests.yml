@@ -17,7 +17,9 @@ name: 'smoke-tests'
 on:
   workflow_call:
     outputs:
-      success: '${{ jobs.smoke-tests-passed.outputs.success }}'
+      success:
+        description: 'Whether or not the smoke-tests passed'
+        value: '${{ jobs.smoke-tests-passed.outputs.success }}'
 
 concurrency:
   group: 'smoke-tests'
