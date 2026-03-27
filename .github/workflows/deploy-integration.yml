@@ -56,10 +56,11 @@ env:
   INTEGRATION_WIF_SERVICE_ACCOUNT: 'github-automation-bot@gha-gad-ci-i-832939.iam.gserviceaccount.com'
 
   INTEGRATION_IGNORED_LABELS: 'ubuntu-latest'
-  INTEGRATION_RUNNER_LOCATION: 'us-central1'
-  INTEGRATION_RUNNER_PROJECT_ID: 'abcxyz-runner-i-4f'
   INTEGRATION_RUNNER_FOLDER_ID: '961583394935' # deployments/gcb-runner/integration folder
-  INTEGRATION_RUNNER_SERVICE_ACCOUNT: 'projects/abcxyz-runner-i-4f/serviceAccounts/runner-sa@abcxyz-runner-i-4f.iam.gserviceaccount.com'
+  INTEGRATION_RUNNER_LOCATION: 'us-central1'
+  INTEGRATION_RUNNER_PROJECT_ID: 'abcxyz-gad-runner-i-4f'
+  INTEGRATION_RUNNER_SERVICE_ACCOUNT: 'projects/abcxyz-gad-runner-i-4f/serviceAccounts/runner-sa@abcxyz-gad-runner-i-4f.iam.gserviceaccount.com'
+  INTEGRATION_WORKER_POOL_ID: 'projects/abcxyz-gad-runner-i-4f/locations/us-central1/workerPools/abcxyz-gad-n2d-standard-2'
   INTEGRATION_REDIS_HOST: '172.16.0.3'
   INTEGRATION_REDIS_PORT: '6379'
 
@@ -68,7 +69,6 @@ env:
   INTEGRATION_REGION: 'us-central1'
   INTEGRATION_SERVICE_NAME: 'github-action-dispatcher-8aa2'
   INTEGRATION_SERVICE_ACCOUNT: 'gad-webhook-sa@github-action-dispatcher-i-e3.iam.gserviceaccount.com'
-  INTEGRATION_WORKER_POOL_ID: 'projects/abcxyz-runner-i-4f/locations/us-central1/workerPools/abcxyz-n2d-standard-2'
 
   INTEGRATION_RUNNER_DISCOVERY_JOB_NAME: 'runner-discovery'
   INTEGRATION_RUNNER_DISCOVERY_JOB_SA: 'runner-discovery-job-sa@github-action-dispatcher-i-e3.iam.gserviceaccount.com'
