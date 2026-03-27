@@ -436,7 +436,7 @@ func TestRunnerDiscovery_Run(t *testing.T) {
 			}
 
 			if tc.expectRedis {
-				mock.ExpectScan(0, tc.config.RunnerRegistryDefaultKeyPrefix+":*", 0).SetVal(tc.expRegistryDels, 0)
+				mock.ExpectScan(0, "*:*", 0).SetVal(tc.expRegistryDels, 0)
 				mock.ExpectTxPipeline()
 				if len(tc.expRegistryDels) > 0 {
 					mock.ExpectDel(tc.expRegistryDels...).SetVal(int64(len(tc.expRegistryDels)))
