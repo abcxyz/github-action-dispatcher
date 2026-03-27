@@ -49,6 +49,9 @@ const (
 	//nolint:gosec // this is a test value
 	serverGitHubWebhookSecret = "test-github-webhook-secret"
 	testEnv                   = "test"
+	// Webhook event details.
+	orgLogin = "google"
+	repoName = "webhook"
 )
 
 func TestHandleWebhook(t *testing.T) {
@@ -84,6 +87,7 @@ func TestHandleWebhook(t *testing.T) {
 		expRespBody          string // This is now only for plain text responses.
 		expectBuildCount     int
 		expGCBBuildIDs       []string
+		exp404               bool
 
 		runnerExecutionTimeoutSeconds  int
 		runnerIdleTimeoutSeconds       int
@@ -113,6 +117,12 @@ func TestHandleWebhook(t *testing.T) {
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
 			supportedRunnerLabels:         []string{SelfHostedRunnerLabel},
+
+			registryWorkerPools: map[string][]registry.WorkerPoolInfo{
+				"google:self-hosted": {
+					{Name: "projects/12345-test-project-1/locations/us-west1/workerPools/wp1", ProjectID: "test-project-1", ProjectNumber: "12345-test-project-1"},
+				},
+			},
 		},
 		{
 			name:                 "Workflow Job Queued - Custom Label",
@@ -135,6 +145,12 @@ func TestHandleWebhook(t *testing.T) {
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
 			supportedRunnerLabels:         []string{"custom-label"},
+
+			registryWorkerPools: map[string][]registry.WorkerPoolInfo{
+				"google:custom-label": {
+					{Name: "projects/12345-test-project-1/locations/us-west1/workerPools/wp1", ProjectID: "test-project-1", ProjectNumber: "12345-test-project-1"},
+				},
+			},
 		},
 		{
 			name:                 "Workflow Job Queued - Aliased Label",
@@ -160,6 +176,12 @@ func TestHandleWebhook(t *testing.T) {
 				"old-label": "new-label",
 			},
 			supportedRunnerLabels: []string{"new-label"},
+
+			registryWorkerPools: map[string][]registry.WorkerPoolInfo{
+				"google:new-label": {
+					{Name: "projects/12345-test-project-1/locations/us-west1/workerPools/wp1", ProjectID: "test-project-1", ProjectNumber: "12345-test-project-1"},
+				},
+			},
 		},
 		{
 			name:                 "Workflow Job Queued - Multiple Builds Spawned",
@@ -183,6 +205,11 @@ func TestHandleWebhook(t *testing.T) {
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
 			supportedRunnerLabels:         []string{SelfHostedRunnerLabel},
+			registryWorkerPools: map[string][]registry.WorkerPoolInfo{
+				"google:self-hosted": {
+					{Name: "projects/12345-test-project-1/locations/us-west1/workerPools/wp1", ProjectID: "test-project-1", ProjectNumber: "12345-test-project-1"},
+				},
+			},
 		},
 		{
 			name:                 "Workflow Job Queued - Multiple Label Fails",
@@ -215,8 +242,14 @@ func TestHandleWebhook(t *testing.T) {
 			jobID:                &jobID,
 			jobName:              &jobName,
 			expStatusCode:        200,
-			expRespBody:          "no action taken for label: other-label",
-			expectBuildCount:     0,
+			expRespBody:          "workflow job completed event logged",
+			expectBuildCount:     1,
+			exp404:               true,
+			expGCBBuildIDs:       []string{testGCBBuildID},
+
+			runnerExecutionTimeoutSeconds: 7200,
+			runnerIdleTimeoutSeconds:      300,
+			supportedRunnerLabels:         []string{SelfHostedRunnerLabel},
 		},
 		{
 			name:                 "Workflow Job In Progress",
@@ -280,6 +313,12 @@ func TestHandleWebhook(t *testing.T) {
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
 			supportedRunnerLabels:         []string{SelfHostedUbuntuLatestRunnerLabel},
+
+			registryWorkerPools: map[string][]registry.WorkerPoolInfo{
+				"google:sh-ubuntu-latest": {
+					{Name: "projects/12345-test-project-1/locations/us-west1/workerPools/wp1", ProjectID: "test-project-1", ProjectNumber: "12345-test-project-1"},
+				},
+			},
 		},
 		{
 			name:                 "Workflow Job Queued - Supported Runner Label",
@@ -302,6 +341,12 @@ func TestHandleWebhook(t *testing.T) {
 			runnerExecutionTimeoutSeconds: 7200,
 			runnerIdleTimeoutSeconds:      300,
 			supportedRunnerLabels:         []string{"ubuntu-20.04-n2d-standard-2"},
+
+			registryWorkerPools: map[string][]registry.WorkerPoolInfo{
+				"google:ubuntu-20.04-n2d-standard-2": {
+					{Name: "projects/12345-test-project-1/locations/us-west1/workerPools/wp1", ProjectID: "test-project-1", ProjectNumber: "12345-test-project-1"},
+				},
+			},
 		},
 		{
 			name:                 "Workflow Job Queued - Worker Pool From Registry",
@@ -374,9 +419,9 @@ func TestHandleWebhook(t *testing.T) {
 			}
 			expectedBuildTimeout := time.Duration(buildTimeoutForTest) * time.Second
 
-			orgLogin := "google"
-			repoName := "webhook"
 			installationID := int64(123)
+			orgLoginVar := orgLogin
+			repoNameVar := repoName
 			event := &github.WorkflowJobEvent{
 				Action: &tc.action,
 				WorkflowJob: &github.WorkflowJob{
@@ -392,10 +437,10 @@ func TestHandleWebhook(t *testing.T) {
 					ID: &installationID,
 				},
 				Org: &github.Organization{
-					Login: &orgLogin,
+					Login: &orgLoginVar,
 				},
 				Repo: &github.Repository{
-					Name: &repoName,
+					Name: &repoNameVar,
 				},
 			}
 
@@ -459,6 +504,13 @@ func TestHandleWebhook(t *testing.T) {
 				RunnerRegistryDefaultKeyPrefix: tc.runnerRegistryDefaultKeyPrefix,
 				BackoffInitialDelay:            1 * time.Second,
 				MaxRetryAttempts:               3,
+				Runner404Enabled:               true,
+				Runner404DefaultDisabled:       false,
+				Runner404ImageName:             "runner-404",
+				Runner404ImageTag:              "latest-404",
+				Runner404Location:              "us-central1",
+				Runner404ProjectID:             "404-project",
+				Runner404ServiceAccount:        "404-sa",
 			}
 
 			// Configure WebhookClientOptions
@@ -488,6 +540,10 @@ func TestHandleWebhook(t *testing.T) {
 			if got, want := resp.Code, tc.expStatusCode; got != want {
 				t.Errorf("expected %d to be %d", got, want)
 			}
+			wantImageTag := "latest"
+			if tc.exp404 {
+				wantImageTag = "latest-404"
+			}
 
 			// If the action was "queued" and we expected a build, we check for the JSON response.
 			if tc.action == "queued" && tc.expectBuildCount > 0 {
@@ -516,7 +572,7 @@ func TestHandleWebhook(t *testing.T) {
 
 			if tc.expectBuildCount == len(mockCloudBuildClient.CreateBuildReqs) {
 				for _, buildReq := range mockCloudBuildClient.CreateBuildReqs {
-					if got, want := buildReq.GetBuild().GetSubstitutions()["_IMAGE_TAG"], "latest"; got != want {
+					if got, want := buildReq.GetBuild().GetSubstitutions()["_IMAGE_TAG"], wantImageTag; got != want {
 						t.Errorf("expected image tag %q to be %q", want, got)
 					}
 					if got, want := buildReq.GetBuild().GetTimeout().AsDuration(), expectedBuildTimeout; got != want {
