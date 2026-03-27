@@ -47,7 +47,7 @@ jobs:
   # there is no default pool configured for this label.
   # This should fail with 404 on runs-on label.
   test-missing-org-pool-does-not-default:
-    name: 'test-missing-org-pool-default-success[FAILURE_EXPECTED]'
+    name: 'test-missing-org-pool-default[FAILURE_EXPECTED]'
     needs: ['deploy-dispatcher-with-default', 'deploy-runner-discovery-job']
     runs-on: 'github-action-dispatcher-2-integration'
     steps:
@@ -163,7 +163,7 @@ jobs:
       'test-finds-default-pool',
       'test-finds-default-pool-with-alias',
       'test-found-pool-for-label-after-discovery-updates-with-label'
-      ]
+    ]
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'

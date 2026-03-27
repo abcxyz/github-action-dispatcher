@@ -194,7 +194,9 @@ func validateGitHubPayload(r *http.Request, webhookSecret []byte) (*github.Workf
 // queued job. It returns the names of the runners it successfully started and
 // an error if anything went wrong.
 func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJobEvent, jobOriginalRunnerLabel, jobResolvedRunnerLabel string) ([]string, []string, error) {
-	logger := logging.FromContext(ctx)
+	logger := logging.FromContext(ctx).With(
+		"original_label", jobOriginalRunnerLabel,
+		"resolved_label", jobResolvedRunnerLabel)
 
 	// These slices will hold the names and build IDs of runners we successfully create.
 	var startedRunnerNames []string
@@ -203,23 +205,16 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 	pool := s.selectWorkerPool(ctx, *event.Org.Login, jobResolvedRunnerLabel)
 	// If we are running with default disabled send to 404.
 	if pool == nil && s.config.Runner404DefaultDisabled {
+		logger.WarnContext(ctx, "unable to find a pool to handle requested label - sending to 404 runner")
 		return s.start404RunnerForJob(ctx, event, jobOriginalRunnerLabel)
 	}
 	// Try to get a matching default runner when default fallback is enabled.
 	if pool == nil {
 		pool = s.selectWorkerPool(ctx, s.runnerRegistryDefaultKeyPrefix, jobResolvedRunnerLabel)
 	}
-	// TODO: Remove this static default that does not support lookup by label type.
 	if pool == nil {
-		// TODO: Select the "default" pool from the registry that matches the same original label.
-		pool = &workerPool{
-			projectID:      s.runnerProjectID,
-			location:       s.runnerLocation,
-			serviceAccount: s.runnerServiceAccount,
-		}
-		if s.runnerWorkerPoolID != "" {
-			pool.name = s.runnerWorkerPoolID
-		}
+		logger.WarnContext(ctx, "unable to find an org pool or default pool to handle requested label - sending to 404 runner")
+		return s.start404RunnerForJob(ctx, event, jobOriginalRunnerLabel)
 	}
 
 	for i := 1; i <= 1+s.extraRunnerCount; i++ {
@@ -557,10 +552,9 @@ func (s *Server) selectWorkerPool(ctx context.Context, orgName, jobResolvedRunne
 		}
 	}
 
-	// Fallback to default.
 	logger.InfoContext(
 		ctx,
-		"no worker pools found in registry for label, using default server configuration",
+		"no worker pools found in registry for label",
 		"org_name", orgName,
 		"label", jobResolvedRunnerLabel,
 	)
