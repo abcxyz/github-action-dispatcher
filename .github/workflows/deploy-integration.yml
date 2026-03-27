@@ -160,6 +160,7 @@ jobs:
           GCP_ALLOWED_PROJECT_LABEL_POOL_LOCATION_VALUES: '${{ env.INTEGRATION_RUNNER_LOCATION }}'
           GCP_ALLOWED_PROJECT_LABEL_POOL_AVAILABILITY_VALUES: 'available,unavailable'
           GCP_ALLOWED_PROJECT_LABEL_POOL_TYPE_VALUES: 'trusted,private'
+          GCP_IGNORED_PROJECT_LABELS: 'goog-terraform-provisioned'
           REDIS_HOST: '${{ env.INTEGRATION_REDIS_HOST }}'
           REDIS_PORT: '${{ env.INTEGRATION_REDIS_PORT }}'
           EOF

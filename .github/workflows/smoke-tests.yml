@@ -35,14 +35,14 @@ jobs:
     with:
       deploy_dispatcher: false
       deploy_discovery: true
-      supported_runner_labels: 'github-action-dispatcher-integration,self-hosted'
+      supported_runner_labels: 'github-action-dispatcher-integration,self-hosted,tbi'
 
   deploy-dispatcher-with-default:
     uses: './.github/workflows/deploy-integration.yml' # ratchet:exclude
     with:
       deploy_dispatcher: true
       deploy_discovery: false
-      supported_runner_labels: 'github-action-dispatcher-integration,github-action-dispatcher-2-integration,self-hosted'
+      supported_runner_labels: 'github-action-dispatcher-integration,github-action-dispatcher-2-integration,self-hosted,tbi'
       dispatcher_runner_label_aliases: 'self-hosted=github-action-dispatcher-integration'
       dispatcher_disable_default: false
 
@@ -63,7 +63,7 @@ jobs:
   test-finds-default-pool:
     name: 'test-finds-default-pool[SUCCESS_EXPECTED]'
     needs: ['deploy-dispatcher-with-default', 'deploy-runner-discovery-job']
-    runs-on: 'github-action-dispatcher-integration'
+    runs-on: 'tbi' # Temporarily forcing this job to run on the tbi runner
     steps:
       - name: 'I SHOULD RUN'
         run: |
