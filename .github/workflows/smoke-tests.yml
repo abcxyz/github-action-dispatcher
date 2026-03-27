@@ -16,6 +16,8 @@ name: 'smoke-tests'
 
 on:
   workflow_call:
+    outputs:
+      success: '${{ jobs.smoke-tests-passed.outputs.success }}'
 
 concurrency:
   group: 'smoke-tests'
@@ -167,6 +169,8 @@ jobs:
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
+    outputs:
+      success: '${{ steps.success.outputs.success }}'
     steps:
       #############
       # FAILURES
@@ -230,4 +234,7 @@ jobs:
           exit 1
 
       - name: 'Confirm tests passed'
-        run: 'echo \"Smoke tests succeeded\"'
+        id: 'success'
+        run: |
+          echo "Smoke tests succeeded"
+          echo "success=true" >> "${GITHUB_OUTPUT}"

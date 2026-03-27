@@ -185,9 +185,9 @@ jobs:
         # Thus requiring us to cancel the workflow as part of the successful
         # execution of the smoke tests.
         if: |-
-          ${{ needs.smoke-tests.result != 'failure' }}
+          ${{ needs.smoke-tests.outputs.success == 'true' }}
         env:
-          RESULT: '${{ needs.smoke-tests.result }}'
+          RESULT: '${{ needs.smoke-tests.outputs.success }}'
         run: |
           echo "::error::Smoke Test should end in failure. Failing status check to block merge. Status: ${RESULT}"
           exit 1
