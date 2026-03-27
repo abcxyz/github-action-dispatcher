@@ -185,7 +185,7 @@ jobs:
         # Thus requiring us to cancel the workflow as part of the successful
         # execution of the smoke tests.
         if: |-
-          ${{ needs.smoke-tests.outputs.success == 'true' }}
+          ${{ needs.smoke-tests.outputs.success != 'true' }}
         env:
           RESULT: '${{ needs.smoke-tests.outputs.success }}'
         run: |
