@@ -218,7 +218,7 @@ func (rd *RunnerDiscovery) updateRegistry(ctx context.Context, poolsByRegistryKe
 
 	// Find all stale keys that need to be deleted.
 	var staleKeys []string
-	iter := rd.rc.Scan(ctx, 0, rd.config.RunnerRegistryDefaultKeyPrefix+":*", 0).Iterator()
+	iter := rd.rc.Scan(ctx, 0, "*:*", 0).Iterator()
 	for iter.Next(ctx) {
 		staleKeys = append(staleKeys, iter.Val())
 	}
