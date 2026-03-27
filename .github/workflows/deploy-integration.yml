@@ -75,7 +75,8 @@ env:
 
 jobs:
   deploy-dispatcher-and-or-discovery:
-    name: 'deploy[dispatcher=${{ inputs.deploy_dispatcher }}][discovery=${{ inputs.deploy_discovery }}]'
+    name: |
+      deploy[${{ inputs.deploy_dispatcher && 'dispatcher' }}${{ inputs.deploy_dispatcher && inputs.deploy_discovery && ',' }}${{ inputs.deploy_discovery && 'discovery' }}]
     runs-on: 'ubuntu-latest'
     permissions:
       contents: 'read'
