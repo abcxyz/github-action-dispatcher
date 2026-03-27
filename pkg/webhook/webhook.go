@@ -212,6 +212,7 @@ func (s *Server) startRunnersForJob(ctx context.Context, event *github.WorkflowJ
 	if pool == nil {
 		pool = s.selectWorkerPool(ctx, s.runnerRegistryDefaultKeyPrefix, jobResolvedRunnerLabel)
 	}
+	// If the default
 	if pool == nil {
 		logger.WarnContext(ctx, "unable to find an org pool or default pool to handle requested label - sending to 404 runner")
 		return s.start404RunnerForJob(ctx, event, jobOriginalRunnerLabel)
