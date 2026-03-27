@@ -90,7 +90,7 @@ jobs:
   # No pools initially are configured in the discovery that have the abcxyz org
   # scope. So ALL JOBS SHOULD FAIL.
   deploy-dispatcher-no-default:
-    needs: ['test-org-pool-default-success', 'test-finds-default-pool', 'test-finds-default-pool-with-alias']
+    needs: ['test-finds-default-pool', 'test-finds-default-pool-with-alias']
     uses: './.github/workflows/deploy-integration.yml' # ratchet:exclude
     with:
       deploy_dispatcher: true
