@@ -46,7 +46,7 @@ jobs:
   # dispatcher looks it up it is missing. The dispatcher allows this label but
   # there is no default pool configured for this label.
   # This should fail with 404 on runs-on label.
-  test-missing-org-pool-does-not-default:
+  test-missing-org-pool-does-not-default-fails:
     name: 'test-missing-org-pool-default[FAILURE_EXPECTED]'
     needs: ['deploy-dispatcher-with-default', 'deploy-runner-discovery-job']
     runs-on: 'github-action-dispatcher-2-integration'
@@ -76,7 +76,7 @@ jobs:
           echo "OH YEAH..."
 
   # This should fail with 404 on runs-on label.
-  test-unknown-label:
+  test-unknown-label-fails:
     name: 'test-unknown-label[FAILURE_EXPECTED]'
     needs: ['deploy-dispatcher-with-default', 'deploy-runner-discovery-job']
     runs-on: 'label-no-run-me'
@@ -110,7 +110,7 @@ jobs:
         run: |
           sleep 60s
 
-  test-does-not-find-default-pool:
+  test-does-not-find-default-pool-fails:
     name: 'test-does-not-find-default-pool[FAILURE_EXPECETED]'
     needs: ['deploy-dispatcher-no-default']
     runs-on: 'github-action-dispatcher-integration'
@@ -121,7 +121,7 @@ jobs:
 
   # This should fail with 404 on runs-on label because the label is allowlisted,
   # there is no assigned pool, and fallback to default runners is disabled.
-  test-does-not-find-missing-org-pool:
+  test-does-not-find-missing-org-pool-fails:
     name: 'test-does-not-find-missing-org-pool[FAILURE_EXPECETED]'
     needs: ['deploy-dispatcher-no-default']
     runs-on: 'github-action-dispatcher-2-integration'
@@ -155,10 +155,10 @@ jobs:
       ${{ always() }}
     needs: [
       # FAILURES
-      'test-missing-org-pool-does-not-default',
-      'test-unknown-label',
-      'test-does-not-find-default-pool',
-      'test-does-not-find-missing-org-pool',
+      'test-missing-org-pool-does-not-default-fails',
+      'test-unknown-label-fails',
+      'test-does-not-find-default-pool-fails',
+      'test-does-not-find-missing-org-pool-fails',
       # SUCCESSES
       'test-finds-default-pool',
       'test-finds-default-pool-with-alias',
@@ -171,36 +171,36 @@ jobs:
       #############
       # FAILURES
       #############
-      - name: 'Assert test-missing-org-pool-does-not-default fails'
+      - name: 'Assert test-missing-org-pool-does-not-default-fails'
         if: |-
-          ${{ needs.test-missing-org-pool-does-not-default.result != 'failure' }}
+          ${{ needs.test-missing-org-pool-does-not-default-fails.result != 'failure' }}
         run: |
           echo "::error::Smoke Test succeeded or was skipped. Expected failure. Failing status check to block merge."
-          echo "::error::Status: ${{ needs.test-missing-org-pool-does-not-default.result }}"
+          echo "::error::Status: ${{ needs.test-missing-org-pool-does-not-default-fails.result }}"
           exit 1
 
-      - name: 'Assert test-unknown-labal fails'
+      - name: 'Assert test-unknown-labal-fails'
         if: |-
-          ${{ needs.test-unknown-label.result != 'failure' }}
+          ${{ needs.test-unknown-label-fails.result != 'failure' }}
         run: |
           echo "::error::Smoke Test succeeded or was skipped. Expected failure. Failing status check to block merge."
-          echo "::error::Status: ${{ needs.test-unknown-label.result }}"
+          echo "::error::Status: ${{ needs.test-unknown-label-fails.result }}"
           exit 1
 
-      - name: 'Assert test-does-not-find-default-pool fails'
+      - name: 'Assert test-does-not-find-default-pool-fails'
         if: |-
-          ${{ needs.test-does-not-find-default-pool.result != 'failure' }}
+          ${{ needs.test-does-not-find-default-pool-fails.result != 'failure' }}
         run: |
           echo "::error::Smoke Test succeeded or was skipped. Expected failure. Failing status check to block merge."
-          echo "::error::Status: ${{ needs.test-does-not-find-default-pool.result }}"
+          echo "::error::Status: ${{ needs.test-does-not-find-default-pool-fails.result }}"
           exit 1
 
-      - name: 'Assert test-does-not-find-missing-org-pool Test fails'
+      - name: 'Assert test-does-not-find-missing-org-pool-fails'
         if: |-
-          ${{ needs.test-does-not-find-missing-org-pool.result != 'failure' }}
+          ${{ needs.test-does-not-find-missing-org-pool-fails.result != 'failure' }}
         run: |
           echo "::error::Smoke Test succeeded or was skipped. Expected failure. Failing status check to block merge."
-          echo "::error::Status: ${{ needs.test-does-not-find-missing-org-pool.result }}"
+          echo "::error::Status: ${{ needs.test-does-not-find-missing-org-pool-fails.result }}"
           exit 1
       #############
       # SUCCESSES
